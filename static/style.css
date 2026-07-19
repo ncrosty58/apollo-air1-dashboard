@@ -519,25 +519,28 @@
 .forecast-area { margin-bottom: 12px; }
 .forecast-days { display: flex; flex-wrap: wrap; gap: 12px; }
 .forecast-day {
-  flex: 1 1 200px; min-width: 200px;
+  flex: 1 1 230px; min-width: 230px;
   border: 1px solid var(--hairline); border-radius: var(--radius-tech);
-  padding: 14px 14px 12px; text-align: center;
+  padding: 14px 16px 12px; text-align: center;
 }
 .fd-label { font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); margin-bottom: 8px; }
 .fd-badge { font-weight: 700; font-size: 1rem; color: var(--band-color, var(--ink)); text-wrap: balance; margin-bottom: 6px; }
 .fd-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.875rem; color: var(--ink-dim); }
 .fd-pollutant { font-size: 0.75rem; color: var(--ink-dim); margin-top: 2px; }
 
+/* One pollutant per row, not a 2-column grid -- Google's values carry a
+   unit ("45.41 µg/m³") that's roughly twice as long as AirNow's bare
+   sub-AQI number, and two of those side by side was what felt cramped. */
 .fd-pollutants {
   margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline);
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 12px; text-align: left;
+  display: flex; flex-direction: column; gap: 7px; text-align: left;
 }
 .fd-pollutant-item {
-  display: flex; justify-content: space-between; gap: 6px; min-width: 0;
-  font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.02em; color: var(--ink-dim);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0;
+  font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.02em; color: var(--ink-dim);
 }
-.fd-pollutant-item .fp-label { text-transform: uppercase; }
-.fd-pollutant-item .fp-value { color: var(--ink); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.fd-pollutant-item .fp-label { text-transform: uppercase; flex: none; }
+.fd-pollutant-item .fp-value { color: var(--ink); font-weight: 600; text-align: right; white-space: nowrap; }
 
 .forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
 .discussion-toggle {
