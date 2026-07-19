@@ -216,7 +216,14 @@
     const url = `/api/forecast?${zipParam}provider=${currentProvider}`;
     try {
       const res = await fetch(url);
-      const d = await res.json();
+      let d;
+      try {
+        d = await res.json();
+      } catch (parseErr) {
+        // A non-JSON body (a proxy/timeout error page, e.g.) would otherwise
+        // surface as a raw "Unexpected token '<'..." parser error.
+        throw new Error(`unexpected response (${res.status})`);
+      }
       if (!res.ok) throw new Error(d.error || "request failed");
 
       areaEl.textContent = d.reporting_area || "—";
@@ -288,7 +295,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ label, zip }),
       });
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result.error || "request failed");
       savedLocations = result;
       document.getElementById("new-location-label").value = "";
