@@ -224,6 +224,13 @@
   const settingsBackdrop = document.getElementById("settings-backdrop");
 
   function positionSettingsPanel() {
+    // Below 560px the panel is a fixed bottom sheet (CSS handles left/
+    // right/bottom) -- clear any inline position so that isn't fought.
+    if (window.innerWidth <= 560) {
+      settingsPanel.style.top = "";
+      settingsPanel.style.right = "";
+      return;
+    }
     const rect = settingsToggle.getBoundingClientRect();
     const margin = 20;
     settingsPanel.style.top = `${rect.bottom + 8}px`;

@@ -240,7 +240,12 @@
     <div class="section">
       <div class="section-head">
         <span class="section-title">History</span>
-        <span class="section-note">Uses the same range as the Inside history above</span>
+        <div class="range-toggle" id="range-toggle-outside">
+          <button type="button" data-range="6" aria-pressed="false">6h</button>
+          <button type="button" data-range="24" aria-pressed="true">24h</button>
+          <button type="button" data-range="72" aria-pressed="false">3d</button>
+          <button type="button" data-range="168" aria-pressed="false">7d</button>
+        </div>
       </div>
       <div class="chart-card">
         <h4>AQI <span class="eyebrow" style="font-weight:500">inside vs outside</span></h4>

@@ -209,6 +209,20 @@
   }
   .settings-panel[hidden] { display: none; }
   @keyframes settingsin { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  /* Anchoring the popover under the gear needs JS to read its on-screen
+     position -- fragile on phones (dynamic toolbars, safe-area insets move
+     the viewport under it). Below the breakpoint it becomes a plain bottom
+     sheet instead: no coordinate math, just fixed to the screen edges. JS
+     skips setting top/right inline styles at this width so this can win
+     without !important. */
+  @media (max-width: 560px) {
+    .settings-panel {
+      left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); top: auto;
+      width: auto; max-height: calc(100vh - 24px); overflow-y: auto;
+      animation: settingsheetup 180ms ease both;
+    }
+    @keyframes settingsheetup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  }
   .settings-panel-head {
     font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--ink-dim); font-weight: 600; padding: 10px 0 8px; border-bottom: 1px solid var(--hairline);
@@ -356,7 +370,7 @@
   .range-toggle button {
     font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
     border: 1px solid var(--hairline); background: var(--panel-raised); color: var(--ink-dim);
-    border-radius: 4px; padding: 6px 11px; cursor: pointer;
+    border-radius: 4px; padding: 9px 13px; min-height: 40px; cursor: pointer;
   }
   .range-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 

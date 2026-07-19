@@ -180,7 +180,7 @@
     };
   }
 
-  function renderAllCharts(points, outsidePoints, rangeLabel) {
+  function renderInsideCharts(points, rangeLabel) {
     renderChart(document.getElementById("chart-co2"), [
       seriesFor(points, "co2_ppm", cssVar("--accent"), true),
     ], { leftLabel: rangeLabel, label: "CO2 history" });
@@ -207,18 +207,25 @@
       seriesFor(points, "humidity_pct", "#6f9be0", true),
     ], { leftLabel: rangeLabel, label: "Humidity history" });
 
-    const providerLabel = currentProvider === "google" ? "Google" : "AirNow";
-    renderChart(document.getElementById("chart-aqi-compare"), [
-      seriesFor(points, "aqi", cssVar("--accent")),
-      seriesFor(outsidePoints, "aqi", cssVar("--zone-outside")),
-    ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
-
     document.getElementById("legend-pm").innerHTML = [
       ["#6f9be0", "PM1.0"], ["#e0935a", "PM2.5"], ["#b23a3a", "PM4.0"], ["#6a5acd", "PM10"],
     ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
     document.getElementById("legend-voc").innerHTML = [
       [cssVar("--accent"), "VOC index"], ["#e0935a", "NOx index"],
     ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+  }
+
+  // insidePoints here is a second, independent fetch of /api/history -- the
+  // inside-vs-outside comparison chart needs both series on the same time
+  // axis, so it can't just borrow whatever range the Inside section above
+  // happens to be showing once Outside gets its own range control.
+  function renderOutsideCharts(insidePoints, outsidePoints, rangeLabel) {
+    const providerLabel = currentProvider === "google" ? "Google" : "AirNow";
+    renderChart(document.getElementById("chart-aqi-compare"), [
+      seriesFor(insidePoints, "aqi", cssVar("--accent")),
+      seriesFor(outsidePoints, "aqi", cssVar("--zone-outside")),
+    ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
+
     document.getElementById("legend-aqi-compare").innerHTML = [
       [cssVar("--accent"), "Inside (NowCast)"], [cssVar("--zone-outside"), `Outside (${providerLabel})`],
     ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
@@ -354,15 +361,28 @@
   }
 
   /* ---------- history / charts ---------- */
+  function rangeLabelFor(hours) {
+    return { 6: "6h ago", 24: "24h ago", 72: "3d ago", 168: "7d ago" }[hours] || `${hours}h ago`;
+  }
+
   async function loadHistory(hours) {
-    const rangeLabel = { 6: "6h ago", 24: "24h ago", 72: "3d ago", 168: "7d ago" }[hours] || `${hours}h ago`;
+    const res = await fetch(`/api/history?hours=${hours}`);
+    const points = res.ok ? await res.json() : [];
+    renderInsideCharts(points, rangeLabelFor(hours));
+  }
+
+  // Outside gets its own range control (separate from Inside's, above) --
+  // the comparison chart still needs an Inside series on the same axis, so
+  // this re-fetches /api/history at whatever range Outside is set to,
+  // independent of what the Inside section is currently showing.
+  async function loadOutsideHistorySection(hours) {
     const [insideRes, outsideRes] = await Promise.allSettled([
       fetch(`/api/history?hours=${hours}`),
       fetch(`/api/outside/history?hours=${hours}&provider=${currentProvider}`),
     ]);
-    const points = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
+    const insidePoints = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
     const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
-    renderAllCharts(points, outsidePoints, rangeLabel);
+    renderOutsideCharts(insidePoints, outsidePoints, rangeLabelFor(hours));
   }
 
   /* ---------- provider switch (AirNow / Google) ---------- */
@@ -382,7 +402,7 @@
     localStorage.setItem("apollo-air1-provider", currentProvider);
     renderProviderToggles();
     loadOutside();
-    if (!viewTechnical.hidden) loadHistory(currentRange);
+    if (!viewTechnical.hidden) loadOutsideHistorySection(currentRangeOutside);
   });
 
   // Google's own enum value, abbreviated to the unit symbol everyone reads
@@ -582,6 +602,7 @@
   const viewSimple = document.getElementById("view-simple");
   const viewTechnical = document.getElementById("view-technical");
   let currentRange = 24;
+  let currentRangeOutside = 24;
 
   function setView(v) {
     const toTech = v === "technical";
@@ -596,6 +617,7 @@
     localStorage.setItem("apollo-air1-view", toTech ? "technical" : "simple");
     if (toTech) {
       loadHistory(currentRange);
+      loadOutsideHistorySection(currentRangeOutside);
       loadControls();
     }
   }
@@ -622,6 +644,7 @@
     localStorage.setItem("apollo-air1-theme", next);
     renderThemeToggle();
     loadHistory(currentRange);
+    loadOutsideHistorySection(currentRangeOutside);
   });
 
   /* ---------- settings panel ---------- */
@@ -630,6 +653,13 @@
   const settingsBackdrop = document.getElementById("settings-backdrop");
 
   function positionSettingsPanel() {
+    // Below 560px the panel is a fixed bottom sheet (CSS handles left/
+    // right/bottom) -- clear any inline position so that isn't fought.
+    if (window.innerWidth <= 560) {
+      settingsPanel.style.top = "";
+      settingsPanel.style.right = "";
+      return;
+    }
     const rect = settingsToggle.getBoundingClientRect();
     const margin = 20;
     settingsPanel.style.top = `${rect.bottom + 8}px`;
@@ -656,13 +686,21 @@
     if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
   });
 
-  /* ---------- range toggle ---------- */
+  /* ---------- range toggles (Inside and Outside are independent) ---------- */
   document.querySelectorAll("#range-toggle button").forEach((btn) => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("#range-toggle button").forEach((b) => b.setAttribute("aria-pressed", "false"));
       btn.setAttribute("aria-pressed", "true");
       currentRange = Number(btn.getAttribute("data-range"));
       loadHistory(currentRange);
+    });
+  });
+  document.querySelectorAll("#range-toggle-outside button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#range-toggle-outside button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      btn.setAttribute("aria-pressed", "true");
+      currentRangeOutside = Number(btn.getAttribute("data-range"));
+      loadOutsideHistorySection(currentRangeOutside);
     });
   });
 
@@ -692,5 +730,10 @@
   setInterval(loadLatest, 60000);
   setInterval(loadOutside, 15 * 60000);
   setInterval(loadControls, 30000);
-  setInterval(() => { if (!viewTechnical.hidden) loadHistory(currentRange); }, 60000);
+  setInterval(() => {
+    if (!viewTechnical.hidden) {
+      loadHistory(currentRange);
+      loadOutsideHistorySection(currentRangeOutside);
+    }
+  }, 60000);
 })();
