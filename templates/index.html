@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apollo AIR-1</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <h1>Apollo AIR-1</h1>
+        <div class="subtitle">Air quality sensor — CO2, particulates, VOC/NOx, gas</div>
+      </div>
+      <div class="updated" id="updated">Loading…</div>
+    </header>
+
+    <div class="tile-grid">
+      <div class="tile">
+        <div class="label">CO2</div>
+        <div class="value"><span id="t-co2">—</span><span class="unit">ppm</span></div>
+        <div class="chip" id="c-co2"></div>
+      </div>
+      <div class="tile">
+        <div class="label">AQI (NowCast)</div>
+        <div class="value"><span id="t-aqi">—</span></div>
+        <div class="chip" id="c-aqi"></div>
+      </div>
+      <div class="tile">
+        <div class="label">PM2.5</div>
+        <div class="value"><span id="t-pm25">—</span><span class="unit">µg/m³</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">VOC Index</div>
+        <div class="value"><span id="t-voc">—</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">NOx Index</div>
+        <div class="value"><span id="t-nox">—</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">Temperature</div>
+        <div class="value"><span id="t-temp">—</span><span class="unit">°C</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">Humidity</div>
+        <div class="value"><span id="t-hum">—</span><span class="unit">%</span></div>
+      </div>
+      <div class="tile">
+        <div class="label">Pressure</div>
+        <div class="value"><span id="t-pressure">—</span><span class="unit">hPa</span></div>
+      </div>
+    </div>
+
+    <div class="range-controls">
+      <button data-hours="6">6h</button>
+      <button data-hours="24" class="active">24h</button>
+      <button data-hours="72">3d</button>
+      <button data-hours="168">7d</button>
+    </div>
+
+    <section class="chart-section">
+      <h2>CO2</h2>
+      <div class="chart-svg-wrap" id="chart-co2"></div>
+    </section>
+
+    <section class="chart-section">
+      <h2>Particulates</h2>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>PM1.0</span>
+        <span class="item"><span class="swatch" style="background:var(--series-2)"></span>PM2.5</span>
+        <span class="item"><span class="swatch" style="background:var(--series-3)"></span>PM4.0</span>
+        <span class="item"><span class="swatch" style="background:var(--series-4)"></span>PM10</span>
+      </div>
+      <div class="chart-svg-wrap" id="chart-pm"></div>
+    </section>
+
+    <section class="chart-section">
+      <h2>VOC / NOx index</h2>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>VOC index</span>
+        <span class="item"><span class="swatch" style="background:var(--series-2)"></span>NOx index</span>
+      </div>
+      <div class="chart-svg-wrap" id="chart-voc"></div>
+    </section>
+
+    <section class="chart-section">
+      <h2>Temperature</h2>
+      <div class="chart-svg-wrap" id="chart-temp"></div>
+    </section>
+
+    <section class="chart-section">
+      <h2>Humidity</h2>
+      <div class="chart-svg-wrap" id="chart-hum"></div>
+    </section>
+
+    <section class="chart-section">
+      <h2>Gas sensors (MICS-4514)</h2>
+      <table class="gas-table">
+        <tr><th>Nitrogen dioxide</th><td class="value"><span id="g-no2">—</span> ppm</td></tr>
+        <tr><th>Carbon monoxide</th><td class="value"><span id="g-co">—</span> ppm</td></tr>
+        <tr><th>Hydrogen</th><td class="value"><span id="g-h2">—</span> ppm</td></tr>
+        <tr><th>Ethanol</th><td class="value"><span id="g-ethanol">—</span> ppm</td></tr>
+        <tr><th>Methane</th><td class="value"><span id="g-methane">—</span> ppm</td></tr>
+        <tr><th>Ammonia</th><td class="value"><span id="g-ammonia">—</span> ppm</td></tr>
+      </table>
+    </section>
+
+    <section class="chart-section">
+      <h2>Device diagnostics</h2>
+      <table class="gas-table">
+        <tr><th>WiFi RSSI</th><td class="value"><span id="d-rssi">—</span> dB</td></tr>
+        <tr><th>ESP temperature</th><td class="value"><span id="d-esptemp">—</span> °C</td></tr>
+        <tr><th>Last wake, awake for</th><td class="value"><span id="d-uptime">—</span> min</td></tr>
+        <tr><th>Firmware version</th><td class="value"><span id="d-firmware">—</span></td></tr>
+      </table>
+    </section>
+  </div>
+
+  <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>

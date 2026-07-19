@@ -1,0 +1,13 @@
+services:
+  web:
+    container_name: apollo-air1-dashboard
+    build: .
+    ports:
+      - "5960:5858"
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - PORT=5858
+    command: gunicorn -w 2 -b 0.0.0.0:5858 app:app
+    restart: unless-stopped
