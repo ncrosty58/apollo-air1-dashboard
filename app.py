@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import airnow
+import google_aq
 import influx
 import locations as locations_store
 import mqtt_bridge
@@ -86,42 +87,67 @@ def api_history():
     return jsonify(points)
 
 
-OUTSIDE_POLLUTANT_LABELS = {
-    "o3_aqi": "O3",
-    "pm2_5_aqi": "PM2.5",
-    "pm10_aqi": "PM10",
-    "no2_aqi": "NO2",
-}
+def _resolve_home_latlon():
+    """Google's API needs coordinates, not a zip -- AirNow's own response for
+    the home zip already resolved that, so reuse its (cached) call instead
+    of adding a separate geocoding dependency."""
+    try:
+        obs = airnow.get_current_observation(os.environ["AIRNOW_ZIP"])
+    except Exception:
+        return None, None, None
+    if obs is None or obs.get("lat") is None:
+        return None, None, None
+    return obs["lat"], obs["lon"], obs.get("reporting_area") or "Home"
+
+
+def _resolve_latlon_for_zip(zip_code):
+    if zip_code == os.environ["AIRNOW_ZIP"]:
+        return _resolve_home_latlon()
+    for loc in locations_store.list_locations():
+        if loc["zip"] != zip_code:
+            continue
+        if loc.get("lat") is not None:
+            return loc["lat"], loc["lon"], loc["label"]
+        # Saved before this lat/lon capture existed -- backfill from AirNow's
+        # (cached) forecast lookup rather than making the user re-add it.
+        try:
+            forecast = airnow.get_forecast(zip_code)
+        except Exception:
+            return None, None, None
+        if forecast and forecast.get("lat") is not None:
+            return forecast["lat"], forecast["lon"], loc["label"]
+        return None, None, None
+    return None, None, None
 
 
 @app.route("/api/outside")
 def api_outside():
-    # Node-RED already polls AirNow for the home zip and logs it to
-    # InfluxDB (for the history charts) — read that instead of making our
-    # own separate, redundant AirNow request for the same current reading.
-    try:
-        row = influx.query_outside_latest()
-    except Exception:
-        logging.exception("Failed to query outdoor reading from InfluxDB")
-        return jsonify({"error": "influxdb query failed"}), 502
-    if row is None:
-        return jsonify({"error": "no data for this location"}), 404
+    provider = request.args.get("provider", "airnow")
 
-    aqi = row.get("aqi")
-    pollutants = [
-        {"parameter": label, "aqi": row[field]}
-        for field, label in OUTSIDE_POLLUTANT_LABELS.items()
-        if isinstance(row.get(field), (int, float))
-    ]
-    return jsonify({
-        "aqi": aqi,
-        "band": airnow.band_for_aqi(aqi),
-        "category": row.get("category"),
-        "dominant_pollutant": row.get("dominant_pollutant"),
-        "reporting_area": row.get("reporting_area"),
-        "time": row.get("time"),
-        "pollutants": pollutants,
-    })
+    if provider == "google":
+        if not os.environ.get("GOOGLE_AQ_API_KEY"):
+            return jsonify({"error": "Google Air Quality isn't configured"}), 400
+        lat, lon, label = _resolve_home_latlon()
+        if lat is None:
+            return jsonify({"error": "couldn't resolve coordinates for the home location"}), 502
+        try:
+            data = google_aq.get_current_observation(lat, lon)
+        except Exception:
+            logging.exception("Failed to fetch outdoor reading from Google")
+            return jsonify({"error": "google air quality request failed"}), 502
+        if data is None:
+            return jsonify({"error": "no data for this location"}), 404
+        data["reporting_area"] = label
+        return jsonify(data)
+
+    try:
+        data = airnow.get_current_observation(os.environ["AIRNOW_ZIP"])
+    except Exception:
+        logging.exception("Failed to fetch outdoor reading from AirNow")
+        return jsonify({"error": "airnow request failed"}), 502
+    if data is None:
+        return jsonify({"error": "no data for this location"}), 404
+    return jsonify(data)
 
 
 @app.route("/api/outside/history")
@@ -144,6 +170,24 @@ def api_forecast():
     zip_code = request.args.get("zip") or os.environ["AIRNOW_ZIP"]
     if not locations_store.ZIP_RE.match(zip_code):
         return jsonify({"error": "zip must be 5 digits"}), 400
+    provider = request.args.get("provider", "airnow")
+
+    if provider == "google":
+        if not os.environ.get("GOOGLE_AQ_API_KEY"):
+            return jsonify({"error": "Google Air Quality isn't configured"}), 400
+        lat, lon, label = _resolve_latlon_for_zip(zip_code)
+        if lat is None:
+            return jsonify({"error": "couldn't resolve coordinates for that zip"}), 502
+        try:
+            data = google_aq.get_forecast(lat, lon)
+        except Exception:
+            logging.exception("Failed to fetch forecast from Google")
+            return jsonify({"error": "google air quality request failed"}), 502
+        if data is None:
+            return jsonify({"error": "no forecast for this location"}), 404
+        data["reporting_area"] = label
+        return jsonify(data)
+
     try:
         data = airnow.get_forecast(zip_code)
     except Exception:
@@ -178,7 +222,10 @@ def api_locations_add():
     if forecast is None:
         return jsonify({"error": "AirNow doesn't have forecast data for that zip"}), 400
 
-    result = locations_store.add_location(label, zip_code)
+    # AirNow's own response already resolved this zip to a lat/lon -- grab
+    # it now so the Google provider can use this location later without a
+    # separate geocoding call/dependency.
+    result = locations_store.add_location(label, zip_code, forecast.get("lat"), forecast.get("lon"))
     return jsonify(result)
 
 

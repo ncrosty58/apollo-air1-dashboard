@@ -3,7 +3,9 @@ import time
 
 import requests
 
+API_URL = "https://www.airnowapi.org/aq/observation/zipCode/current/"
 FORECAST_API_URL = "https://www.airnowapi.org/aq/forecast/zipCode/"
+CACHE_TTL_S = 55 * 60  # AirNow refreshes hourly; a little headroom avoids edge-of-hour misses
 FORECAST_CACHE_TTL_S = 3 * 60 * 60  # forecasts are issued at most a couple times a day
 
 # AirNow resolves a zip to its nearest reporting area within this radius.
@@ -13,6 +15,7 @@ FORECAST_CACHE_TTL_S = 3 * 60 * 60  # forecasts are issued at most a couple time
 # already resolve at a shorter distance (it's always the *nearest* one).
 SEARCH_DISTANCE_MI = 200
 
+_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
 _forecast_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
 
 
@@ -43,6 +46,54 @@ def band_for_category(number):
     if number == 2:
         return "fair"
     return "good"
+
+
+def _fetch(zip_code):
+    resp = requests.get(
+        API_URL,
+        params={
+            "format": "application/json",
+            "zipCode": zip_code,
+            "distance": SEARCH_DISTANCE_MI,
+            "API_KEY": os.environ["AIRNOW_API_KEY"],
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    readings = resp.json()
+    if not readings:
+        return None
+
+    dominant = max(readings, key=lambda r: r["AQI"])
+    return {
+        "aqi": dominant["AQI"],
+        "category": dominant["Category"]["Name"],
+        "band": band_for_aqi(dominant["AQI"]),
+        "dominant_pollutant": dominant["ParameterName"],
+        "reporting_area": f'{dominant["ReportingArea"]}, {dominant["StateCode"]}',
+        "lat": dominant.get("Latitude"),
+        "lon": dominant.get("Longitude"),
+        "observed_hour": dominant["HourObserved"],
+        "pollutants": [
+            {
+                "parameter": r["ParameterName"],
+                "aqi": r["AQI"],
+                "category": r["Category"]["Name"],
+            }
+            for r in readings
+        ],
+    }
+
+
+def get_current_observation(zip_code):
+    now = time.time()
+    cached = _cache.get(zip_code)
+    if cached is not None and (now - cached["fetched_at"]) < CACHE_TTL_S:
+        return cached["data"]
+
+    data = _fetch(zip_code)
+    _cache[zip_code] = {"fetched_at": now, "data": data}
+    return data
 
 
 def _fetch_forecast(zip_code):
@@ -94,6 +145,8 @@ def _fetch_forecast(zip_code):
 
     return {
         "reporting_area": f'{rows[0]["ReportingArea"]}, {rows[0]["StateCode"]}',
+        "lat": rows[0].get("Latitude"),
+        "lon": rows[0].get("Longitude"),
         "discussion": discussion,
         "days": days,
     }

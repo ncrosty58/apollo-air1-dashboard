@@ -18,6 +18,13 @@
     return `${Math.round(s / 86400)}d ago`;
   }
 
+  function formatObservedHour(hour) {
+    if (typeof hour !== "number") return "—";
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.toLocaleTimeString([], { hour: "numeric" });
+  }
+
   const BAND_ORDER = ["good", "fair", "poor", "bad"];
   const BAND_WORD = { good: "Good", fair: "Fair", poor: "Poor", bad: "Very poor" };
 
@@ -293,27 +300,47 @@
     renderAllCharts(points, outsidePoints, rangeLabel);
   }
 
-  /* ---------- outside (AirNow) ---------- */
+  /* ---------- provider switch (AirNow / Google) ---------- */
+  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
+
+  function renderProviderToggles() {
+    document.querySelectorAll(".provider-toggle").forEach((wrap) => {
+      wrap.querySelectorAll("button").forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(btn.getAttribute("data-provider") === currentProvider));
+      });
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".provider-toggle button");
+    if (!btn) return;
+    currentProvider = btn.getAttribute("data-provider");
+    localStorage.setItem("apollo-air1-provider", currentProvider);
+    renderProviderToggles();
+    loadOutside();
+  });
+
+  /* ---------- outside (AirNow or Google) ---------- */
   async function loadOutside() {
     try {
-      const res = await fetch("/api/outside");
-      if (!res.ok) throw new Error("request failed");
+      const res = await fetch(`/api/outside?provider=${currentProvider}`);
       const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "request failed");
 
       const band = d.band;
+      const whenText = d.time ? timeAgo(d.time) : formatObservedHour(d.observed_hour);
 
       const outsideBadge = document.getElementById("outside-badge");
       outsideBadge.textContent = typeof d.aqi === "number" ? String(d.aqi) : "—";
       outsideBadge.style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-area").textContent = d.reporting_area || "—";
       document.getElementById("outside-sentence").textContent = d.category || "Loading…";
-      document.getElementById("outside-updated-rel").textContent = timeAgo(d.time);
+      document.getElementById("outside-updated-rel").textContent = whenText;
 
       document.getElementById("outside-aqi-tech").textContent = d.aqi ?? "—";
       document.getElementById("outside-aqi-tech").style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-category-tech").textContent = d.category || "—";
       document.getElementById("outside-area-tech").textContent = d.reporting_area || "—";
-      document.getElementById("outside-updated-tech").textContent = timeAgo(d.time);
+      document.getElementById("outside-updated-tech").textContent = whenText;
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
 
       document.getElementById("outside-pollutants").innerHTML = (d.pollutants || [])
@@ -321,7 +348,7 @@
         .join("");
     } catch (e) {
       document.getElementById("outside-badge").textContent = "—";
-      document.getElementById("outside-sentence").textContent = "Couldn't reach the outdoor reading.";
+      document.getElementById("outside-sentence").textContent = "Couldn't reach " + (currentProvider === "google" ? "Google Air Quality." : "AirNow.");
       document.getElementById("outside-aqi-tech").textContent = "—";
       document.getElementById("outside-category-tech").textContent = "Unavailable";
     }
@@ -519,6 +546,7 @@
   /* ---------- init ---------- */
   const savedView = localStorage.getItem("apollo-air1-view");
   setView(savedView === "technical" ? "technical" : "simple");
+  renderProviderToggles();
   loadLatest();
   loadOutside();
   loadControls();

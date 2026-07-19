@@ -388,6 +388,8 @@
 .simple-hero--outside { padding: 24px 24px; gap: 2px; }
 .simple-hero--outside .hero-sentence { margin: 0; }
 .simple-hero--outside .hero-updated { margin: 8px 0 0; }
+.simple-hero--outside .provider-toggle { margin-top: 6px; }
+.provider-toggle--standalone { margin-bottom: 14px; }
 .simple-hero--outside .hero-forecast-link { margin-top: 12px; }
 
 .hero-badge-label {

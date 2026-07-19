@@ -28,6 +28,24 @@
     setTimeout(() => el.remove(), 3200);
   }
 
+  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
+
+  function renderProviderToggles() {
+    document.querySelectorAll(".provider-toggle").forEach((wrap) => {
+      wrap.querySelectorAll("button").forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(btn.getAttribute("data-provider") === currentProvider));
+      });
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".provider-toggle button");
+    if (!btn) return;
+    currentProvider = btn.getAttribute("data-provider");
+    localStorage.setItem("apollo-air1-provider", currentProvider);
+    renderProviderToggles();
+    loadForecast();
+  });
+
   let savedLocations = [];
   let selectedZip = null; // null = home (AIRNOW_ZIP)
 
@@ -91,7 +109,8 @@
     const discussionText = document.getElementById("discussion-text");
     const discussionToggle = document.getElementById("discussion-toggle");
 
-    const url = selectedZip ? `/api/forecast?zip=${encodeURIComponent(selectedZip)}` : "/api/forecast";
+    const zipParam = selectedZip ? `zip=${encodeURIComponent(selectedZip)}&` : "";
+    const url = `/api/forecast?${zipParam}provider=${currentProvider}`;
     try {
       const res = await fetch(url);
       const d = await res.json();
@@ -117,8 +136,9 @@
         discussionWrap.hidden = true;
       }
     } catch (e) {
+      const providerName = currentProvider === "google" ? "Google Air Quality" : "AirNow";
       areaEl.textContent = "—";
-      daysEl.innerHTML = `<div class="empty-state">Couldn't reach AirNow — ${escapeHtml(e.message)}</div>`;
+      daysEl.innerHTML = `<div class="empty-state">Couldn't reach ${providerName} — ${escapeHtml(e.message)}</div>`;
       discussionWrap.hidden = true;
     }
   }
@@ -163,6 +183,7 @@
   tickClock();
   setInterval(tickClock, 1000);
 
+  renderProviderToggles();
   loadLocations();
   loadForecast();
   setInterval(loadForecast, 15 * 60000);

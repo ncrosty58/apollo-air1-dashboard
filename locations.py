@@ -43,9 +43,9 @@ def validate_new(label, zip_code):
     return label, zip_code
 
 
-def add_location(label, zip_code):
+def add_location(label, zip_code, lat=None, lon=None):
     locations = _load()
-    locations.append({"label": label, "zip": zip_code})
+    locations.append({"label": label, "zip": zip_code, "lat": lat, "lon": lon})
     _save(locations)
     return locations
 
