@@ -2,9 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Apollo AIR-1</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#2a78d6">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AIR-1">
 </head>
 <body>
   <div class="page">
@@ -15,6 +22,38 @@
       </div>
       <div class="updated" id="updated">Loading…</div>
     </header>
+
+    <div class="view-toggle">
+      <button id="btn-simple" data-view="simple" class="active">Simple</button>
+      <button id="btn-advanced" data-view="advanced">Advanced</button>
+    </div>
+
+    <div id="simple-view">
+      <div class="hero-status" id="hero-status">
+        <div class="hero-badge" id="hero-badge">—</div>
+        <div class="hero-label">Air quality</div>
+      </div>
+      <div class="simple-grid">
+        <div class="simple-tile">
+          <div class="s-label">CO2</div>
+          <div class="s-value"><span id="s-co2">—</span><span class="s-unit">ppm</span></div>
+        </div>
+        <div class="simple-tile">
+          <div class="s-label">PM2.5</div>
+          <div class="s-value"><span id="s-pm25">—</span><span class="s-unit">µg/m³</span></div>
+        </div>
+        <div class="simple-tile">
+          <div class="s-label">Temperature</div>
+          <div class="s-value"><span id="s-temp">—</span><span class="s-unit">°C</span></div>
+        </div>
+        <div class="simple-tile">
+          <div class="s-label">Humidity</div>
+          <div class="s-value"><span id="s-hum">—</span><span class="s-unit">%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="advanced-view" style="display:none">
 
     <div class="tile-grid">
       <div class="tile">
@@ -116,6 +155,8 @@
         <tr><th>Firmware version</th><td class="value"><span id="d-firmware">—</span></td></tr>
       </table>
     </section>
+
+    </div>
   </div>
 
   <script src="{{ url_for('static', filename='dashboard.js') }}"></script>

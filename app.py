@@ -2,7 +2,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import influx
 
@@ -20,6 +20,17 @@ DEBUG = os.environ.get("DEBUG", "False").lower() in ("true", "1", "t")
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/manifest.webmanifest")
+def manifest():
+    return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def service_worker():
+    # Served from the root (not /static/sw.js) so its default scope covers the whole app.
+    return send_from_directory(app.static_folder, "sw.js", mimetype="application/javascript")
 
 
 @app.route("/api/latest")

@@ -208,6 +208,27 @@ function setChip(id, kind, value) {
   node.innerHTML = `<span class="dot" style="background:${status.color}"></span>${status.label}`;
 }
 
+function setHero(aqi, co2) {
+  const badge = document.getElementById("hero-badge");
+  if (!badge) return;
+  // Whichever of AQI / CO2 reads worse drives the headline, since a non-technical
+  // reader only wants one answer, not two numbers to reconcile.
+  const aqiStatus = statusFor("aqi", aqi);
+  const co2Status = statusFor("co2", co2);
+  const order = ["Good", "Moderate", "Elevated", "Unhealthy (sensitive)", "Poor", "Unhealthy", "Very poor"];
+  let status = aqiStatus;
+  if (co2Status && (!status || order.indexOf(co2Status.label) > order.indexOf(status.label))) {
+    status = co2Status;
+  }
+  if (!status) {
+    badge.textContent = "—";
+    badge.style.color = "";
+    return;
+  }
+  badge.textContent = status.label;
+  badge.style.color = status.color;
+}
+
 async function loadLatest() {
   try {
     const res = await fetch("/api/latest");
@@ -238,6 +259,12 @@ async function loadLatest() {
     setTile("g-ethanol", d.ethanol_ppm, 3);
     setTile("g-methane", d.methane_ppm, 3);
     setTile("g-ammonia", d.ammonia_ppm, 3);
+
+    setTile("s-co2", d.co2_ppm, 0);
+    setTile("s-pm25", d.pm2_5_ugm3, 1);
+    setTile("s-temp", d.temperature_c, 1);
+    setTile("s-hum", d.humidity_pct, 1);
+    setHero(d.aqi, d.co2_ppm);
 
     const updated = document.getElementById("updated");
     if (updated) updated.textContent = "Latest reading: " + new Date(d.time).toLocaleString();
@@ -288,8 +315,42 @@ function currentRangeHours() {
   return active ? Number(active.dataset.hours) : 24;
 }
 
+function setView(view) {
+  const simpleView = document.getElementById("simple-view");
+  const advancedView = document.getElementById("advanced-view");
+  const btnSimple = document.getElementById("btn-simple");
+  const btnAdvanced = document.getElementById("btn-advanced");
+  const isSimple = view !== "advanced";
+
+  simpleView.style.display = isSimple ? "" : "none";
+  advancedView.style.display = isSimple ? "none" : "";
+  btnSimple.classList.toggle("active", isSimple);
+  btnAdvanced.classList.toggle("active", !isSimple);
+  localStorage.setItem("apollo-air1-view", isSimple ? "simple" : "advanced");
+
+  // History/charts are only needed once someone actually opens Advanced —
+  // skip the extra query and render for people who stay on Simple.
+  if (!isSimple) loadHistory(currentRangeHours());
+}
+
+function initViewToggle() {
+  document.getElementById("btn-simple").addEventListener("click", () => setView("simple"));
+  document.getElementById("btn-advanced").addEventListener("click", () => setView("advanced"));
+  const saved = localStorage.getItem("apollo-air1-view");
+  setView(saved === "advanced" ? "advanced" : "simple");
+}
+
+function registerServiceWorker() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Installability is a nice-to-have; the app works fine without it.
+    });
+  }
+}
+
 initRangeControls();
+initViewToggle();
+registerServiceWorker();
 loadLatest();
-loadHistory(currentRangeHours());
 setInterval(loadLatest, 60000);
-setInterval(() => loadHistory(currentRangeHours()), 60000);
+setInterval(() => { if (document.getElementById("advanced-view").style.display !== "none") loadHistory(currentRangeHours()); }, 60000);

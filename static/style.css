@@ -56,7 +56,7 @@ body {
 .page {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 24px 16px 64px;
+  padding: max(24px, env(safe-area-inset-top)) 16px calc(64px + env(safe-area-inset-bottom));
 }
 
 header {
@@ -81,6 +81,83 @@ h1 {
 .updated {
   color: var(--text-muted);
   font-size: 0.8rem;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.view-toggle button {
+  flex: 1;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.view-toggle button.active {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+  font-weight: 600;
+}
+
+.hero-status {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 16px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.hero-badge {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.hero-label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+.simple-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.simple-tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.simple-tile .s-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.simple-tile .s-value {
+  font-size: 2.2rem;
+  font-variant-numeric: proportional-nums;
+}
+
+.simple-tile .s-unit {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-left: 4px;
 }
 
 .tile-grid {
