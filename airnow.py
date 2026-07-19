@@ -133,6 +133,10 @@ def _fetch_forecast(zip_code):
             "category": dominant["Category"]["Name"],
             "band": band_for_aqi(dominant_aqi) if dominant_aqi else band_for_category(dominant["Category"]["Number"]),
             "dominant_pollutant": dominant["ParameterName"],
+            # An agency-issued "Action Day" designation -- distinct from the
+            # AQI number itself, e.g. PM2.5 can be flagged even on a day its
+            # own AQI wasn't computed (see the -1/Category fallback above).
+            "action_day": any(r.get("ActionDay") for r in readings),
             "pollutants": [
                 {
                     "parameter": r["ParameterName"],

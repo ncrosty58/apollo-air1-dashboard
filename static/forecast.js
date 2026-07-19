@@ -32,6 +32,31 @@
     }).join("");
   }
 
+  // Google's per-population-group guidance -- more specific than AirNow's
+  // one paragraph for everyone. General population always shows; the rest
+  // sit behind a toggle since most readers only need the first line.
+  const HEALTH_GROUP_LABELS = {
+    elderly: "Elderly",
+    lungDiseasePopulation: "Lung disease",
+    heartDiseasePopulation: "Heart disease",
+    athletes: "Athletes",
+    pregnantWomen: "Pregnant",
+    children: "Children",
+  };
+
+  function healthRecommendationsHtml(hr) {
+    if (!hr || !hr.generalPopulation) return "";
+    const groups = Object.entries(HEALTH_GROUP_LABELS)
+      .filter(([key]) => hr[key])
+      .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
+      .join("");
+    return `<div class="fd-health">
+      <p class="fd-health-text">${escapeHtml(hr.generalPopulation)}</p>
+      ${groups ? `<button type="button" class="fd-health-toggle" aria-expanded="false">Guidance for sensitive groups</button>
+      <div class="fd-health-groups" hidden>${groups}</div>` : ""}
+    </div>`;
+  }
+
   function dayLabel(dateStr) {
     const d = new Date(dateStr + "T00:00:00");
     const today = new Date();
@@ -145,11 +170,14 @@
         const pollutantsBlock = day.pollutants && day.pollutants.length
           ? `<div class="fd-pollutants">${pollutantsHtml(day.pollutants)}</div>`
           : `<div class="fd-pollutant">${escapeHtml(day.dominant_pollutant)}</div>`;
+        const actionBadge = day.action_day ? '<div class="fd-action-badge">Action Day</div>' : "";
         return `<div class="forecast-day">
           <div class="fd-label">${dayLabel(day.date)}</div>
+          ${actionBadge}
           <div class="fd-badge" style="--band-color: ${bandVar(day.band)}">${escapeHtml(day.category)}</div>
           <div class="fd-aqi">${aqiText}</div>
           ${pollutantsBlock}
+          ${healthRecommendationsHtml(day.health_recommendations)}
         </div>`;
       }).join("") : '<div class="empty-state">No forecast published for this location right now.</div>');
 
@@ -175,6 +203,17 @@
     const expanded = btn.getAttribute("aria-expanded") === "true";
     btn.setAttribute("aria-expanded", String(!expanded));
     p.hidden = expanded;
+  });
+
+  // Day cards are rebuilt on every loadForecast(), so this is delegated
+  // rather than bound to specific elements that won't exist yet.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".fd-health-toggle");
+    if (!btn) return;
+    const groups = btn.nextElementSibling;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    groups.hidden = expanded;
   });
 
   document.getElementById("add-location-form").addEventListener("submit", async (e) => {

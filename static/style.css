@@ -542,6 +542,24 @@
 .fd-pollutant-item .fp-label { text-transform: uppercase; flex: none; }
 .fd-pollutant-item .fp-value { color: var(--ink); font-weight: 600; text-align: right; }
 
+.fd-action-badge {
+  display: inline-block; font-family: var(--font-mono); font-size: 0.625rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--poor);
+  background: var(--poor-bg); border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;
+}
+
+.fd-health { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); text-align: left; }
+.fd-health-text { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
+.fd-health-toggle {
+  margin-top: 8px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
+  background: none; border: none; color: var(--ink-dim); cursor: pointer; padding: 0;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.fd-health-groups { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.fd-health-groups[hidden] { display: none; }
+.fd-health-groups p { margin: 0; font-size: 0.8125rem; color: var(--ink-dim); }
+.fd-health-groups strong { color: var(--ink); }
+
 .forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
 .discussion-toggle {
   font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;

@@ -128,7 +128,7 @@ def _fetch_forecast(lat, lon):
             "endTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
         },
         "pageSize": 100,
-        "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION"],
+        "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION", "HEALTH_RECOMMENDATIONS"],
         "languageCode": "en",
     }
 
@@ -171,6 +171,10 @@ def _fetch_forecast(lat, lon):
             "category": idx.get("category"),
             "band": airnow.band_for_aqi(aqi),
             "dominant_pollutant": _dominant_label(raw_pollutants, idx.get("dominantPollutant")),
+            # Per-population-group guidance for this day's worst hour --
+            # more specific than AirNow's one-size-fits-all forecaster
+            # discussion, which Google doesn't have an equivalent of.
+            "health_recommendations": dominant_point.get("healthRecommendations"),
             "pollutants": _pollutants_from(raw_pollutants),
         })
 
