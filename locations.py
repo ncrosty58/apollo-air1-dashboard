@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-DATA_DIR = "data"
+DATA_DIR = os.environ.get("DATA_DIR", "data")
 LOCATIONS_FILE = os.path.join(DATA_DIR, "locations.json")
 
 ZIP_RE = re.compile(r"^\d{5}$")
@@ -27,16 +27,24 @@ def list_locations():
     return _load()
 
 
-def add_location(label, zip_code):
+def validate_new(label, zip_code):
+    """Format/duplicate checks only — doesn't touch AirNow or the file.
+    Callers should confirm AirNow actually has data for the zip before
+    calling add_location, since a bad zip saved here would just fail
+    silently every time it's later selected."""
     label = (label or "").strip()
     zip_code = (zip_code or "").strip()
     if not label:
         raise ValueError("a name is required")
     if not ZIP_RE.match(zip_code):
         raise ValueError("zip must be 5 digits")
-    locations = _load()
-    if any(loc["zip"] == zip_code for loc in locations):
+    if any(loc["zip"] == zip_code for loc in _load()):
         raise ValueError("that zip is already saved")
+    return label, zip_code
+
+
+def add_location(label, zip_code):
+    locations = _load()
     locations.append({"label": label, "zip": zip_code})
     _save(locations)
     return locations

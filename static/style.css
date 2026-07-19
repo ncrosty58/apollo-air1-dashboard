@@ -385,7 +385,10 @@
 .simple-hero { border-top: 3px solid var(--accent); }
 .simple-hero--outside { border-top-color: var(--zone-outside); }
 
-.simple-hero--outside { padding: 28px 24px; }
+.simple-hero--outside { padding: 24px 24px; gap: 2px; }
+.simple-hero--outside .hero-sentence { margin: 0; }
+.simple-hero--outside .hero-updated { margin: 8px 0 0; }
+.simple-hero--outside .hero-forecast-link { margin-top: 12px; }
 
 .hero-badge-label {
   font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.1em;
@@ -398,7 +401,6 @@
   border: 1px solid var(--hairline); border-radius: 999px; padding: 8px 18px;
 }
 .pill-link:hover { background: var(--panel-sunken); }
-.hero-forecast-link { margin-top: 4px; }
 
 .outside-tech-card {
   background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);

@@ -86,16 +86,42 @@ def api_history():
     return jsonify(points)
 
 
+OUTSIDE_POLLUTANT_LABELS = {
+    "o3_aqi": "O3",
+    "pm2_5_aqi": "PM2.5",
+    "pm10_aqi": "PM10",
+    "no2_aqi": "NO2",
+}
+
+
 @app.route("/api/outside")
 def api_outside():
+    # Node-RED already polls AirNow for the home zip and logs it to
+    # InfluxDB (for the history charts) — read that instead of making our
+    # own separate, redundant AirNow request for the same current reading.
     try:
-        data = airnow.get_current_observation()
+        row = influx.query_outside_latest()
     except Exception:
-        logging.exception("Failed to fetch outdoor reading from AirNow")
-        return jsonify({"error": "airnow request failed"}), 502
-    if data is None:
+        logging.exception("Failed to query outdoor reading from InfluxDB")
+        return jsonify({"error": "influxdb query failed"}), 502
+    if row is None:
         return jsonify({"error": "no data for this location"}), 404
-    return jsonify(data)
+
+    aqi = row.get("aqi")
+    pollutants = [
+        {"parameter": label, "aqi": row[field]}
+        for field, label in OUTSIDE_POLLUTANT_LABELS.items()
+        if isinstance(row.get(field), (int, float))
+    ]
+    return jsonify({
+        "aqi": aqi,
+        "band": airnow.band_for_aqi(aqi),
+        "category": row.get("category"),
+        "dominant_pollutant": row.get("dominant_pollutant"),
+        "reporting_area": row.get("reporting_area"),
+        "time": row.get("time"),
+        "pollutants": pollutants,
+    })
 
 
 @app.route("/api/outside/history")
@@ -137,9 +163,22 @@ def api_locations():
 def api_locations_add():
     body = request.get_json(silent=True) or {}
     try:
-        result = locations_store.add_location(body.get("label"), body.get("zip"))
+        label, zip_code = locations_store.validate_new(body.get("label"), body.get("zip"))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+    # Confirm AirNow actually has forecast coverage for this zip before
+    # saving it — otherwise it'd sit in the list failing every time it's
+    # selected (this is exactly how the 54554 zip broke).
+    try:
+        forecast = airnow.get_forecast(zip_code)
+    except Exception:
+        logging.exception("Failed to verify forecast for new location zip=%s", zip_code)
+        return jsonify({"error": "couldn't reach AirNow to verify that zip"}), 502
+    if forecast is None:
+        return jsonify({"error": "AirNow doesn't have forecast data for that zip"}), 400
+
+    result = locations_store.add_location(label, zip_code)
     return jsonify(result)
 
 

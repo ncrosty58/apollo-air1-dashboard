@@ -3,12 +3,16 @@ import time
 
 import requests
 
-API_URL = "https://www.airnowapi.org/aq/observation/zipCode/current/"
 FORECAST_API_URL = "https://www.airnowapi.org/aq/forecast/zipCode/"
-CACHE_TTL_S = 55 * 60  # AirNow refreshes hourly; a little headroom avoids edge-of-hour misses
 FORECAST_CACHE_TTL_S = 3 * 60 * 60  # forecasts are issued at most a couple times a day
 
-_cache = {"fetched_at": 0, "data": None}
+# AirNow resolves a zip to its nearest reporting area within this radius.
+# Urban zips typically have one within 25mi, but rural zips (e.g. northern
+# Wisconsin) can be 50-100mi from the nearest station — 200 is generous
+# enough to cover those without changing which station wins for zips that
+# already resolve at a shorter distance (it's always the *nearest* one).
+SEARCH_DISTANCE_MI = 200
+
 _forecast_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
 
 
@@ -41,60 +45,13 @@ def band_for_category(number):
     return "good"
 
 
-def _fetch():
-    resp = requests.get(
-        API_URL,
-        params={
-            "format": "application/json",
-            "zipCode": os.environ["AIRNOW_ZIP"],
-            "distance": 25,
-            "API_KEY": os.environ["AIRNOW_API_KEY"],
-        },
-        timeout=10,
-    )
-    resp.raise_for_status()
-    readings = resp.json()
-    if not readings:
-        return None
-
-    dominant = max(readings, key=lambda r: r["AQI"])
-    return {
-        "aqi": dominant["AQI"],
-        "category": dominant["Category"]["Name"],
-        "band": band_for_aqi(dominant["AQI"]),
-        "dominant_pollutant": dominant["ParameterName"],
-        "reporting_area": f'{dominant["ReportingArea"]}, {dominant["StateCode"]}',
-        "observed": dominant["DateObserved"],
-        "observed_hour": dominant["HourObserved"],
-        "pollutants": [
-            {
-                "parameter": r["ParameterName"],
-                "aqi": r["AQI"],
-                "category": r["Category"]["Name"],
-            }
-            for r in readings
-        ],
-    }
-
-
-def get_current_observation():
-    now = time.time()
-    if _cache["data"] is not None and (now - _cache["fetched_at"]) < CACHE_TTL_S:
-        return _cache["data"]
-
-    data = _fetch()
-    _cache["data"] = data
-    _cache["fetched_at"] = now
-    return data
-
-
 def _fetch_forecast(zip_code):
     resp = requests.get(
         FORECAST_API_URL,
         params={
             "format": "application/json",
             "zipCode": zip_code,
-            "distance": 25,
+            "distance": SEARCH_DISTANCE_MI,
             "API_KEY": os.environ["AIRNOW_API_KEY"],
         },
         timeout=10,

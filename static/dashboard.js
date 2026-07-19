@@ -307,13 +307,13 @@
       outsideBadge.style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-area").textContent = d.reporting_area || "—";
       document.getElementById("outside-sentence").textContent = d.category || "Loading…";
-      document.getElementById("outside-updated-rel").textContent = `hour ${d.observed_hour}`;
+      document.getElementById("outside-updated-rel").textContent = timeAgo(d.time);
 
       document.getElementById("outside-aqi-tech").textContent = d.aqi ?? "—";
       document.getElementById("outside-aqi-tech").style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-category-tech").textContent = d.category || "—";
       document.getElementById("outside-area-tech").textContent = d.reporting_area || "—";
-      document.getElementById("outside-updated-tech").textContent = `${d.observed} · hour ${d.observed_hour}`;
+      document.getElementById("outside-updated-tech").textContent = timeAgo(d.time);
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
 
       document.getElementById("outside-pollutants").innerHTML = (d.pollutants || [])
@@ -321,7 +321,7 @@
         .join("");
     } catch (e) {
       document.getElementById("outside-badge").textContent = "—";
-      document.getElementById("outside-sentence").textContent = "Couldn't reach AirNow.";
+      document.getElementById("outside-sentence").textContent = "Couldn't reach the outdoor reading.";
       document.getElementById("outside-aqi-tech").textContent = "—";
       document.getElementById("outside-category-tech").textContent = "Unavailable";
     }
