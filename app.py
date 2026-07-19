@@ -6,6 +6,7 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import airnow
 import influx
+import locations as locations_store
 import mqtt_bridge
 
 load_dotenv()
@@ -105,6 +106,45 @@ def api_outside_history():
         logging.exception("Failed to query outdoor history from InfluxDB")
         return jsonify({"error": "influxdb query failed"}), 502
     return jsonify(points)
+
+
+@app.route("/api/forecast")
+def api_forecast():
+    zip_code = request.args.get("zip") or os.environ["AIRNOW_ZIP"]
+    if not locations_store.ZIP_RE.match(zip_code):
+        return jsonify({"error": "zip must be 5 digits"}), 400
+    try:
+        data = airnow.get_forecast(zip_code)
+    except Exception:
+        logging.exception("Failed to fetch forecast from AirNow")
+        return jsonify({"error": "airnow request failed"}), 502
+    if data is None:
+        return jsonify({"error": "no forecast for this location"}), 404
+    return jsonify(data)
+
+
+@app.route("/api/locations")
+def api_locations():
+    return jsonify(locations_store.list_locations())
+
+
+@app.route("/api/locations", methods=["POST"])
+def api_locations_add():
+    body = request.get_json(silent=True) or {}
+    try:
+        result = locations_store.add_location(body.get("label"), body.get("zip"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(result)
+
+
+@app.route("/api/locations/<zip_code>", methods=["DELETE"])
+def api_locations_delete(zip_code):
+    try:
+        result = locations_store.remove_location(zip_code)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    return jsonify(result)
 
 
 @app.route("/api/controls")

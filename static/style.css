@@ -386,7 +386,7 @@
 .simple-hero--outside { border-top-color: var(--zone-outside); }
 
 .simple-hero--outside { padding: 28px 24px; }
-.simple-hero--outside .hero-badge { font-size: clamp(1.75rem, 5vw, 2.5rem); }
+.simple-hero--outside .hero-badge { font-size: clamp(1.375rem, 4vw, 2rem); max-width: 22ch; }
 
 .outside-tech-card {
   background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
@@ -407,3 +407,58 @@
 .outside-pollutant .op-value { font-weight: 700; color: var(--ink); font-size: 1rem; font-family: var(--font-mono); }
 
 .empty-state { font-size: 0.875rem; color: var(--ink-dim); padding: 20px 0; text-align: center; }
+
+/* ---------- forecast / saved locations ---------- */
+.location-switch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.location-chip-wrap { display: inline-flex; align-items: stretch; }
+.location-chip {
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
+  border: 1px solid var(--hairline); background: var(--panel-raised); color: var(--ink-dim);
+  border-radius: 999px; padding: 7px 14px; cursor: pointer;
+}
+.location-chip[aria-pressed="true"] { background: var(--zone-outside); color: var(--accent-ink); border-color: var(--zone-outside); }
+.location-chip-wrap .location-chip { border-radius: 999px 0 0 999px; border-right: none; }
+.location-chip-remove {
+  font-family: var(--font-mono); font-size: 0.75rem; line-height: 1; cursor: pointer;
+  border: 1px solid var(--hairline); border-left: none; background: var(--panel-raised); color: var(--ink-dim);
+  border-radius: 0 999px 999px 0; padding: 7px 10px;
+}
+.location-chip-remove:hover { color: var(--danger); }
+.location-chip-add { border-style: dashed; }
+
+.add-location-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.add-location-form input {
+  font: inherit; font-size: 0.875rem; padding: 8px 12px; border-radius: var(--radius-tech);
+  border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
+}
+.add-location-form input#new-location-zip { width: 7ch; flex: none; }
+.add-location-form button {
+  font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  border-radius: var(--radius-tech); border: 1px solid var(--hairline); padding: 8px 14px;
+}
+.add-location-form button[type="submit"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.add-location-form button#cancel-location-btn { background: var(--panel-raised); color: var(--ink-dim); }
+
+.forecast-card {
+  background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+  padding: 18px 20px;
+}
+.forecast-area { margin-bottom: 12px; }
+.forecast-days { display: flex; flex-wrap: wrap; gap: 12px; }
+.forecast-day {
+  flex: 1 1 140px; min-width: 140px;
+  border: 1px solid var(--hairline); border-radius: var(--radius-tech);
+  padding: 14px 14px 12px; text-align: center;
+}
+.fd-label { font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); margin-bottom: 8px; }
+.fd-badge { font-weight: 700; font-size: 1rem; color: var(--band-color, var(--ink)); text-wrap: balance; margin-bottom: 6px; }
+.fd-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.875rem; color: var(--ink-dim); }
+.fd-pollutant { font-size: 0.75rem; color: var(--ink-dim); margin-top: 2px; }
+
+.forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
+.discussion-toggle {
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
+  background: none; border: none; color: var(--ink-dim); cursor: pointer; padding: 0;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.forecast-discussion p { white-space: pre-line; font-size: 0.8125rem; color: var(--ink-dim); margin: 10px 0 0; }

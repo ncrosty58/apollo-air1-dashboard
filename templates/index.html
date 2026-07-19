@@ -57,19 +57,19 @@
     <div class="simple-grid">
       <div class="simple-tile">
         <div class="s-label">CO2</div>
-        <div class="s-value"><span id="s-co2">612</span><span class="s-unit">ppm</span></div>
+        <div class="s-value"><span id="s-co2">—</span><span class="s-unit">ppm</span></div>
       </div>
       <div class="simple-tile">
         <div class="s-label">Fine dust (PM2.5)</div>
-        <div class="s-value"><span id="s-pm25">2.4</span><span class="s-unit">µg/m³</span></div>
+        <div class="s-value"><span id="s-pm25">—</span><span class="s-unit">µg/m³</span></div>
       </div>
       <div class="simple-tile">
         <div class="s-label">Temperature</div>
-        <div class="s-value"><span id="s-temp">22.1</span><span class="s-unit">°C</span></div>
+        <div class="s-value"><span id="s-temp">—</span><span class="s-unit">°C</span></div>
       </div>
       <div class="simple-tile">
         <div class="s-label">Humidity</div>
-        <div class="s-value"><span id="s-hum">42</span><span class="s-unit">%</span></div>
+        <div class="s-value"><span id="s-hum">—</span><span class="s-unit">%</span></div>
       </div>
     </div>
 
@@ -91,7 +91,7 @@
   <section class="view" id="view-technical" hidden>
 
     <div class="zone-banner zone-banner--inside">
-      <span class="zone-dot"></span> Inside <span class="zone-sub">— readout, controls &amp; history for the device itself</span>
+      <span class="zone-dot"></span> Inside <span class="zone-sub">— readout &amp; history for the device itself</span>
     </div>
 
     <div class="section">
@@ -100,94 +100,6 @@
         <span class="section-note">Refreshed once per wake cycle — last reading <strong id="since-reading">—</strong></span>
       </div>
       <div class="readout-grid" id="readout-grid"></div>
-    </div>
-
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">Controls</span>
-        <span class="section-note">Mirrors the switches, numbers, and buttons on the device itself</span>
-      </div>
-      <div class="control-groups">
-
-        <div class="control-card">
-          <h3>Sleep</h3>
-          <div class="control-row">
-            <div class="control-label">
-              <span class="cl-name">Keep awake</span>
-              <span class="cl-help">Stops the deep-sleep cycle — for OTA updates or debugging</span>
-              <span class="cl-id">switch.prevent_sleep</span>
-            </div>
-            <button class="rocker" id="rocker-sleep" aria-pressed="false" aria-label="Keep awake"></button>
-          </div>
-          <div class="control-row">
-            <div class="control-label">
-              <span class="cl-name">Sleep duration</span>
-              <span class="cl-id">number.deep_sleep_sleep_duration</span>
-            </div>
-            <div class="stepper">
-              <button type="button" data-step="sleep" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-sleep">5</span> <span class="stepper-unit">min</span></span>
-              <button type="button" data-step="sleep" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="control-card">
-          <h3>Calibration offsets</h3>
-          <div class="control-row">
-            <div class="control-label"><span class="cl-name">SEN55 temperature</span><span class="cl-id">number.sen55_temperature_offset</span></div>
-            <div class="stepper">
-              <button type="button" data-step="toffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-toffset">6.0</span> <span class="stepper-unit">°C</span></span>
-              <button type="button" data-step="toffset" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-          <div class="control-row">
-            <div class="control-label"><span class="cl-name">SEN55 humidity</span><span class="cl-id">number.sen55_humidity_offset</span></div>
-            <div class="stepper">
-              <button type="button" data-step="hoffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-hoffset">0.0</span> <span class="stepper-unit">%</span></span>
-              <button type="button" data-step="hoffset" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-          <div class="control-row">
-            <div class="control-label"><span class="cl-name">DPS310 pressure</span><span class="cl-id">number.dps310_pressure_offset</span></div>
-            <div class="stepper">
-              <button type="button" data-step="poffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-poffset">0.0</span> <span class="stepper-unit">hPa</span></span>
-              <button type="button" data-step="poffset" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="control-card">
-          <h3>Maintenance</h3>
-          <button class="btn" type="button" id="btn-calibrate">
-            <span>Calibrate CO2 sensor to 420ppm</span>
-            <span class="btn-id">button.set_scd40_calibrate — run outdoors or after airing the room out</span>
-          </button>
-          <button class="btn" type="button" id="btn-clean">
-            <span>Clean particulate sensor</span>
-            <span class="btn-id">button.clean_sen55 — runs the SEN55's fan autoclean</span>
-          </button>
-        </div>
-
-        <div class="control-card danger-card">
-          <h3>Device</h3>
-          <button class="btn" type="button" id="btn-reboot">
-            <span>Restart device</span>
-            <span class="btn-id">button.esp_reboot</span>
-          </button>
-          <button class="btn hold-btn" type="button" id="btn-factory-reset">
-            <span class="hold-fill" id="hold-fill"></span>
-            <span class="btn-label-inner">
-              <span>Hold to factory reset</span>
-              <span class="btn-id">Same 3s hold as the physical button — erases WiFi + MQTT settings</span>
-            </span>
-          </button>
-        </div>
-
-      </div>
     </div>
 
     <div class="section">
@@ -232,12 +144,12 @@
         <table>
           <caption>Gas sensors — MICS-4514</caption>
           <tbody>
-            <tr><th>Nitrogen dioxide</th><td id="g-no2">0.01 ppm</td></tr>
-            <tr><th>Carbon monoxide</th><td id="g-co">0.2 ppm</td></tr>
-            <tr><th>Hydrogen</th><td id="g-h2">0.0 ppm</td></tr>
-            <tr><th>Ethanol</th><td id="g-ethanol">0.0 ppm</td></tr>
-            <tr><th>Methane</th><td id="g-methane">0.0 ppm</td></tr>
-            <tr><th>Ammonia</th><td id="g-ammonia">0.0 ppm</td></tr>
+            <tr><th>Nitrogen dioxide</th><td id="g-no2">—</td></tr>
+            <tr><th>Carbon monoxide</th><td id="g-co">—</td></tr>
+            <tr><th>Hydrogen</th><td id="g-h2">—</td></tr>
+            <tr><th>Ethanol</th><td id="g-ethanol">—</td></tr>
+            <tr><th>Methane</th><td id="g-methane">—</td></tr>
+            <tr><th>Ammonia</th><td id="g-ammonia">—</td></tr>
           </tbody>
         </table>
       </div>
@@ -245,10 +157,10 @@
         <table>
           <caption>Diagnostics</caption>
           <tbody>
-            <tr><th>WiFi signal</th><td id="d-rssi">−58 dB</td></tr>
-            <tr><th>ESP temperature</th><td id="d-esptemp">34.2 °C</td></tr>
-            <tr><th>Awake for</th><td id="d-uptime">23 s</td></tr>
-            <tr><th>Firmware</th><td id="d-firmware">1.0.0-mqtt</td></tr>
+            <tr><th>WiFi signal</th><td id="d-rssi">—</td></tr>
+            <tr><th>ESP temperature</th><td id="d-esptemp">—</td></tr>
+            <tr><th>Awake for</th><td id="d-uptime">—</td></tr>
+            <tr><th>Firmware</th><td id="d-firmware">—</td></tr>
           </tbody>
         </table>
       </div>
@@ -287,13 +199,122 @@
         <span class="section-note">Uses the same range as the Inside history above</span>
       </div>
       <div class="chart-card">
-        <h4>Outside AQI <span class="eyebrow" style="font-weight:500">AirNow</span></h4>
-        <div class="chart-svg-wrap" id="chart-outside-aqi"></div>
-      </div>
-      <div class="chart-card">
-        <h4>Inside vs outside AQI</h4>
+        <h4>AQI <span class="eyebrow" style="font-weight:500">inside vs outside</span></h4>
         <div class="legend" id="legend-aqi-compare"></div>
         <div class="chart-svg-wrap" id="chart-aqi-compare"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Forecast</span>
+        <span class="section-note">AirNow — as many days as it's currently forecasting, never padded out</span>
+      </div>
+
+      <div class="location-switch" id="location-switch"></div>
+
+      <form class="add-location-form" id="add-location-form" hidden>
+        <input type="text" id="new-location-label" placeholder="Name — e.g. Grandma's house" maxlength="40" autocomplete="off">
+        <input type="text" id="new-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+        <button type="submit">Save</button>
+        <button type="button" id="cancel-location-btn">Cancel</button>
+      </form>
+
+      <div class="forecast-card">
+        <div class="forecast-area eyebrow" id="forecast-area">—</div>
+        <div class="forecast-days" id="forecast-days"></div>
+        <div class="forecast-discussion" id="forecast-discussion" hidden>
+          <button type="button" class="discussion-toggle" id="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
+          <p id="discussion-text" hidden></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Controls</span>
+        <span class="section-note">Mirrors the switches, numbers, and buttons on the Inside device itself</span>
+      </div>
+      <div class="control-groups">
+
+        <div class="control-card">
+          <h3>Sleep</h3>
+          <div class="control-row">
+            <div class="control-label">
+              <span class="cl-name">Keep awake</span>
+              <span class="cl-help">Stops the deep-sleep cycle — for OTA updates or debugging</span>
+              <span class="cl-id">switch.prevent_sleep</span>
+            </div>
+            <button class="rocker" id="rocker-sleep" aria-pressed="false" aria-label="Keep awake"></button>
+          </div>
+          <div class="control-row">
+            <div class="control-label">
+              <span class="cl-name">Sleep duration</span>
+              <span class="cl-id">number.deep_sleep_sleep_duration</span>
+            </div>
+            <div class="stepper">
+              <button type="button" data-step="sleep" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-sleep">—</span> <span class="stepper-unit">min</span></span>
+              <button type="button" data-step="sleep" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-card">
+          <h3>Calibration offsets</h3>
+          <div class="control-row">
+            <div class="control-label"><span class="cl-name">SEN55 temperature</span><span class="cl-id">number.sen55_temperature_offset</span></div>
+            <div class="stepper">
+              <button type="button" data-step="toffset" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-toffset">—</span> <span class="stepper-unit">°C</span></span>
+              <button type="button" data-step="toffset" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <div class="control-label"><span class="cl-name">SEN55 humidity</span><span class="cl-id">number.sen55_humidity_offset</span></div>
+            <div class="stepper">
+              <button type="button" data-step="hoffset" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-hoffset">—</span> <span class="stepper-unit">%</span></span>
+              <button type="button" data-step="hoffset" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <div class="control-label"><span class="cl-name">DPS310 pressure</span><span class="cl-id">number.dps310_pressure_offset</span></div>
+            <div class="stepper">
+              <button type="button" data-step="poffset" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-poffset">—</span> <span class="stepper-unit">hPa</span></span>
+              <button type="button" data-step="poffset" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-card">
+          <h3>Maintenance</h3>
+          <button class="btn" type="button" id="btn-calibrate">
+            <span>Calibrate CO2 sensor to 420ppm</span>
+            <span class="btn-id">button.set_scd40_calibrate — run outdoors or after airing the room out</span>
+          </button>
+          <button class="btn" type="button" id="btn-clean">
+            <span>Clean particulate sensor</span>
+            <span class="btn-id">button.clean_sen55 — runs the SEN55's fan autoclean</span>
+          </button>
+        </div>
+
+        <div class="control-card danger-card">
+          <h3>Device</h3>
+          <button class="btn" type="button" id="btn-reboot">
+            <span>Restart device</span>
+            <span class="btn-id">button.esp_reboot</span>
+          </button>
+          <button class="btn hold-btn" type="button" id="btn-factory-reset">
+            <span class="hold-fill" id="hold-fill"></span>
+            <span class="btn-label-inner">
+              <span>Hold to factory reset</span>
+              <span class="btn-id">Same 3s hold as the physical button — erases WiFi + MQTT settings</span>
+            </span>
+          </button>
+        </div>
+
       </div>
     </div>
 

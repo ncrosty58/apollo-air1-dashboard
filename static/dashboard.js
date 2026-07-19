@@ -53,22 +53,23 @@
       default: return "Waiting for a reading…";
     }
   }
-  function outsideSentence(band, pollutant) {
-    const p = pollutant || "the dominant pollutant";
-    switch (band) {
-      case "good": return `Clear outside — ${p} is low.`;
-      case "fair": return `A bit hazy outside — ${p} is moderate.`;
-      case "poor": return `${p} is elevated outside — sensitive groups should ease up on strenuous outdoor activity.`;
-      case "bad": return `${p} is high outside — limit time outdoors if you can.`;
-      default: return "Loading…";
-    }
+  function outsideSentence(category, pollutant) {
+    if (!category) return "Loading…";
+    return `${category} — ${pollutant || "AQI"} is the main pollutant outside.`;
   }
 
   /* ---------- chart rendering (SVG, hand-drawn) ----------
    * Series are plotted by real timestamp (not array index) so that sources
    * sampled at different rates — e.g. indoor readings every ~5-10min vs.
    * AirNow's hourly outdoor readings — overlay correctly on one chart. */
-  const W = 760, H = 160, PAD = { l: 4, r: 4, t: 10, b: 18 };
+  const W = 760, H = 160, PAD = { l: 34, r: 4, t: 10, b: 18 };
+
+  function formatTick(v) {
+    const abs = Math.abs(v);
+    if (abs >= 100) return String(Math.round(v));
+    if (abs >= 10) return String(Math.round(v * 10) / 10);
+    return String(Math.round(v * 100) / 100);
+  }
 
   function pathFor(points, tMin, tMax, vMin, vMax) {
     const xw = W - PAD.l - PAD.r;
@@ -107,6 +108,8 @@
     for (let gy = 0; gy <= 3; gy++) {
       const y = PAD.t + (gy / 3) * (H - PAD.t - PAD.b);
       svg += `<line class="chart-grid-line" x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W - PAD.r}" y2="${y.toFixed(1)}" />`;
+      const tickVal = hi - (gy / 3) * (hi - lo);
+      svg += `<text class="chart-axis-label chart-y-label" x="${(PAD.l - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end">${formatTick(tickVal)}</text>`;
     }
     nonEmpty.forEach((s) => {
       const d = pathFor(s.points, tMin, tMax, lo, hi);
@@ -162,10 +165,6 @@
     renderChart(document.getElementById("chart-hum"), [
       seriesFor(points, "humidity_pct", "#6f9be0", true),
     ], { leftLabel: rangeLabel, label: "Humidity history" });
-
-    renderChart(document.getElementById("chart-outside-aqi"), [
-      seriesFor(outsidePoints, "aqi", cssVar("--zone-outside"), true),
-    ], { leftLabel: rangeLabel, label: "Outside AQI history" });
 
     renderChart(document.getElementById("chart-aqi-compare"), [
       seriesFor(points, "aqi", cssVar("--accent")),
@@ -269,10 +268,22 @@
     }
   }
 
+  const INDOOR_FIELD_IDS = [
+    "s-co2", "s-pm25", "s-temp", "s-hum",
+    "g-no2", "g-co", "g-h2", "g-ethanol", "g-methane", "g-ammonia",
+    "d-rssi", "d-esptemp", "d-uptime", "d-firmware",
+  ];
+
   function setIndoorUnavailable(msg) {
     document.getElementById("hero-sentence").textContent = msg;
     document.getElementById("hero-updated-rel").textContent = "—";
     document.getElementById("since-reading").textContent = "—";
+    const heroBadge = document.getElementById("hero-badge");
+    heroBadge.textContent = "—";
+    heroBadge.style.setProperty("--band-color", "var(--ink-dim)");
+    INDOOR_FIELD_IDS.forEach((id) => { document.getElementById(id).textContent = "—"; });
+    document.getElementById("readout-grid").innerHTML = "";
+    previousLatest = null;
   }
 
   /* ---------- history / charts ---------- */
@@ -295,13 +306,12 @@
       const d = await res.json();
 
       const band = d.band;
-      const areaShort = (d.reporting_area || "").split(",")[0] || "—";
 
       const outsideBadge = document.getElementById("outside-badge");
-      outsideBadge.textContent = BAND_WORD[band] || "—";
+      outsideBadge.textContent = d.category || "—";
       outsideBadge.style.setProperty("--band-color", bandVar(band));
-      document.getElementById("outside-area").textContent = areaShort;
-      document.getElementById("outside-sentence").textContent = outsideSentence(band, d.dominant_pollutant);
+      document.getElementById("outside-area").textContent = d.reporting_area || "—";
+      document.getElementById("outside-sentence").textContent = outsideSentence(d.category, d.dominant_pollutant);
       document.getElementById("outside-updated-rel").textContent = `hour ${d.observed_hour}`;
 
       document.getElementById("outside-aqi-tech").textContent = d.aqi ?? "—";
@@ -319,6 +329,150 @@
       document.getElementById("outside-category-tech").textContent = "Unavailable";
     }
   }
+
+  /* ---------- forecast / saved locations ---------- */
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function dayLabel(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((d - today) / 86400000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    return d.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+  }
+
+  let savedLocations = [];
+  let selectedZip = null; // null = home (AIRNOW_ZIP)
+
+  async function loadLocations() {
+    try {
+      const res = await fetch("/api/locations");
+      savedLocations = res.ok ? await res.json() : [];
+    } catch (e) {
+      savedLocations = [];
+    }
+    renderLocationSwitch();
+  }
+
+  function renderLocationSwitch() {
+    const wrap = document.getElementById("location-switch");
+    const homeBtn = `<button type="button" class="location-chip" data-zip="" aria-pressed="${selectedZip === null}">Home</button>`;
+    const chips = savedLocations.map((loc) => `
+      <span class="location-chip-wrap">
+        <button type="button" class="location-chip" data-zip="${loc.zip}" aria-pressed="${selectedZip === loc.zip}">${escapeHtml(loc.label)}</button>
+        <button type="button" class="location-chip-remove" data-zip="${loc.zip}" aria-label="Remove ${escapeHtml(loc.label)}">×</button>
+      </span>`).join("");
+    const addBtn = `<button type="button" class="location-chip location-chip-add" id="add-location-toggle">+ Add</button>`;
+    wrap.innerHTML = homeBtn + chips + addBtn;
+
+    wrap.querySelectorAll(".location-chip[data-zip]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedZip = btn.getAttribute("data-zip") || null;
+        renderLocationSwitch();
+        loadForecast();
+      });
+    });
+    wrap.querySelectorAll(".location-chip-remove").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const zip = btn.getAttribute("data-zip");
+        try {
+          const res = await fetch(`/api/locations/${zip}`, { method: "DELETE" });
+          const result = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(result.error || "request failed");
+          savedLocations = result;
+          if (selectedZip === zip) {
+            selectedZip = null;
+            loadForecast();
+          }
+          renderLocationSwitch();
+          toast("Removed");
+        } catch (err) {
+          toast("Couldn't remove that — " + err.message);
+        }
+      });
+    });
+    document.getElementById("add-location-toggle").addEventListener("click", () => {
+      document.getElementById("add-location-form").hidden = false;
+    });
+  }
+
+  async function loadForecast() {
+    const daysEl = document.getElementById("forecast-days");
+    const areaEl = document.getElementById("forecast-area");
+    const discussionWrap = document.getElementById("forecast-discussion");
+    const discussionText = document.getElementById("discussion-text");
+    const discussionToggle = document.getElementById("discussion-toggle");
+
+    const url = selectedZip ? `/api/forecast?zip=${encodeURIComponent(selectedZip)}` : "/api/forecast";
+    try {
+      const res = await fetch(url);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "request failed");
+
+      areaEl.textContent = d.reporting_area || "—";
+      daysEl.innerHTML = (d.days && d.days.length ? d.days.map((day) => {
+        const aqiText = day.aqi != null ? `AQI ${day.aqi}` : "AQI —";
+        return `<div class="forecast-day">
+          <div class="fd-label">${dayLabel(day.date)}</div>
+          <div class="fd-badge" style="--band-color: ${bandVar(day.band)}">${escapeHtml(day.category)}</div>
+          <div class="fd-aqi">${aqiText}</div>
+          <div class="fd-pollutant">${escapeHtml(day.dominant_pollutant)}</div>
+        </div>`;
+      }).join("") : '<div class="empty-state">No forecast published for this location right now.</div>');
+
+      if (d.discussion) {
+        discussionWrap.hidden = false;
+        discussionText.textContent = d.discussion;
+        discussionToggle.setAttribute("aria-expanded", "false");
+        discussionText.hidden = true;
+      } else {
+        discussionWrap.hidden = true;
+      }
+    } catch (e) {
+      areaEl.textContent = "—";
+      daysEl.innerHTML = `<div class="empty-state">Couldn't reach AirNow — ${escapeHtml(e.message)}</div>`;
+      discussionWrap.hidden = true;
+    }
+  }
+
+  document.getElementById("discussion-toggle").addEventListener("click", () => {
+    const btn = document.getElementById("discussion-toggle");
+    const p = document.getElementById("discussion-text");
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    p.hidden = expanded;
+  });
+
+  document.getElementById("add-location-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const label = document.getElementById("new-location-label").value;
+    const zip = document.getElementById("new-location-zip").value;
+    try {
+      const res = await fetch("/api/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, zip }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "request failed");
+      savedLocations = result;
+      document.getElementById("new-location-label").value = "";
+      document.getElementById("new-location-zip").value = "";
+      document.getElementById("add-location-form").hidden = true;
+      renderLocationSwitch();
+      toast("Saved");
+    } catch (err) {
+      toast("Couldn't save that — " + err.message);
+    }
+  });
+  document.getElementById("cancel-location-btn").addEventListener("click", () => {
+    document.getElementById("add-location-form").hidden = true;
+  });
 
   /* ---------- controls (real MQTT bridge) ---------- */
   const stepperConf = {
@@ -469,6 +623,7 @@
     if (toTech) {
       loadHistory(currentRange);
       loadControls();
+      loadForecast();
     }
   }
   tabSimple.addEventListener("click", () => setView("simple"));
@@ -516,8 +671,10 @@
   loadLatest();
   loadOutside();
   loadControls();
+  loadLocations();
   setInterval(loadLatest, 60000);
   setInterval(loadOutside, 15 * 60000);
   setInterval(loadControls, 30000);
   setInterval(() => { if (!viewTechnical.hidden) loadHistory(currentRange); }, 60000);
+  setInterval(() => { if (!viewTechnical.hidden) loadForecast(); }, 15 * 60000);
 })();

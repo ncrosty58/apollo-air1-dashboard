@@ -27,6 +27,7 @@ mirrors the device's switches/numbers/buttons and publishes commands to them.
 
 ```
 cp .env.example .env    # fill in INFLUX_TOKEN, MQTT_*, AIRNOW_* — see below
+mkdir -p data && chmod 777 data   # bind-mounted; container runs as a non-root user
 docker compose up -d --build
 ```
 
@@ -62,6 +63,14 @@ python app.py
   window (1–168h), used by the charts.
 - `GET /api/outside` — current outdoor AQI/category/dominant pollutant from
   AirNow for `AIRNOW_ZIP`.
+- `GET /api/forecast?zip=<zip>` — AirNow's forecast for a zip (defaults to
+  `AIRNOW_ZIP`). AirNow only issues forecasts for today and, where available,
+  tomorrow — the response has however many days it actually published, never
+  padded out to a full week.
+- `GET /api/locations`, `POST /api/locations` (`{label, zip}`),
+  `DELETE /api/locations/<zip>` — saved locations for the forecast switcher,
+  persisted to `data/locations.json` (bind-mounted, see above, so they
+  survive `docker compose up --build`).
 - `GET /api/controls` — cached state of the device's switches/numbers plus
   online/offline (from its MQTT birth/LWT `status` topic).
 - `POST /api/control/switch/<id>`, `/api/control/number/<id>`,

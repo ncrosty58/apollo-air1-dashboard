@@ -4,9 +4,12 @@ import time
 import requests
 
 API_URL = "https://www.airnowapi.org/aq/observation/zipCode/current/"
+FORECAST_API_URL = "https://www.airnowapi.org/aq/forecast/zipCode/"
 CACHE_TTL_S = 55 * 60  # AirNow refreshes hourly; a little headroom avoids edge-of-hour misses
+FORECAST_CACHE_TTL_S = 3 * 60 * 60  # forecasts are issued at most a couple times a day
 
 _cache = {"fetched_at": 0, "data": None}
+_forecast_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
 
 
 def band_for_aqi(aqi):
@@ -19,6 +22,21 @@ def band_for_aqi(aqi):
     if aqi > 100:
         return "poor"
     if aqi > 50:
+        return "fair"
+    return "good"
+
+
+def band_for_category(number):
+    """Fallback for forecast rows where AirNow reports AQI as -1 (not
+    computed, e.g. during an active smoke/alert day) but still gives a
+    Category.Number on its own 1-6 scale. Thresholds mirror band_for_aqi."""
+    if number is None:
+        return None
+    if number >= 4:
+        return "bad"
+    if number == 3:
+        return "poor"
+    if number == 2:
         return "fair"
     return "good"
 
@@ -67,4 +85,69 @@ def get_current_observation():
     data = _fetch()
     _cache["data"] = data
     _cache["fetched_at"] = now
+    return data
+
+
+def _fetch_forecast(zip_code):
+    resp = requests.get(
+        FORECAST_API_URL,
+        params={
+            "format": "application/json",
+            "zipCode": zip_code,
+            "distance": 25,
+            "API_KEY": os.environ["AIRNOW_API_KEY"],
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    rows = resp.json()
+    if not rows:
+        return None
+
+    by_date = {}
+    discussion = None
+    for r in rows:
+        by_date.setdefault(r["DateForecast"], []).append(r)
+        if not discussion and (r.get("Discussion") or "").strip():
+            discussion = r["Discussion"].strip()
+
+    days = []
+    for date in sorted(by_date):
+        readings = by_date[date]
+        # AQI is -1 on rows AirNow hasn't computed a number for (common on
+        # active alert days) — Category.Number is still meaningful then, so
+        # rank by that first and use it as the band fallback.
+        dominant = max(readings, key=lambda r: (r["Category"]["Number"], r["AQI"]))
+        dominant_aqi = dominant["AQI"] if dominant["AQI"] and dominant["AQI"] > 0 else None
+        days.append({
+            "date": date,
+            "aqi": dominant_aqi,
+            "category": dominant["Category"]["Name"],
+            "band": band_for_aqi(dominant_aqi) if dominant_aqi else band_for_category(dominant["Category"]["Number"]),
+            "dominant_pollutant": dominant["ParameterName"],
+            "pollutants": [
+                {
+                    "parameter": r["ParameterName"],
+                    "aqi": r["AQI"] if r["AQI"] and r["AQI"] > 0 else None,
+                    "category": r["Category"]["Name"],
+                }
+                for r in readings
+            ],
+        })
+
+    return {
+        "reporting_area": f'{rows[0]["ReportingArea"]}, {rows[0]["StateCode"]}',
+        "discussion": discussion,
+        "days": days,
+    }
+
+
+def get_forecast(zip_code):
+    now = time.time()
+    cached = _forecast_cache.get(zip_code)
+    if cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
+        return cached["data"]
+
+    data = _fetch_forecast(zip_code)
+    _forecast_cache[zip_code] = {"fetched_at": now, "data": data}
     return data
