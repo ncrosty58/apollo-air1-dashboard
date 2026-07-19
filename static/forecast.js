@@ -17,13 +17,18 @@
   }
 
   function pollutantsHtml(pollutants) {
+    // AirNow sometimes doesn't compute a per-pollutant AQI for forecast rows
+    // (AQI: -1, common during an active alert, like the "Air Quality Alert"
+    // discussion text that comes with it) -- it still gives a category
+    // ("Moderate", "Unhealthy for Sensitive Groups") for that pollutant, so
+    // fall back to that instead of a bare dash.
     return (pollutants || []).map((p) => {
       const valueText = typeof p.aqi === "number"
         ? String(p.aqi)
         : typeof p.concentration_value === "number"
           ? `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`
-          : "—";
-      return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(p.parameter)}</span><span class="fp-value">${valueText}</span></span>`;
+          : p.category || "—";
+      return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(p.parameter)}</span><span class="fp-value">${escapeHtml(valueText)}</span></span>`;
     }).join("");
   }
 
