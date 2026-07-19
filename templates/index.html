@@ -12,6 +12,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="AIR-1">
+  <script>
+    // Applied before first paint so a saved dark-mode choice never flashes light.
+    (function () {
+      var t = localStorage.getItem("apollo-air1-theme");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
 </head>
 <body>
 
@@ -32,22 +39,46 @@
       <span class="lamp pulse-once" id="lamp" data-state="mqtt" role="img" aria-label="Connection status"></span>
       <div class="device-name-block">
         <span class="device-name">APOLLO AIR-1</span>
-        <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span> · <button id="theme-toggle" type="button">switch to dark</button></span>
+        <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span></span>
       </div>
     </div>
     <div class="header-controls">
-      <div class="range-toggle provider-toggle" role="tablist" aria-label="Air quality data source">
-        <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
-        <button type="button" data-provider="google" aria-pressed="false">Google</button>
-      </div>
-      <div class="range-toggle unit-toggle" role="tablist" aria-label="Temperature unit">
-        <button type="button" data-unit="f" aria-pressed="true">°F</button>
-        <button type="button" data-unit="c" aria-pressed="false">°C</button>
-      </div>
       <div class="mode-switch" role="tablist" aria-label="View mode">
         <button type="button" role="tab" id="tab-simple" aria-pressed="true">Basic</button>
         <button type="button" role="tab" id="tab-technical" aria-pressed="false">Technical</button>
       </div>
+      <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M12 3v2.4M12 18.6V21M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M3 12h2.4M18.6 12H21M5.4 18.6l1.7-1.7M16.9 7.1l1.7-1.7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="settings-backdrop" hidden></div>
+<div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
+  <div class="settings-panel-head">Settings</div>
+  <div class="control-row">
+    <div class="control-label"><span class="cl-name">Data source</span></div>
+    <div class="settings-rail provider-toggle" role="tablist" aria-label="Air quality data source">
+      <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
+      <button type="button" data-provider="google" aria-pressed="false">Google</button>
+    </div>
+  </div>
+  <div class="control-row">
+    <div class="control-label"><span class="cl-name">Units</span></div>
+    <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
+      <button type="button" data-unit="f" aria-pressed="true">°F</button>
+      <button type="button" data-unit="c" aria-pressed="false">°C</button>
+    </div>
+  </div>
+  <div class="control-row">
+    <div class="control-label"><span class="cl-name">Theme</span></div>
+    <div class="settings-rail theme-toggle" role="tablist" aria-label="Color theme">
+      <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
     </div>
   </div>
 </div>

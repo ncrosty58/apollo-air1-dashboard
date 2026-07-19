@@ -9,6 +9,24 @@
     return band ? `var(--${band})` : "var(--ink-dim)";
   }
 
+  // Same mechanical enum-to-words formatting dashboard.js uses for Google's
+  // concentration units, abbreviated for the tight per-day grid.
+  function formatConcentrationUnits(units) {
+    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
+    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
+  }
+
+  function pollutantsHtml(pollutants) {
+    return (pollutants || []).map((p) => {
+      const valueText = typeof p.aqi === "number"
+        ? String(p.aqi)
+        : typeof p.concentration_value === "number"
+          ? `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`
+          : "—";
+      return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(p.parameter)}</span><span class="fp-value">${valueText}</span></span>`;
+    }).join("");
+  }
+
   function dayLabel(dateStr) {
     const d = new Date(dateStr + "T00:00:00");
     const today = new Date();
@@ -119,11 +137,14 @@
       areaEl.textContent = d.reporting_area || "—";
       daysEl.innerHTML = (d.days && d.days.length ? d.days.map((day) => {
         const aqiText = day.aqi != null ? `AQI ${day.aqi}` : "AQI —";
+        const pollutantsBlock = day.pollutants && day.pollutants.length
+          ? `<div class="fd-pollutants">${pollutantsHtml(day.pollutants)}</div>`
+          : `<div class="fd-pollutant">${escapeHtml(day.dominant_pollutant)}</div>`;
         return `<div class="forecast-day">
           <div class="fd-label">${dayLabel(day.date)}</div>
           <div class="fd-badge" style="--band-color: ${bandVar(day.band)}">${escapeHtml(day.category)}</div>
           <div class="fd-aqi">${aqiText}</div>
-          <div class="fd-pollutant">${escapeHtml(day.dominant_pollutant)}</div>
+          ${pollutantsBlock}
         </div>`;
       }).join("") : '<div class="empty-state">No forecast published for this location right now.</div>');
 
@@ -177,6 +198,58 @@
     document.getElementById("add-location-form").hidden = true;
   });
 
+  /* ---------- theme toggle ---------- */
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  }
+  function renderThemeToggle() {
+    const theme = currentTheme();
+    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".theme-toggle button");
+    if (!btn) return;
+    const next = btn.getAttribute("data-theme-choice");
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("apollo-air1-theme", next);
+    renderThemeToggle();
+  });
+
+  /* ---------- settings panel ---------- */
+  const settingsToggle = document.getElementById("settings-toggle");
+  const settingsPanel = document.getElementById("settings-panel");
+  const settingsBackdrop = document.getElementById("settings-backdrop");
+
+  function positionSettingsPanel() {
+    const rect = settingsToggle.getBoundingClientRect();
+    const margin = 20;
+    settingsPanel.style.top = `${rect.bottom + 8}px`;
+    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
+  }
+  function openSettings() {
+    positionSettingsPanel();
+    settingsPanel.hidden = false;
+    settingsBackdrop.hidden = false;
+    settingsToggle.setAttribute("aria-expanded", "true");
+    window.addEventListener("resize", positionSettingsPanel);
+  }
+  function closeSettings() {
+    settingsPanel.hidden = true;
+    settingsBackdrop.hidden = true;
+    settingsToggle.setAttribute("aria-expanded", "false");
+    window.removeEventListener("resize", positionSettingsPanel);
+  }
+  settingsToggle.addEventListener("click", () => {
+    if (settingsPanel.hidden) openSettings(); else closeSettings();
+  });
+  settingsBackdrop.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
+  });
+
   function tickClock() {
     document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   }
@@ -184,6 +257,7 @@
   setInterval(tickClock, 1000);
 
   renderProviderToggles();
+  renderThemeToggle();
   loadLocations();
   loadForecast();
   setInterval(loadForecast, 15 * 60000);

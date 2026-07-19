@@ -165,23 +165,57 @@
   .device-name-block { display: flex; flex-direction: column; gap: 2px; }
   .device-name { font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; }
   .device-sub { font-size: 0.75rem; color: var(--ink-dim); }
-  .device-sub button { background: none; border: none; padding: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font: inherit; }
 
   .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-  .mode-switch {
-    display: flex; background: var(--panel-sunken); border-radius: 999px; padding: 3px;
+  /* The header only ever holds the one control you reach for constantly --
+     Basic/Technical -- plus a single gear that opens everything you set
+     once and forget (source, units, theme). A rocker-plate idiom: a sunken
+     track holding a raised, shadowed "on" pill. */
+  .mode-switch, .settings-rail {
+    display: flex; align-items: stretch; background: var(--panel-sunken); border-radius: 999px; padding: 3px;
     box-shadow: var(--shadow-inset);
-    font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
   }
-  .mode-switch button {
+  .mode-switch button, .settings-rail button {
     border: none; background: transparent; color: var(--ink-dim); cursor: pointer;
-    padding: 7px 16px; border-radius: 999px; text-transform: uppercase;
+    padding: 7px 14px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
+    font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
-  .mode-switch button[aria-pressed="true"] {
+  .mode-switch button[aria-pressed="true"], .settings-rail button[aria-pressed="true"] {
     background: var(--panel-raised); color: var(--ink); box-shadow: var(--shadow-raised);
   }
+
+  .settings-gear {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; flex: none; padding: 0;
+    border-radius: 50%; border: 1px solid var(--hairline); background: var(--panel-sunken);
+    color: var(--ink-dim); cursor: pointer; box-shadow: var(--shadow-inset);
+    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
+  .settings-gear svg { width: 17px; height: 17px; }
+  .settings-gear[aria-expanded="true"] {
+    background: var(--accent); color: var(--accent-ink); box-shadow: none; border-color: var(--accent);
+  }
+
+  .settings-backdrop {
+    position: fixed; inset: 0; z-index: 25; background: transparent;
+  }
+  .settings-panel {
+    position: fixed; z-index: 30; width: 240px;
+    background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+    padding: 6px 16px 10px; display: flex; flex-direction: column;
+    animation: settingsin 140ms ease both;
+  }
+  .settings-panel[hidden] { display: none; }
+  @keyframes settingsin { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .settings-panel-head {
+    font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-dim); font-weight: 600; padding: 10px 0 8px; border-bottom: 1px solid var(--hairline);
+  }
+  .settings-panel .control-row { padding: 12px 0; }
+  .settings-panel .control-row + .control-row { border-top: 1px solid var(--hairline); }
+  .settings-panel .cl-name { font-size: 0.875rem; }
 
   /* ---------- view containers ---------- */
   .view { padding-top: 28px; }
@@ -465,7 +499,7 @@
 .forecast-area { margin-bottom: 12px; }
 .forecast-days { display: flex; flex-wrap: wrap; gap: 12px; }
 .forecast-day {
-  flex: 1 1 140px; min-width: 140px;
+  flex: 1 1 200px; min-width: 200px;
   border: 1px solid var(--hairline); border-radius: var(--radius-tech);
   padding: 14px 14px 12px; text-align: center;
 }
@@ -473,6 +507,17 @@
 .fd-badge { font-weight: 700; font-size: 1rem; color: var(--band-color, var(--ink)); text-wrap: balance; margin-bottom: 6px; }
 .fd-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.875rem; color: var(--ink-dim); }
 .fd-pollutant { font-size: 0.75rem; color: var(--ink-dim); margin-top: 2px; }
+
+.fd-pollutants {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline);
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 12px; text-align: left;
+}
+.fd-pollutant-item {
+  display: flex; justify-content: space-between; gap: 6px; min-width: 0;
+  font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.02em; color: var(--ink-dim);
+}
+.fd-pollutant-item .fp-label { text-transform: uppercase; }
+.fd-pollutant-item .fp-value { color: var(--ink); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 
 .forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
 .discussion-toggle {

@@ -603,14 +603,56 @@
   document.getElementById("to-technical").addEventListener("click", () => setView("technical"));
 
   /* ---------- theme toggle ---------- */
-  document.getElementById("theme-toggle").addEventListener("click", (e) => {
-    const root = document.documentElement;
-    const current = root.getAttribute("data-theme") ||
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") ||
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    const next = current === "dark" ? "light" : "dark";
-    root.setAttribute("data-theme", next);
-    e.target.textContent = next === "dark" ? "switch to light" : "switch to dark";
+  }
+  function renderThemeToggle() {
+    const theme = currentTheme();
+    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".theme-toggle button");
+    if (!btn) return;
+    const next = btn.getAttribute("data-theme-choice");
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("apollo-air1-theme", next);
+    renderThemeToggle();
     loadHistory(currentRange);
+  });
+
+  /* ---------- settings panel ---------- */
+  const settingsToggle = document.getElementById("settings-toggle");
+  const settingsPanel = document.getElementById("settings-panel");
+  const settingsBackdrop = document.getElementById("settings-backdrop");
+
+  function positionSettingsPanel() {
+    const rect = settingsToggle.getBoundingClientRect();
+    const margin = 20;
+    settingsPanel.style.top = `${rect.bottom + 8}px`;
+    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
+  }
+  function openSettings() {
+    positionSettingsPanel();
+    settingsPanel.hidden = false;
+    settingsBackdrop.hidden = false;
+    settingsToggle.setAttribute("aria-expanded", "true");
+    window.addEventListener("resize", positionSettingsPanel);
+  }
+  function closeSettings() {
+    settingsPanel.hidden = true;
+    settingsBackdrop.hidden = true;
+    settingsToggle.setAttribute("aria-expanded", "false");
+    window.removeEventListener("resize", positionSettingsPanel);
+  }
+  settingsToggle.addEventListener("click", () => {
+    if (settingsPanel.hidden) openSettings(); else closeSettings();
+  });
+  settingsBackdrop.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
   });
 
   /* ---------- range toggle ---------- */
@@ -642,6 +684,7 @@
   setView(savedView === "technical" ? "technical" : "simple");
   renderProviderToggles();
   renderUnitToggle();
+  renderThemeToggle();
   loadLatest();
   loadOutside();
   loadControls();
