@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Forecast — Cosmos Lab</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#5fc9c1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AIR-1">
+</head>
+<body>
+
+<div class="faceplate">
+  <div class="faceplate-inner">
+    <div class="device-id">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" role="img" aria-label="Cosmos Lab">
+          <rect x="0" y="0" width="64" height="64" rx="14" fill="var(--panel-sunken)" />
+          <ellipse cx="32" cy="32" rx="21" ry="12.5" fill="none" stroke="var(--accent)" stroke-width="3.2" transform="rotate(-28 32 32)" />
+          <circle cx="45.5" cy="20" r="4.4" fill="var(--accent)" />
+          <circle cx="32" cy="32" r="2.1" fill="var(--ink)" />
+        </svg>
+        <span class="brand-word">Cosmos Lab</span>
+      </div>
+      <span class="id-divider"></span>
+      <span class="device-name">FORECAST</span>
+    </div>
+    <a class="pill-link" href="/">← Dashboard</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <section class="view view-fade">
+    <div class="zone-banner zone-banner--outside">
+      <span class="zone-dot"></span> Air quality forecast <span class="zone-sub">— AirNow, switch between saved places</span>
+    </div>
+
+    <div class="location-switch" id="location-switch"></div>
+
+    <form class="add-location-form" id="add-location-form" hidden>
+      <input type="text" id="new-location-label" placeholder="Name — e.g. Grandma's house" maxlength="40" autocomplete="off">
+      <input type="text" id="new-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+      <button type="submit">Save</button>
+      <button type="button" id="cancel-location-btn">Cancel</button>
+    </form>
+
+    <div class="forecast-card">
+      <div class="forecast-area eyebrow" id="forecast-area">—</div>
+      <div class="forecast-days" id="forecast-days"></div>
+      <div class="forecast-discussion" id="forecast-discussion" hidden>
+        <button type="button" class="discussion-toggle" id="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
+        <p id="discussion-text" hidden></p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <span>Cosmos Lab · apollo-air1-dashboard</span>
+    <span id="footer-clock"></span>
+  </footer>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script src="{{ url_for('static', filename='forecast.js') }}"></script>
+</body>
+</html>

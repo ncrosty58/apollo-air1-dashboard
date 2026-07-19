@@ -386,7 +386,19 @@
 .simple-hero--outside { border-top-color: var(--zone-outside); }
 
 .simple-hero--outside { padding: 28px 24px; }
-.simple-hero--outside .hero-badge { font-size: clamp(1.375rem, 4vw, 2rem); max-width: 22ch; }
+
+.hero-badge-label {
+  font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-dim); font-weight: 600;
+}
+.pill-link {
+  display: inline-block;
+  font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.03em;
+  color: var(--ink); text-decoration: none;
+  border: 1px solid var(--hairline); border-radius: 999px; padding: 8px 18px;
+}
+.pill-link:hover { background: var(--panel-sunken); }
+.hero-forecast-link { margin-top: 4px; }
 
 .outside-tech-card {
   background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);

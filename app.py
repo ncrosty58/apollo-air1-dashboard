@@ -43,6 +43,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/forecast")
+def forecast_page():
+    return render_template("forecast.html")
+
+
 @app.route("/manifest.webmanifest")
 def manifest():
     return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")

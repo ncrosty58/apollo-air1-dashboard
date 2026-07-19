@@ -77,9 +77,11 @@
       <span class="zone-dot"></span> Outside <span class="zone-sub">— <span id="outside-area">—</span></span>
     </div>
     <div class="simple-hero simple-hero--outside" id="hero-outside">
+      <div class="hero-badge-label">AQI</div>
       <div class="hero-badge" id="outside-badge" style="--band-color: var(--ink-dim);">—</div>
       <p class="hero-sentence" id="outside-sentence">Loading…</p>
       <p class="hero-updated">AirNow · <span id="outside-updated-rel">—</span></p>
+      <a class="pill-link hero-forecast-link" href="/forecast">See the forecast →</a>
     </div>
 
     <p class="simple-footnote">
@@ -182,7 +184,7 @@
     <div class="section">
       <div class="section-head">
         <span class="section-title">Current reading</span>
-        <span class="section-note">Updated <span id="outside-updated-tech">—</span></span>
+        <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast">See the forecast →</a></span>
       </div>
       <div class="outside-tech-card" id="outside-tech-card" style="--edge-color: var(--hairline);">
         <div class="outside-tech-main">
@@ -202,31 +204,6 @@
         <h4>AQI <span class="eyebrow" style="font-weight:500">inside vs outside</span></h4>
         <div class="legend" id="legend-aqi-compare"></div>
         <div class="chart-svg-wrap" id="chart-aqi-compare"></div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">Forecast</span>
-        <span class="section-note">AirNow — as many days as it's currently forecasting, never padded out</span>
-      </div>
-
-      <div class="location-switch" id="location-switch"></div>
-
-      <form class="add-location-form" id="add-location-form" hidden>
-        <input type="text" id="new-location-label" placeholder="Name — e.g. Grandma's house" maxlength="40" autocomplete="off">
-        <input type="text" id="new-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-        <button type="submit">Save</button>
-        <button type="button" id="cancel-location-btn">Cancel</button>
-      </form>
-
-      <div class="forecast-card">
-        <div class="forecast-area eyebrow" id="forecast-area">—</div>
-        <div class="forecast-days" id="forecast-days"></div>
-        <div class="forecast-discussion" id="forecast-discussion" hidden>
-          <button type="button" class="discussion-toggle" id="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
-          <p id="discussion-text" hidden></p>
-        </div>
       </div>
     </div>
 
