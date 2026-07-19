@@ -232,6 +232,12 @@ function setHero(aqi, co2) {
 async function loadLatest() {
   try {
     const res = await fetch("/api/latest");
+
+    if (res.status === 404) {
+      const updated = document.getElementById("updated");
+      if (updated) updated.textContent = "No sensor data yet — waiting for the AIR-1 to report in";
+      return;
+    }
     if (!res.ok) throw new Error("request failed");
     const d = await res.json();
 
