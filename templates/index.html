@@ -35,9 +35,19 @@
         <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span> · <button id="theme-toggle" type="button">switch to dark</button></span>
       </div>
     </div>
-    <div class="mode-switch" role="tablist" aria-label="View mode">
-      <button type="button" role="tab" id="tab-simple" aria-pressed="true">Basic</button>
-      <button type="button" role="tab" id="tab-technical" aria-pressed="false">Technical</button>
+    <div class="header-controls">
+      <div class="range-toggle provider-toggle" role="tablist" aria-label="Air quality data source">
+        <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
+        <button type="button" data-provider="google" aria-pressed="false">Google</button>
+      </div>
+      <div class="range-toggle unit-toggle" role="tablist" aria-label="Temperature unit">
+        <button type="button" data-unit="f" aria-pressed="true">°F</button>
+        <button type="button" data-unit="c" aria-pressed="false">°C</button>
+      </div>
+      <div class="mode-switch" role="tablist" aria-label="View mode">
+        <button type="button" role="tab" id="tab-simple" aria-pressed="true">Basic</button>
+        <button type="button" role="tab" id="tab-technical" aria-pressed="false">Technical</button>
+      </div>
     </div>
   </div>
 </div>
@@ -65,7 +75,7 @@
       </div>
       <div class="simple-tile">
         <div class="s-label">Temperature</div>
-        <div class="s-value"><span id="s-temp">—</span><span class="s-unit">°C</span></div>
+        <div class="s-value"><span id="s-temp">—</span><span class="s-unit" id="s-temp-unit">°F</span></div>
       </div>
       <div class="simple-tile">
         <div class="s-label">Humidity</div>
@@ -81,10 +91,7 @@
       <div class="hero-badge" id="outside-badge" style="--band-color: var(--ink-dim);">—</div>
       <p class="hero-sentence" id="outside-sentence">Loading…</p>
       <p class="hero-updated"><span id="outside-updated-rel">—</span></p>
-      <div class="range-toggle provider-toggle" role="tablist" aria-label="Air quality data source">
-        <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
-        <button type="button" data-provider="google" aria-pressed="false">Google</button>
-      </div>
+      <div class="outside-factors" id="outside-factors-basic"></div>
       <a class="pill-link hero-forecast-link" href="/forecast">See the forecast →</a>
     </div>
 
@@ -135,7 +142,7 @@
       </div>
       <div class="two-col">
         <div class="chart-card">
-          <h4>Temperature <span class="eyebrow" style="font-weight:500">°C</span></h4>
+          <h4>Temperature <span class="eyebrow" style="font-weight:500" id="chart-temp-unit">°F</span></h4>
           <div class="chart-svg-wrap" id="chart-temp"></div>
         </div>
         <div class="chart-card">
@@ -188,10 +195,6 @@
     <div class="section">
       <div class="section-head">
         <span class="section-title">Current reading</span>
-        <div class="range-toggle provider-toggle" role="tablist" aria-label="Air quality data source">
-          <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
-          <button type="button" data-provider="google" aria-pressed="false">Google</button>
-        </div>
         <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast">See the forecast →</a></span>
       </div>
       <div class="outside-tech-card" id="outside-tech-card" style="--edge-color: var(--hairline);">
@@ -212,6 +215,11 @@
         <h4>AQI <span class="eyebrow" style="font-weight:500">inside vs outside</span></h4>
         <div class="legend" id="legend-aqi-compare"></div>
         <div class="chart-svg-wrap" id="chart-aqi-compare"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Outside pollutants <span class="eyebrow" style="font-weight:500">AQI per pollutant</span></h4>
+        <div class="legend" id="legend-outside-pollutants"></div>
+        <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
       </div>
     </div>
 
@@ -251,7 +259,7 @@
             <div class="control-label"><span class="cl-name">SEN55 temperature</span><span class="cl-id">number.sen55_temperature_offset</span></div>
             <div class="stepper">
               <button type="button" data-step="toffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-toffset">—</span> <span class="stepper-unit">°C</span></span>
+              <span class="stepper-value"><span id="val-toffset">—</span> <span class="stepper-unit" id="unit-toffset">°F</span></span>
               <button type="button" data-step="toffset" data-dir="1" aria-label="Increase">+</button>
             </div>
           </div>

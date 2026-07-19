@@ -25,6 +25,43 @@
     return d.toLocaleTimeString([], { hour: "numeric" });
   }
 
+  /* ---------- temperature unit (F/C) ---------- */
+  let currentUnit = localStorage.getItem("apollo-air1-unit") || "f";
+
+  function tempUnitLabel() {
+    return currentUnit === "f" ? "°F" : "°C";
+  }
+  // Absolute reading: F = C * 9/5 + 32.
+  function displayTemp(celsius) {
+    return typeof celsius === "number" ? (currentUnit === "f" ? celsius * 9 / 5 + 32 : celsius) : null;
+  }
+  // A *difference* between two temperatures (e.g. a calibration offset)
+  // converts without the +32 -- that's only for absolute readings.
+  function displayTempDelta(deltaCelsius) {
+    return typeof deltaCelsius === "number" ? (currentUnit === "f" ? deltaCelsius * 9 / 5 : deltaCelsius) : null;
+  }
+
+  function renderUnitToggle() {
+    document.querySelectorAll(".unit-toggle").forEach((wrap) => {
+      wrap.querySelectorAll("button").forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(btn.getAttribute("data-unit") === currentUnit));
+      });
+    });
+    document.querySelectorAll("#s-temp-unit, #chart-temp-unit, #unit-toffset").forEach((el) => {
+      el.textContent = tempUnitLabel();
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".unit-toggle button");
+    if (!btn) return;
+    currentUnit = btn.getAttribute("data-unit");
+    localStorage.setItem("apollo-air1-unit", currentUnit);
+    renderUnitToggle();
+    loadLatest();
+    loadControls();
+    if (!viewTechnical.hidden) loadHistory(currentRange);
+  });
+
   const BAND_ORDER = ["good", "fair", "poor", "bad"];
   const BAND_WORD = { good: "Good", fair: "Fair", poor: "Poor", bad: "Very poor" };
 
@@ -160,14 +197,17 @@
       seriesFor(points, "nox_index", "#e0935a"),
     ], { leftLabel: rangeLabel, label: "VOC and NOx index history" });
 
-    renderChart(document.getElementById("chart-temp"), [
-      seriesFor(points, "temperature_c", "#e0935a", true),
-    ], { leftLabel: rangeLabel, label: "Temperature history" });
+    const tempSeries = seriesFor(points, "temperature_c", "#e0935a", true);
+    if (currentUnit === "f") {
+      tempSeries.points = tempSeries.points.map((p) => ({ t: p.t, v: p.v * 9 / 5 + 32 }));
+    }
+    renderChart(document.getElementById("chart-temp"), [tempSeries], { leftLabel: rangeLabel, label: "Temperature history" });
 
     renderChart(document.getElementById("chart-hum"), [
       seriesFor(points, "humidity_pct", "#6f9be0", true),
     ], { leftLabel: rangeLabel, label: "Humidity history" });
 
+    const providerLabel = currentProvider === "google" ? "Google" : "AirNow";
     renderChart(document.getElementById("chart-aqi-compare"), [
       seriesFor(points, "aqi", cssVar("--accent")),
       seriesFor(outsidePoints, "aqi", cssVar("--zone-outside")),
@@ -180,8 +220,31 @@
       [cssVar("--accent"), "VOC index"], ["#e0935a", "NOx index"],
     ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
     document.getElementById("legend-aqi-compare").innerHTML = [
-      [cssVar("--accent"), "Inside (NowCast)"], [cssVar("--zone-outside"), "Outside (AirNow)"],
+      [cssVar("--accent"), "Inside (NowCast)"], [cssVar("--zone-outside"), `Outside (${providerLabel})`],
     ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+
+    // AirNow's per-pollutant AQI values (O3/PM2.5/PM10/NO2) share the same
+    // 0-500 scale, so they can share one chart. Google only gives raw
+    // concentrations per pollutant, each in its own unit (ppb for gases,
+    // µg/m³ for particulates) -- plotting those together on one axis would
+    // be misleading, so there's no combined chart for it; the current
+    // breakdown above still shows each in its own real unit.
+    const pollutantChartEl = document.getElementById("chart-outside-pollutants");
+    const pollutantLegendEl = document.getElementById("legend-outside-pollutants");
+    if (currentProvider === "google") {
+      pollutantChartEl.innerHTML = '<div class="empty-state">Google reports each pollutant in its own unit (ppb for gases, µg/m³ for particulates) rather than a shared AQI scale, so they can\'t be plotted on one chart. See the current breakdown above.</div>';
+      pollutantLegendEl.innerHTML = "";
+    } else {
+      renderChart(pollutantChartEl, [
+        seriesFor(outsidePoints, "o3_aqi", "#6f9be0"),
+        seriesFor(outsidePoints, "pm2_5_aqi", "#e0935a"),
+        seriesFor(outsidePoints, "pm10_aqi", "#6a5acd"),
+        seriesFor(outsidePoints, "no2_aqi", "#b23a3a"),
+      ], { leftLabel: rangeLabel, label: "Outside pollutant AQI history" });
+      pollutantLegendEl.innerHTML = [
+        ["#6f9be0", "O3"], ["#e0935a", "PM2.5"], ["#6a5acd", "PM10"], ["#b23a3a", "NO2"],
+      ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+    }
   }
 
   /* ---------- toast ---------- */
@@ -201,7 +264,7 @@
     { id: "pm25", label: "PM2.5", unit: "µg/m³", key: "pm2_5_ugm3", decimals: 1, band: (v) => v > 35 ? "bad" : v > 12 ? "poor" : null },
     { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: (v) => v > 250 ? "bad" : v > 150 ? "poor" : null },
     { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
-    { id: "temp", label: "Temperature", unit: "°C", key: "temperature_c", decimals: 1, band: () => null },
+    { id: "temp", label: "Temperature", unit: () => tempUnitLabel(), key: "temperature_c", decimals: 1, band: () => null, convert: displayTemp },
     { id: "hum", label: "Humidity", unit: "%", key: "humidity_pct", decimals: 1, band: () => null },
     { id: "pressure", label: "Pressure", unit: "hPa", key: "pressure_hpa", decimals: 1, band: () => null },
   ];
@@ -211,17 +274,19 @@
   function renderReadouts(latest) {
     const grid = document.getElementById("readout-grid");
     grid.innerHTML = READOUT_DEFS.map((r) => {
-      const value = latest ? latest[r.key] : null;
-      const prevValue = previousLatest ? previousLatest[r.key] : null;
+      const rawValue = latest ? latest[r.key] : null;
+      const prevRawValue = previousLatest ? previousLatest[r.key] : null;
       let dir = "flat";
-      if (typeof value === "number" && typeof prevValue === "number" && value !== prevValue) {
-        dir = value > prevValue ? "up" : "down";
+      if (typeof rawValue === "number" && typeof prevRawValue === "number" && rawValue !== prevRawValue) {
+        dir = rawValue > prevRawValue ? "up" : "down";
       }
       const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "→";
-      const bandKey = typeof value === "number" ? r.band(value) : null;
+      const bandKey = typeof rawValue === "number" ? r.band(rawValue) : null;
+      const value = typeof r.convert === "function" ? r.convert(rawValue) : rawValue;
+      const unit = typeof r.unit === "function" ? r.unit() : r.unit;
       return `<div class="readout" style="--edge-color: ${bandKey ? `var(--${bandKey})` : "var(--hairline)"}">
         <div class="r-label"><span>${r.label}</span><span class="trend" data-dir="${dir}">${arrow}</span></div>
-        <div class="r-value">${fmt(value, r.decimals)}<span class="r-unit">${r.unit}</span></div>
+        <div class="r-value">${fmt(value, r.decimals)}<span class="r-unit">${unit}</span></div>
       </div>`;
     }).join("");
   }
@@ -242,7 +307,7 @@
 
       document.getElementById("s-co2").textContent = fmt(d.co2_ppm, 0);
       document.getElementById("s-pm25").textContent = fmt(d.pm2_5_ugm3, 1);
-      document.getElementById("s-temp").textContent = fmt(d.temperature_c, 1);
+      document.getElementById("s-temp").textContent = fmt(displayTemp(d.temperature_c), 1);
       document.getElementById("s-hum").textContent = fmt(d.humidity_pct, 1);
 
       document.getElementById("g-no2").textContent = fmt(d.nitrogen_dioxide_ppm, 3) + " ppm";
@@ -253,7 +318,7 @@
       document.getElementById("g-ammonia").textContent = fmt(d.ammonia_ppm, 3) + " ppm";
 
       document.getElementById("d-rssi").textContent = fmt(d.wifi_rssi_db, 0) + " dB";
-      document.getElementById("d-esptemp").textContent = fmt(d.esp_temperature_c, 1) + " °C";
+      document.getElementById("d-esptemp").textContent = fmt(displayTemp(d.esp_temperature_c), 1) + " " + tempUnitLabel();
       const uptimeMin = typeof d.uptime_s === "number" ? d.uptime_s / 60 : null;
       document.getElementById("d-uptime").textContent = fmt(uptimeMin, 1) + " min";
       document.getElementById("d-firmware").textContent = d.firmware_version || "—";
@@ -293,7 +358,7 @@
     const rangeLabel = { 6: "6h ago", 24: "24h ago", 72: "3d ago", 168: "7d ago" }[hours] || `${hours}h ago`;
     const [insideRes, outsideRes] = await Promise.allSettled([
       fetch(`/api/history?hours=${hours}`),
-      fetch(`/api/outside/history?hours=${hours}`),
+      fetch(`/api/outside/history?hours=${hours}&provider=${currentProvider}`),
     ]);
     const points = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
     const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
@@ -317,7 +382,26 @@
     localStorage.setItem("apollo-air1-provider", currentProvider);
     renderProviderToggles();
     loadOutside();
+    if (!viewTechnical.hidden) loadHistory(currentRange);
   });
+
+  // Mechanical formatting only (lowercase, underscores to spaces) -- not a
+  // translation, just Google's own enum value made readable, e.g.
+  // "PARTS_PER_BILLION" -> "parts per billion".
+  function formatConcentrationUnits(units) {
+    return (units || "").replace(/_/g, " ").toLowerCase();
+  }
+
+  function pollutantFactorsHtml(pollutants) {
+    return (pollutants || []).map((p) => {
+      const valueText = typeof p.aqi === "number"
+        ? String(p.aqi)
+        : typeof p.concentration_value === "number"
+          ? `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`
+          : "—";
+      return `<span class="outside-pollutant">${p.parameter}<span class="op-value">${valueText}</span></span>`;
+    }).join("");
+  }
 
   /* ---------- outside (AirNow or Google) ---------- */
   async function loadOutside() {
@@ -343,24 +427,34 @@
       document.getElementById("outside-updated-tech").textContent = whenText;
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
 
-      document.getElementById("outside-pollutants").innerHTML = (d.pollutants || [])
-        .map((p) => `<span class="outside-pollutant">${p.parameter}<span class="op-value">${p.aqi}</span></span>`)
-        .join("");
+      const factorsHtml = pollutantFactorsHtml(d.pollutants);
+      document.getElementById("outside-pollutants").innerHTML = factorsHtml;
+      document.getElementById("outside-factors-basic").innerHTML = factorsHtml;
     } catch (e) {
       document.getElementById("outside-badge").textContent = "—";
       document.getElementById("outside-sentence").textContent = "Couldn't reach " + (currentProvider === "google" ? "Google Air Quality." : "AirNow.");
       document.getElementById("outside-aqi-tech").textContent = "—";
       document.getElementById("outside-category-tech").textContent = "Unavailable";
+      document.getElementById("outside-pollutants").innerHTML = "";
+      document.getElementById("outside-factors-basic").innerHTML = "";
     }
   }
   /* ---------- controls (real MQTT bridge) ---------- */
   const stepperConf = {
     sleep: { object_id: "sleep_duration", step: 1, min: 0, max: 800, digits: 0, stateKey: "sleep_duration_min" },
-    toffset: { object_id: "sen55_temperature_offset", step: 0.5, min: -70, max: 70, digits: 1, stateKey: "sen55_temperature_offset" },
+    toffset: { object_id: "sen55_temperature_offset", step: 0.5, min: -70, max: 70, digits: 1, stateKey: "sen55_temperature_offset", isTempDelta: true },
     hoffset: { object_id: "sen55_humidity_offset", step: 0.5, min: -70, max: 70, digits: 1, stateKey: "sen55_humidity_offset" },
     poffset: { object_id: "dps310_pressure_offset", step: 1, min: -100, max: 100, digits: 1, stateKey: "dps310_pressure_offset" },
   };
   const stepperState = { sleep: null, toffset: null, hoffset: null, poffset: null };
+
+  // The stored/sent value always stays in the device's native °C -- only
+  // the displayed text converts, so the +/- step size and what's posted to
+  // the backend never change with the unit toggle.
+  function displayStepperValue(conf, rawValue) {
+    const value = conf.isTempDelta ? displayTempDelta(rawValue) : rawValue;
+    return value.toFixed(conf.digits);
+  }
 
   async function postControl(path, body) {
     const res = await fetch(path, {
@@ -400,7 +494,7 @@
         const v = s[conf.stateKey];
         if (typeof v === "number") {
           stepperState[key] = v;
-          document.getElementById("val-" + key).textContent = v.toFixed(conf.digits);
+          document.getElementById("val-" + key).textContent = displayStepperValue(conf, v);
         }
       });
     } catch (e) {
@@ -418,7 +512,7 @@
       v = Math.max(conf.min, Math.min(conf.max, v));
       v = Math.round(v * 10) / 10;
       stepperState[key] = v;
-      document.getElementById("val-" + key).textContent = v.toFixed(conf.digits);
+      document.getElementById("val-" + key).textContent = displayStepperValue(conf, v);
       try {
         await postControl(`/api/control/number/${conf.object_id}`, { value: v });
         toast("Sent — applies next time the device wakes");
@@ -547,6 +641,7 @@
   const savedView = localStorage.getItem("apollo-air1-view");
   setView(savedView === "technical" ? "technical" : "simple");
   renderProviderToggles();
+  renderUnitToggle();
   loadLatest();
   loadOutside();
   loadControls();

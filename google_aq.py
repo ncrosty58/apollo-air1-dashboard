@@ -8,9 +8,11 @@ import airnow
 
 CURRENT_URL = "https://airquality.googleapis.com/v1/currentConditions:lookup"
 FORECAST_URL = "https://airquality.googleapis.com/v1/forecast:lookup"
+HISTORY_URL = "https://airquality.googleapis.com/v1/history:lookup"
 
 CACHE_TTL_S = 55 * 60  # matches airnow.py's cadence
 FORECAST_CACHE_TTL_S = 3 * 60 * 60
+HISTORY_CACHE_TTL_S = 30 * 60
 # Google's forecast supports up to 96h out, but rejects a period request
 # starting at the exact current instant ("next hour onwards" only) and one
 # landing right on the 96h edge ("time period not supported"). Starting at
@@ -29,6 +31,7 @@ POLLUTANT_CODE_LABELS = {
 
 _cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
 _forecast_cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
+_history_cache = {}  # (lat, lon, hours) -> {"fetched_at": ..., "data": ...}
 
 
 def _cache_key(lat, lon):
@@ -51,13 +54,34 @@ def _best_index(indexes):
     return _index(indexes, "usa_epa") or _index(indexes, "uaqi")
 
 
+def _pollutants_from(raw_pollutants):
+    # Google's own displayName is already exactly "O3"/"PM2.5"/"NO2" etc --
+    # use it verbatim rather than a name we maintain ourselves. Only gives
+    # concentration (its own units, which vary by pollutant), never an AQI
+    # number -- that's not something Google computes per-pollutant, so we
+    # don't fabricate one.
+    return [
+        {
+            "parameter": p.get("displayName") or _pollutant_label(p.get("code")),
+            "concentration_value": (p.get("concentration") or {}).get("value"),
+            "concentration_units": (p.get("concentration") or {}).get("units"),
+        }
+        for p in raw_pollutants
+    ]
+
+
+def _dominant_label(raw_pollutants, code):
+    match = next((p for p in raw_pollutants if p.get("code") == code), None)
+    return (match or {}).get("displayName") or _pollutant_label(code)
+
+
 def _fetch_current(lat, lon):
     resp = requests.post(
         CURRENT_URL,
         params={"key": os.environ["GOOGLE_AQ_API_KEY"]},
         json={
             "location": {"latitude": lat, "longitude": lon},
-            "extraComputations": ["LOCAL_AQI"],
+            "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION"],
             "languageCode": "en",
         },
         timeout=10,
@@ -68,19 +92,17 @@ def _fetch_current(lat, lon):
     if idx is None:
         return None
 
+    raw_pollutants = body.get("pollutants") or []
     aqi = idx.get("aqi")
     return {
         "aqi": aqi,
         "band": airnow.band_for_aqi(aqi),
         "category": idx.get("category"),
-        "dominant_pollutant": _pollutant_label(idx.get("dominantPollutant")),
+        "dominant_pollutant": _dominant_label(raw_pollutants, idx.get("dominantPollutant")),
         "reporting_area": None,  # coordinate-based, no named station -- caller fills in a location label
         "observed_hour": None,
         "time": body.get("dateTime"),
-        # Google's base response gives raw pollutant concentrations, not
-        # per-pollutant AQI -- not comparable to AirNow's breakdown, so we
-        # don't fabricate one; the strip just stays empty for this provider.
-        "pollutants": [],
+        "pollutants": _pollutants_from(raw_pollutants),
     }
 
 
@@ -106,7 +128,7 @@ def _fetch_forecast(lat, lon):
             "endTime": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
         },
         "pageSize": 100,
-        "extraComputations": ["LOCAL_AQI"],
+        "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION"],
         "languageCode": "en",
     }
 
@@ -141,14 +163,15 @@ def _fetch_forecast(lat, lon):
         idx = _best_index(dominant_point.get("indexes") or [])
         if idx is None:
             continue
+        raw_pollutants = dominant_point.get("pollutants") or []
         aqi = idx.get("aqi")
         days.append({
             "date": date,
             "aqi": aqi,
             "category": idx.get("category"),
             "band": airnow.band_for_aqi(aqi),
-            "dominant_pollutant": _pollutant_label(idx.get("dominantPollutant")),
-            "pollutants": [],
+            "dominant_pollutant": _dominant_label(raw_pollutants, idx.get("dominantPollutant")),
+            "pollutants": _pollutants_from(raw_pollutants),
         })
 
     return {
@@ -167,4 +190,44 @@ def get_forecast(lat, lon):
 
     data = _fetch_forecast(lat, lon)
     _forecast_cache[key] = {"fetched_at": now, "data": data}
+    return data
+
+
+def _fetch_history(lat, lon, hours):
+    hours = max(1, min(hours, 720))  # Google's own cap is 30 days
+    payload = {
+        "location": {"latitude": lat, "longitude": lon},
+        "hours": hours,
+        "pageSize": 100,
+        "extraComputations": ["LOCAL_AQI"],
+        "languageCode": "en",
+    }
+
+    points = []
+    for _ in range(10):  # safety cap against an unbounded pagination loop
+        resp = requests.post(HISTORY_URL, params={"key": os.environ["GOOGLE_AQ_API_KEY"]}, json=payload, timeout=15)
+        resp.raise_for_status()
+        body = resp.json()
+        for h in body.get("hoursInfo") or []:
+            idx = _best_index(h.get("indexes") or [])
+            if idx is not None:
+                points.append({"time": h["dateTime"], "aqi": idx.get("aqi")})
+        page_token = body.get("nextPageToken")
+        if not page_token:
+            break
+        payload["pageToken"] = page_token
+
+    points.sort(key=lambda p: p["time"])
+    return points
+
+
+def get_history(lat, lon, hours):
+    key = (_cache_key(lat, lon), hours)
+    now = time.time()
+    cached = _history_cache.get(key)
+    if cached is not None and (now - cached["fetched_at"]) < HISTORY_CACHE_TTL_S:
+        return cached["data"]
+
+    data = _fetch_history(lat, lon, hours)
+    _history_cache[key] = {"fetched_at": now, "data": data}
     return data

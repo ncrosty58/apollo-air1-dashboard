@@ -157,6 +157,21 @@ def api_outside_history():
     except ValueError:
         hours = 24
     hours = max(1, min(hours, 168))
+    provider = request.args.get("provider", "airnow")
+
+    if provider == "google":
+        if not os.environ.get("GOOGLE_AQ_API_KEY"):
+            return jsonify({"error": "Google Air Quality isn't configured"}), 400
+        lat, lon, _ = _resolve_home_latlon()
+        if lat is None:
+            return jsonify({"error": "couldn't resolve coordinates for the home location"}), 502
+        try:
+            points = google_aq.get_history(lat, lon, hours)
+        except Exception:
+            logging.exception("Failed to fetch outside history from Google")
+            return jsonify({"error": "google air quality request failed"}), 502
+        return jsonify(points)
+
     try:
         points = influx.query_outside_history(hours)
     except Exception:

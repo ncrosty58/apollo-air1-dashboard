@@ -167,6 +167,8 @@
   .device-sub { font-size: 0.75rem; color: var(--ink-dim); }
   .device-sub button { background: none; border: none; padding: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font: inherit; }
 
+  .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
   .mode-switch {
     display: flex; background: var(--panel-sunken); border-radius: 999px; padding: 3px;
     box-shadow: var(--shadow-inset);
@@ -388,9 +390,10 @@
 .simple-hero--outside { padding: 24px 24px; gap: 2px; }
 .simple-hero--outside .hero-sentence { margin: 0; }
 .simple-hero--outside .hero-updated { margin: 8px 0 0; }
-.simple-hero--outside .provider-toggle { margin-top: 6px; }
-.provider-toggle--standalone { margin-bottom: 14px; }
+.simple-hero--outside .outside-factors { margin-top: 10px; }
 .simple-hero--outside .hero-forecast-link { margin-top: 12px; }
+
+.outside-factors { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 
 .hero-badge-label {
   font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.1em;

@@ -30,19 +30,20 @@
       <span class="id-divider"></span>
       <span class="device-name">FORECAST</span>
     </div>
-    <a class="pill-link" href="/">← Dashboard</a>
+    <div class="header-controls">
+      <div class="range-toggle provider-toggle" role="tablist" aria-label="Air quality data source">
+        <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
+        <button type="button" data-provider="google" aria-pressed="false">Google</button>
+      </div>
+      <a class="pill-link" href="/">← Dashboard</a>
+    </div>
   </div>
 </div>
 
 <div class="wrap">
   <section class="view view-fade">
     <div class="zone-banner zone-banner--outside">
-      <span class="zone-dot"></span> Air quality forecast <span class="zone-sub">— switch between saved places and data sources</span>
-    </div>
-
-    <div class="range-toggle provider-toggle provider-toggle--standalone" role="tablist" aria-label="Air quality data source">
-      <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
-      <button type="button" data-provider="google" aria-pressed="false">Google</button>
+      <span class="zone-dot"></span> Air quality forecast <span class="zone-sub">— switch between saved places</span>
     </div>
 
     <div class="location-switch" id="location-switch"></div>
