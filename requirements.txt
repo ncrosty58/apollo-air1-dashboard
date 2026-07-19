@@ -1,3 +1,5 @@
 flask
 python-dotenv
 influxdb-client
+paho-mqtt
+requests

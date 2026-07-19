@@ -74,3 +74,32 @@ def query_history(hours):
                 row.pop(key, None)
             points.append(row)
     return points
+
+
+OUTSIDE_MEASUREMENT = "outside_air_quality"
+OUTSIDE_FIELDS = ["aqi", "o3_aqi", "pm2_5_aqi", "pm10_aqi", "no2_aqi"]
+OUTSIDE_STRING_FIELDS = ["category", "dominant_pollutant", "reporting_area"]
+
+
+def query_outside_history(hours):
+    bucket = os.environ["INFLUX_BUCKET"]
+    all_fields = OUTSIDE_FIELDS + OUTSIDE_STRING_FIELDS
+    field_filter = " or ".join(f'r._field == "{f}"' for f in all_fields)
+    flux = f'''
+    from(bucket: "{bucket}")
+      |> range(start: -{hours}h)
+      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
+      |> filter(fn: (r) => {field_filter})
+      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+      |> sort(columns: ["_time"])
+    '''
+    tables = get_client().query_api().query(flux)
+    points = []
+    for table in tables:
+        for record in table.records:
+            row = dict(record.values)
+            row["time"] = record.get_time().isoformat()
+            for key in ("result", "table", "_start", "_stop", "_measurement", "_time"):
+                row.pop(key, None)
+            points.append(row)
+    return points

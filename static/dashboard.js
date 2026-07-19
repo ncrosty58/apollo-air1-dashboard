@@ -1,362 +1,523 @@
-const SVG_NS = "http://www.w3.org/2000/svg";
+(function () {
+  "use strict";
 
-function fmt(value, decimals) {
-  if (value === undefined || value === null || Number.isNaN(value)) return "—";
-  return Number(value).toFixed(decimals);
-}
-
-function el(tag, attrs, children) {
-  const e = document.createElementNS(SVG_NS, tag);
-  for (const k in attrs) e.setAttribute(k, attrs[k]);
-  (children || []).forEach((c) => e.appendChild(c));
-  return e;
-}
-
-// Renders a multi-series line chart with hover crosshair + tooltip into `container`.
-// series: [{ key, label, color }], points: [{ time: iso, [key]: number, ... }]
-function renderLineChart(container, points, series) {
-  container.innerHTML = "";
-  if (!points || points.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = "No data in this range yet.";
-    container.appendChild(empty);
-    return;
+  /* ---------- formatting / bands ---------- */
+  function fmt(value, decimals) {
+    if (value === undefined || value === null || Number.isNaN(value)) return "—";
+    return Number(value).toFixed(decimals);
   }
 
-  const width = 1000;
-  const height = 220;
-  const margin = { top: 10, right: 12, bottom: 22, left: 40 };
-  const innerW = width - margin.left - margin.right;
-  const innerH = height - margin.top - margin.bottom;
-
-  const times = points.map((p) => new Date(p.time).getTime());
-  const xMin = Math.min(...times);
-  const xMax = Math.max(...times);
-
-  let yMin = Infinity, yMax = -Infinity;
-  series.forEach((s) => {
-    points.forEach((p) => {
-      const v = p[s.key];
-      if (typeof v === "number" && !Number.isNaN(v)) {
-        if (v < yMin) yMin = v;
-        if (v > yMax) yMax = v;
-      }
-    });
-  });
-  if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = "No data in this range yet.";
-    container.appendChild(empty);
-    return;
-  }
-  if (yMin === yMax) { yMin -= 1; yMax += 1; }
-  const pad = (yMax - yMin) * 0.1;
-  yMin -= pad; yMax += pad;
-
-  const x = (t) => margin.left + ((t - xMin) / (xMax - xMin || 1)) * innerW;
-  const y = (v) => margin.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
-
-  const svg = el("svg", {
-    class: "chart-svg",
-    viewBox: `0 0 ${width} ${height}`,
-    preserveAspectRatio: "none",
-  });
-
-  // gridlines (4 horizontal)
-  const gridGroup = el("g", { class: "grid" });
-  const gridSteps = 4;
-  for (let i = 0; i <= gridSteps; i++) {
-    const gy = margin.top + (innerH / gridSteps) * i;
-    gridGroup.appendChild(el("line", { x1: margin.left, x2: width - margin.right, y1: gy, y2: gy }));
-  }
-  svg.appendChild(gridGroup);
-
-  // y axis labels
-  const axisGroup = el("g", { class: "axis" });
-  for (let i = 0; i <= gridSteps; i++) {
-    const v = yMax - ((yMax - yMin) / gridSteps) * i;
-    const gy = margin.top + (innerH / gridSteps) * i;
-    const t = el("text", { x: 4, y: gy + 3 });
-    t.textContent = fmt(v, Math.abs(v) < 10 ? 1 : 0);
-    axisGroup.appendChild(t);
-  }
-  // x axis labels (start / mid / end)
-  [0, 0.5, 1].forEach((frac) => {
-    const t = new Date(xMin + (xMax - xMin) * frac);
-    const label = t.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    const anchor = frac === 0 ? "start" : frac === 1 ? "end" : "middle";
-    const tx = el("text", { x: x(t.getTime()), y: height - 4, "text-anchor": anchor });
-    tx.textContent = label;
-    axisGroup.appendChild(tx);
-  });
-  svg.appendChild(axisGroup);
-
-  // lines
-  series.forEach((s) => {
-    const pathPoints = points
-      .filter((p) => typeof p[s.key] === "number" && !Number.isNaN(p[s.key]))
-      .map((p) => `${x(new Date(p.time).getTime())},${y(p[s.key])}`);
-    if (pathPoints.length === 0) return;
-    const path = el("path", {
-      class: "line",
-      d: "M" + pathPoints.join(" L"),
-      stroke: s.color,
-    });
-    svg.appendChild(path);
-  });
-
-  // hover layer
-  const crosshair = el("line", { class: "crosshair", y1: margin.top, y2: margin.top + innerH, x1: -100, x2: -100 });
-  svg.appendChild(crosshair);
-  const hoverDots = series.map((s) => {
-    const dot = el("circle", { class: "hover-dot", r: 4, fill: s.color, cx: -100, cy: -100 });
-    svg.appendChild(dot);
-    return dot;
-  });
-
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "relative";
-  wrapper.appendChild(svg);
-  const tooltip = document.createElement("div");
-  tooltip.className = "tooltip";
-  wrapper.appendChild(tooltip);
-  container.appendChild(wrapper);
-
-  const overlay = el("rect", {
-    x: margin.left, y: margin.top, width: innerW, height: innerH,
-    fill: "transparent",
-  });
-  svg.appendChild(overlay);
-
-  function nearestIndex(mouseT) {
-    let best = 0, bestDist = Infinity;
-    points.forEach((p, i) => {
-      const d = Math.abs(new Date(p.time).getTime() - mouseT);
-      if (d < bestDist) { bestDist = d; best = i; }
-    });
-    return best;
+  function timeAgo(isoOrEpochSeconds) {
+    if (!isoOrEpochSeconds) return "—";
+    const ms = typeof isoOrEpochSeconds === "number" ? isoOrEpochSeconds * 1000 : new Date(isoOrEpochSeconds).getTime();
+    if (Number.isNaN(ms)) return "—";
+    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.round(s / 60)}m ago`;
+    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+    return `${Math.round(s / 86400)}d ago`;
   }
 
-  overlay.addEventListener("mousemove", (evt) => {
-    const rect = svg.getBoundingClientRect();
-    const scaleX = width / rect.width;
-    const mx = (evt.clientX - rect.left) * scaleX;
-    const mouseT = xMin + ((mx - margin.left) / innerW) * (xMax - xMin);
-    const idx = nearestIndex(mouseT);
-    const p = points[idx];
-    const px = x(new Date(p.time).getTime());
-    crosshair.setAttribute("x1", px);
-    crosshair.setAttribute("x2", px);
+  const BAND_ORDER = ["good", "fair", "poor", "bad"];
+  const BAND_WORD = { good: "Good", fair: "Fair", poor: "Poor", bad: "Very poor" };
 
-    let rows = "";
-    series.forEach((s, i) => {
-      const v = p[s.key];
-      const dot = hoverDots[i];
-      if (typeof v === "number" && !Number.isNaN(v)) {
-        dot.setAttribute("cx", px);
-        dot.setAttribute("cy", y(v));
-        rows += `<div class="row"><span class="swatch" style="background:${s.color}"></span>${s.label}: ${fmt(v, 1)}</div>`;
-      } else {
-        dot.setAttribute("cx", -100);
-      }
-    });
-    const time = new Date(p.time).toLocaleString();
-    tooltip.innerHTML = `<div class="row" style="color:var(--text-secondary)">${time}</div>${rows}`;
-    tooltip.style.display = "block";
-    const tipLeft = (px / width) * rect.width;
-    tooltip.style.left = Math.min(tipLeft + 8, rect.width - 160) + "px";
-    tooltip.style.top = "4px";
-  });
-  overlay.addEventListener("mouseleave", () => {
-    tooltip.style.display = "none";
-    crosshair.setAttribute("x1", -100);
-    crosshair.setAttribute("x2", -100);
-    hoverDots.forEach((d) => d.setAttribute("cx", -100));
-  });
-}
-
-function statusFor(kind, value) {
-  if (value === undefined || value === null || Number.isNaN(value)) return null;
-  if (kind === "aqi") {
-    if (value <= 50) return { label: "Good", color: "var(--good)" };
-    if (value <= 100) return { label: "Moderate", color: "var(--warning)" };
-    if (value <= 150) return { label: "Unhealthy (sensitive)", color: "var(--serious)" };
-    return { label: "Unhealthy", color: "var(--critical)" };
+  function bandFromAqi(aqi) {
+    if (aqi === undefined || aqi === null || Number.isNaN(aqi)) return null;
+    if (aqi > 150) return "bad";
+    if (aqi > 100) return "poor";
+    if (aqi > 50) return "fair";
+    return "good";
   }
-  if (kind === "co2") {
-    if (value <= 1000) return { label: "Good", color: "var(--good)" };
-    if (value <= 2000) return { label: "Elevated", color: "var(--warning)" };
-    if (value <= 5000) return { label: "Poor", color: "var(--serious)" };
-    return { label: "Very poor", color: "var(--critical)" };
+  function bandFromCo2(co2) {
+    if (co2 === undefined || co2 === null || Number.isNaN(co2)) return null;
+    if (co2 > 2000) return "bad";
+    if (co2 > 1500) return "poor";
+    if (co2 > 1000) return "fair";
+    return "good";
   }
-  return null;
-}
-
-function setTile(id, value, decimals) {
-  const node = document.getElementById(id);
-  if (node) node.textContent = fmt(value, decimals);
-}
-
-function setChip(id, kind, value) {
-  const node = document.getElementById(id);
-  if (!node) return;
-  const status = statusFor(kind, value);
-  if (!status) { node.style.display = "none"; return; }
-  node.style.display = "inline-flex";
-  node.innerHTML = `<span class="dot" style="background:${status.color}"></span>${status.label}`;
-}
-
-function setHero(aqi, co2) {
-  const badge = document.getElementById("hero-badge");
-  if (!badge) return;
-  // Whichever of AQI / CO2 reads worse drives the headline, since a non-technical
-  // reader only wants one answer, not two numbers to reconcile.
-  const aqiStatus = statusFor("aqi", aqi);
-  const co2Status = statusFor("co2", co2);
-  const order = ["Good", "Moderate", "Elevated", "Unhealthy (sensitive)", "Poor", "Unhealthy", "Very poor"];
-  let status = aqiStatus;
-  if (co2Status && (!status || order.indexOf(co2Status.label) > order.indexOf(status.label))) {
-    status = co2Status;
+  function worseBand(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return BAND_ORDER.indexOf(a) >= BAND_ORDER.indexOf(b) ? a : b;
   }
-  if (!status) {
-    badge.textContent = "—";
-    badge.style.color = "";
-    return;
+  function bandVar(band) {
+    return band ? `var(--${band})` : "var(--ink-dim)";
   }
-  badge.textContent = status.label;
-  badge.style.color = status.color;
-}
 
-async function loadLatest() {
-  try {
-    const res = await fetch("/api/latest");
+  function insideSentence(band) {
+    switch (band) {
+      case "good": return "CO2 and particulates are both low right now — nothing to do.";
+      case "fair": return "Slightly elevated — cracking a window would help.";
+      case "poor": return "CO2 or particulates are elevated — ventilating is a good idea.";
+      case "bad": return "Air quality is poor right now — ventilate if you can.";
+      default: return "Waiting for a reading…";
+    }
+  }
+  function outsideSentence(band, pollutant) {
+    const p = pollutant || "the dominant pollutant";
+    switch (band) {
+      case "good": return `Clear outside — ${p} is low.`;
+      case "fair": return `A bit hazy outside — ${p} is moderate.`;
+      case "poor": return `${p} is elevated outside — sensitive groups should ease up on strenuous outdoor activity.`;
+      case "bad": return `${p} is high outside — limit time outdoors if you can.`;
+      default: return "Loading…";
+    }
+  }
 
-    if (res.status === 404) {
-      const updated = document.getElementById("updated");
-      if (updated) updated.textContent = "No sensor data yet — waiting for the AIR-1 to report in";
+  /* ---------- chart rendering (SVG, hand-drawn) ----------
+   * Series are plotted by real timestamp (not array index) so that sources
+   * sampled at different rates — e.g. indoor readings every ~5-10min vs.
+   * AirNow's hourly outdoor readings — overlay correctly on one chart. */
+  const W = 760, H = 160, PAD = { l: 4, r: 4, t: 10, b: 18 };
+
+  function pathFor(points, tMin, tMax, vMin, vMax) {
+    const xw = W - PAD.l - PAD.r;
+    const yh = H - PAD.t - PAD.b;
+    return points.map((p, i) => {
+      const x = PAD.l + ((p.t - tMin) / (tMax - tMin || 1)) * xw;
+      const y = PAD.t + yh - ((p.v - vMin) / (vMax - vMin || 1)) * yh;
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+  }
+
+  function pointAt(p, tMin, tMax, vMin, vMax) {
+    const xw = W - PAD.l - PAD.r;
+    const yh = H - PAD.t - PAD.b;
+    const x = PAD.l + ((p.t - tMin) / (tMax - tMin || 1)) * xw;
+    const y = PAD.t + yh - ((p.v - vMin) / (vMax - vMin || 1)) * yh;
+    return [x, y];
+  }
+
+  // series: [{ color, points: [{t, v}], area }]
+  function renderChart(el, series, opts) {
+    const nonEmpty = series.filter((s) => s.points.length > 0);
+    if (nonEmpty.length === 0) {
+      el.innerHTML = '<div class="empty-state">No data in this range yet.</div>';
       return;
     }
-    if (!res.ok) throw new Error("request failed");
-    const d = await res.json();
+    const allTimes = nonEmpty.flatMap((s) => s.points.map((p) => p.t));
+    const allVals = nonEmpty.flatMap((s) => s.points.map((p) => p.v));
+    const tMin = Math.min(...allTimes), tMax = Math.max(...allTimes);
+    const vMin = Math.min(...allVals), vMax = Math.max(...allVals);
+    const pad = (vMax - vMin) * 0.12 || 1;
+    const lo = vMin - pad;
+    const hi = vMax + pad;
 
-    setTile("t-co2", d.co2_ppm, 0);
-    setChip("c-co2", "co2", d.co2_ppm);
-    setTile("t-aqi", d.aqi, 0);
-    setChip("c-aqi", "aqi", d.aqi);
-    setTile("t-pm25", d.pm2_5_ugm3, 1);
-    setTile("t-voc", d.voc_index, 0);
-    setTile("t-nox", d.nox_index, 0);
-    setTile("t-temp", d.temperature_c, 1);
-    setTile("t-hum", d.humidity_pct, 1);
-    setTile("t-pressure", d.pressure_hpa, 1);
-
-    setTile("d-rssi", d.wifi_rssi_db, 0);
-    setTile("d-esptemp", d.esp_temperature_c, 1);
-    const uptimeMin = typeof d.uptime_s === "number" ? d.uptime_s / 60 : null;
-    setTile("d-uptime", uptimeMin, 1);
-    const fw = document.getElementById("d-firmware");
-    if (fw) fw.textContent = d.firmware_version || "—";
-
-    setTile("g-no2", d.nitrogen_dioxide_ppm, 3);
-    setTile("g-co", d.carbon_monoxide_ppm, 3);
-    setTile("g-h2", d.hydrogen_ppm, 3);
-    setTile("g-ethanol", d.ethanol_ppm, 3);
-    setTile("g-methane", d.methane_ppm, 3);
-    setTile("g-ammonia", d.ammonia_ppm, 3);
-
-    setTile("s-co2", d.co2_ppm, 0);
-    setTile("s-pm25", d.pm2_5_ugm3, 1);
-    setTile("s-temp", d.temperature_c, 1);
-    setTile("s-hum", d.humidity_pct, 1);
-    setHero(d.aqi, d.co2_ppm);
-
-    const updated = document.getElementById("updated");
-    if (updated) updated.textContent = "Latest reading: " + new Date(d.time).toLocaleString();
-  } catch (e) {
-    const updated = document.getElementById("updated");
-    if (updated) updated.textContent = "Unable to reach InfluxDB";
+    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${opts.label || "chart"}">`;
+    for (let gy = 0; gy <= 3; gy++) {
+      const y = PAD.t + (gy / 3) * (H - PAD.t - PAD.b);
+      svg += `<line class="chart-grid-line" x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W - PAD.r}" y2="${y.toFixed(1)}" />`;
+    }
+    nonEmpty.forEach((s) => {
+      const d = pathFor(s.points, tMin, tMax, lo, hi);
+      if (s.area) {
+        const yh = H - PAD.t - PAD.b;
+        const areaD = `${d} L${(W - PAD.r).toFixed(1)},${(PAD.t + yh).toFixed(1)} L${PAD.l},${(PAD.t + yh).toFixed(1)} Z`;
+        svg += `<path d="${areaD}" fill="${s.color}" opacity="0.12" stroke="none" />`;
+      }
+      svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
+      const last = s.points[s.points.length - 1];
+      const [ex, ey] = pointAt(last, tMin, tMax, lo, hi);
+      svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+    });
+    svg += `<text class="chart-axis-label" x="${PAD.l}" y="${H - 4}">${opts.leftLabel || ""}</text>`;
+    svg += `<text class="chart-axis-label" x="${W - PAD.r}" y="${H - 4}" text-anchor="end">now</text>`;
+    svg += "</svg>";
+    el.innerHTML = svg;
   }
-}
 
-async function loadHistory(hours) {
-  const res = await fetch(`/api/history?hours=${hours}`);
-  const points = res.ok ? await res.json() : [];
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-  renderLineChart(document.getElementById("chart-co2"), points, [
-    { key: "co2_ppm", label: "CO2 (ppm)", color: "var(--series-1)" },
-  ]);
-  renderLineChart(document.getElementById("chart-pm"), points, [
-    { key: "pm1_0_ugm3", label: "PM1.0", color: "var(--series-1)" },
-    { key: "pm2_5_ugm3", label: "PM2.5", color: "var(--series-2)" },
-    { key: "pm4_0_ugm3", label: "PM4.0", color: "var(--series-3)" },
-    { key: "pm10_0_ugm3", label: "PM10", color: "var(--series-4)" },
-  ]);
-  renderLineChart(document.getElementById("chart-temp"), points, [
-    { key: "temperature_c", label: "Temperature (°C)", color: "var(--series-1)" },
-  ]);
-  renderLineChart(document.getElementById("chart-hum"), points, [
-    { key: "humidity_pct", label: "Humidity (%)", color: "var(--series-1)" },
-  ]);
-  renderLineChart(document.getElementById("chart-voc"), points, [
-    { key: "voc_index", label: "VOC index", color: "var(--series-1)" },
-    { key: "nox_index", label: "NOx index", color: "var(--series-2)" },
-  ]);
-}
+  function seriesFor(points, key, color, area) {
+    return {
+      color,
+      area: !!area,
+      points: points
+        .filter((p) => typeof p[key] === "number")
+        .map((p) => ({ t: new Date(p.time).getTime(), v: p[key] })),
+    };
+  }
 
-function initRangeControls() {
-  const buttons = document.querySelectorAll(".range-controls button");
-  buttons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      buttons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      loadHistory(Number(btn.dataset.hours));
+  function renderAllCharts(points, outsidePoints, rangeLabel) {
+    renderChart(document.getElementById("chart-co2"), [
+      seriesFor(points, "co2_ppm", cssVar("--accent"), true),
+    ], { leftLabel: rangeLabel, label: "CO2 history" });
+
+    renderChart(document.getElementById("chart-pm"), [
+      seriesFor(points, "pm1_0_ugm3", "#6f9be0"),
+      seriesFor(points, "pm2_5_ugm3", "#e0935a"),
+      seriesFor(points, "pm4_0_ugm3", "#b23a3a"),
+      seriesFor(points, "pm10_0_ugm3", "#6a5acd"),
+    ], { leftLabel: rangeLabel, label: "Particulate matter history" });
+
+    renderChart(document.getElementById("chart-voc"), [
+      seriesFor(points, "voc_index", cssVar("--accent")),
+      seriesFor(points, "nox_index", "#e0935a"),
+    ], { leftLabel: rangeLabel, label: "VOC and NOx index history" });
+
+    renderChart(document.getElementById("chart-temp"), [
+      seriesFor(points, "temperature_c", "#e0935a", true),
+    ], { leftLabel: rangeLabel, label: "Temperature history" });
+
+    renderChart(document.getElementById("chart-hum"), [
+      seriesFor(points, "humidity_pct", "#6f9be0", true),
+    ], { leftLabel: rangeLabel, label: "Humidity history" });
+
+    renderChart(document.getElementById("chart-outside-aqi"), [
+      seriesFor(outsidePoints, "aqi", cssVar("--zone-outside"), true),
+    ], { leftLabel: rangeLabel, label: "Outside AQI history" });
+
+    renderChart(document.getElementById("chart-aqi-compare"), [
+      seriesFor(points, "aqi", cssVar("--accent")),
+      seriesFor(outsidePoints, "aqi", cssVar("--zone-outside")),
+    ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
+
+    document.getElementById("legend-pm").innerHTML = [
+      ["#6f9be0", "PM1.0"], ["#e0935a", "PM2.5"], ["#b23a3a", "PM4.0"], ["#6a5acd", "PM10"],
+    ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+    document.getElementById("legend-voc").innerHTML = [
+      [cssVar("--accent"), "VOC index"], ["#e0935a", "NOx index"],
+    ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+    document.getElementById("legend-aqi-compare").innerHTML = [
+      [cssVar("--accent"), "Inside (NowCast)"], [cssVar("--zone-outside"), "Outside (AirNow)"],
+    ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+  }
+
+  /* ---------- toast ---------- */
+  function toast(msg) {
+    const stack = document.getElementById("toast-stack");
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(() => el.remove(), 3200);
+  }
+
+  /* ---------- live readout tiles (Technical view) ---------- */
+  const READOUT_DEFS = [
+    { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
+    { id: "aqi", label: "AQI (NowCast)", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
+    { id: "pm25", label: "PM2.5", unit: "µg/m³", key: "pm2_5_ugm3", decimals: 1, band: (v) => v > 35 ? "bad" : v > 12 ? "poor" : null },
+    { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: (v) => v > 250 ? "bad" : v > 150 ? "poor" : null },
+    { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
+    { id: "temp", label: "Temperature", unit: "°C", key: "temperature_c", decimals: 1, band: () => null },
+    { id: "hum", label: "Humidity", unit: "%", key: "humidity_pct", decimals: 1, band: () => null },
+    { id: "pressure", label: "Pressure", unit: "hPa", key: "pressure_hpa", decimals: 1, band: () => null },
+  ];
+
+  let previousLatest = null;
+
+  function renderReadouts(latest) {
+    const grid = document.getElementById("readout-grid");
+    grid.innerHTML = READOUT_DEFS.map((r) => {
+      const value = latest ? latest[r.key] : null;
+      const prevValue = previousLatest ? previousLatest[r.key] : null;
+      let dir = "flat";
+      if (typeof value === "number" && typeof prevValue === "number" && value !== prevValue) {
+        dir = value > prevValue ? "up" : "down";
+      }
+      const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "→";
+      const bandKey = typeof value === "number" ? r.band(value) : null;
+      return `<div class="readout" style="--edge-color: ${bandKey ? `var(--${bandKey})` : "var(--hairline)"}">
+        <div class="r-label"><span>${r.label}</span><span class="trend" data-dir="${dir}">${arrow}</span></div>
+        <div class="r-value">${fmt(value, r.decimals)}<span class="r-unit">${r.unit}</span></div>
+      </div>`;
+    }).join("");
+  }
+
+  /* ---------- indoor latest reading ---------- */
+  async function loadLatest() {
+    try {
+      const res = await fetch("/api/latest");
+      if (res.status === 404) {
+        setIndoorUnavailable("No sensor data yet — waiting for the AIR-1 to report in.");
+        return;
+      }
+      if (!res.ok) throw new Error("request failed");
+      const d = await res.json();
+
+      renderReadouts(d);
+      previousLatest = d;
+
+      document.getElementById("s-co2").textContent = fmt(d.co2_ppm, 0);
+      document.getElementById("s-pm25").textContent = fmt(d.pm2_5_ugm3, 1);
+      document.getElementById("s-temp").textContent = fmt(d.temperature_c, 1);
+      document.getElementById("s-hum").textContent = fmt(d.humidity_pct, 1);
+
+      document.getElementById("g-no2").textContent = fmt(d.nitrogen_dioxide_ppm, 3) + " ppm";
+      document.getElementById("g-co").textContent = fmt(d.carbon_monoxide_ppm, 3) + " ppm";
+      document.getElementById("g-h2").textContent = fmt(d.hydrogen_ppm, 3) + " ppm";
+      document.getElementById("g-ethanol").textContent = fmt(d.ethanol_ppm, 3) + " ppm";
+      document.getElementById("g-methane").textContent = fmt(d.methane_ppm, 3) + " ppm";
+      document.getElementById("g-ammonia").textContent = fmt(d.ammonia_ppm, 3) + " ppm";
+
+      document.getElementById("d-rssi").textContent = fmt(d.wifi_rssi_db, 0) + " dB";
+      document.getElementById("d-esptemp").textContent = fmt(d.esp_temperature_c, 1) + " °C";
+      const uptimeMin = typeof d.uptime_s === "number" ? d.uptime_s / 60 : null;
+      document.getElementById("d-uptime").textContent = fmt(uptimeMin, 1) + " min";
+      document.getElementById("d-firmware").textContent = d.firmware_version || "—";
+
+      const band = worseBand(bandFromAqi(d.aqi), bandFromCo2(d.co2_ppm));
+      const heroBadge = document.getElementById("hero-badge");
+      heroBadge.textContent = BAND_WORD[band] || "—";
+      heroBadge.style.setProperty("--band-color", bandVar(band));
+      document.getElementById("hero-sentence").textContent = insideSentence(band);
+      document.getElementById("hero-updated-rel").textContent = timeAgo(d.time);
+      document.getElementById("since-reading").textContent = timeAgo(d.time);
+    } catch (e) {
+      setIndoorUnavailable("Unable to reach the dashboard's InfluxDB reader.");
+    }
+  }
+
+  function setIndoorUnavailable(msg) {
+    document.getElementById("hero-sentence").textContent = msg;
+    document.getElementById("hero-updated-rel").textContent = "—";
+    document.getElementById("since-reading").textContent = "—";
+  }
+
+  /* ---------- history / charts ---------- */
+  async function loadHistory(hours) {
+    const rangeLabel = { 6: "6h ago", 24: "24h ago", 72: "3d ago", 168: "7d ago" }[hours] || `${hours}h ago`;
+    const [insideRes, outsideRes] = await Promise.allSettled([
+      fetch(`/api/history?hours=${hours}`),
+      fetch(`/api/outside/history?hours=${hours}`),
+    ]);
+    const points = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
+    const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
+    renderAllCharts(points, outsidePoints, rangeLabel);
+  }
+
+  /* ---------- outside (AirNow) ---------- */
+  async function loadOutside() {
+    try {
+      const res = await fetch("/api/outside");
+      if (!res.ok) throw new Error("request failed");
+      const d = await res.json();
+
+      const band = d.band;
+      const areaShort = (d.reporting_area || "").split(",")[0] || "—";
+
+      const outsideBadge = document.getElementById("outside-badge");
+      outsideBadge.textContent = BAND_WORD[band] || "—";
+      outsideBadge.style.setProperty("--band-color", bandVar(band));
+      document.getElementById("outside-area").textContent = areaShort;
+      document.getElementById("outside-sentence").textContent = outsideSentence(band, d.dominant_pollutant);
+      document.getElementById("outside-updated-rel").textContent = `hour ${d.observed_hour}`;
+
+      document.getElementById("outside-aqi-tech").textContent = d.aqi ?? "—";
+      document.getElementById("outside-aqi-tech").style.setProperty("--band-color", bandVar(band));
+      document.getElementById("outside-category-tech").textContent = d.category || "—";
+      document.getElementById("outside-area-tech").textContent = d.reporting_area || "—";
+      document.getElementById("outside-updated-tech").textContent = `${d.observed} · hour ${d.observed_hour}`;
+      document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
+
+      document.getElementById("outside-pollutants").innerHTML = (d.pollutants || [])
+        .map((p) => `<span class="outside-pollutant">${p.parameter}<span class="op-value">${p.aqi}</span></span>`)
+        .join("");
+    } catch (e) {
+      document.getElementById("outside-sentence").textContent = "Couldn't reach AirNow.";
+      document.getElementById("outside-category-tech").textContent = "Unavailable";
+    }
+  }
+
+  /* ---------- controls (real MQTT bridge) ---------- */
+  const stepperConf = {
+    sleep: { object_id: "sleep_duration", step: 1, min: 0, max: 800, digits: 0, stateKey: "sleep_duration_min" },
+    toffset: { object_id: "sen55_temperature_offset", step: 0.5, min: -70, max: 70, digits: 1, stateKey: "sen55_temperature_offset" },
+    hoffset: { object_id: "sen55_humidity_offset", step: 0.5, min: -70, max: 70, digits: 1, stateKey: "sen55_humidity_offset" },
+    poffset: { object_id: "dps310_pressure_offset", step: 1, min: -100, max: 100, digits: 1, stateKey: "dps310_pressure_offset" },
+  };
+  const stepperState = { sleep: null, toffset: null, hoffset: null, poffset: null };
+
+  async function postControl(path, body) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "request failed");
+    }
+  }
+
+  async function loadControls() {
+    try {
+      const res = await fetch("/api/controls");
+      if (!res.ok) throw new Error("request failed");
+      const s = await res.json();
+
+      const lamp = document.getElementById("lamp");
+      const connStatus = document.getElementById("conn-status");
+      if (s.online) {
+        lamp.setAttribute("data-state", "mqtt");
+        connStatus.textContent = "Online now";
+      } else if (s.status_seen_at) {
+        lamp.setAttribute("data-state", "offline");
+        connStatus.textContent = `Asleep — last seen ${timeAgo(s.status_seen_at)}`;
+      } else {
+        lamp.setAttribute("data-state", "stale");
+        connStatus.textContent = "No connection data yet";
+      }
+
+      const rocker = document.getElementById("rocker-sleep");
+      rocker.setAttribute("aria-pressed", String(!!s.prevent_sleep));
+
+      Object.entries(stepperConf).forEach(([key, conf]) => {
+        const v = s[conf.stateKey];
+        if (typeof v === "number") {
+          stepperState[key] = v;
+          document.getElementById("val-" + key).textContent = v.toFixed(conf.digits);
+        }
+      });
+    } catch (e) {
+      // Controls staying at their last-known display is preferable to blanking them out.
+    }
+  }
+
+  document.querySelectorAll("[data-step]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const key = btn.getAttribute("data-step");
+      const dir = Number(btn.getAttribute("data-dir"));
+      const conf = stepperConf[key];
+      const base = stepperState[key] ?? 0;
+      let v = base + dir * conf.step;
+      v = Math.max(conf.min, Math.min(conf.max, v));
+      v = Math.round(v * 10) / 10;
+      stepperState[key] = v;
+      document.getElementById("val-" + key).textContent = v.toFixed(conf.digits);
+      try {
+        await postControl(`/api/control/number/${conf.object_id}`, { value: v });
+        toast("Sent — applies next time the device wakes");
+      } catch (e) {
+        toast("Couldn't send that — " + e.message);
+      }
     });
   });
-}
 
-function currentRangeHours() {
-  const active = document.querySelector(".range-controls button.active");
-  return active ? Number(active.dataset.hours) : 24;
-}
+  const rockerSleep = document.getElementById("rocker-sleep");
+  rockerSleep.addEventListener("click", async () => {
+    const on = rockerSleep.getAttribute("aria-pressed") !== "true";
+    rockerSleep.setAttribute("aria-pressed", String(on));
+    try {
+      await postControl("/api/control/switch/prevent_sleep", { state: on });
+      toast(on
+        ? "Sent — stays awake once it's next connected"
+        : "Sent — resumes its normal sleep cycle next wake");
+    } catch (e) {
+      rockerSleep.setAttribute("aria-pressed", String(!on));
+      toast("Couldn't send that — " + e.message);
+    }
+  });
 
-function setView(view) {
-  const simpleView = document.getElementById("simple-view");
-  const advancedView = document.getElementById("advanced-view");
-  const btnSimple = document.getElementById("btn-simple");
-  const btnAdvanced = document.getElementById("btn-advanced");
-  const isSimple = view !== "advanced";
+  async function pressButton(objectId, sentMessage) {
+    try {
+      await postControl(`/api/control/button/${objectId}`);
+      toast(sentMessage);
+    } catch (e) {
+      toast("Couldn't send that — " + e.message);
+    }
+  }
+  document.getElementById("btn-calibrate").addEventListener("click", () => {
+    pressButton("calibrate_scd40_to_420ppm", "Sent — calibrates next time the device wakes");
+  });
+  document.getElementById("btn-clean").addEventListener("click", () => {
+    pressButton("clean_sen55", "Sent — cleans next time the device wakes");
+  });
+  document.getElementById("btn-reboot").addEventListener("click", () => {
+    pressButton("esp_reboot", "Sent — restarts if the device is currently awake");
+  });
 
-  simpleView.style.display = isSimple ? "" : "none";
-  advancedView.style.display = isSimple ? "none" : "";
-  btnSimple.classList.toggle("active", isSimple);
-  btnAdvanced.classList.toggle("active", !isSimple);
-  localStorage.setItem("apollo-air1-view", isSimple ? "simple" : "advanced");
+  const holdBtn = document.getElementById("btn-factory-reset");
+  const holdFill = document.getElementById("hold-fill");
+  let holdTimer = null, holdStart = 0;
+  const HOLD_MS = 3000;
+  function holdStep() {
+    const pct = Math.min(100, ((Date.now() - holdStart) / HOLD_MS) * 100);
+    holdFill.style.width = pct + "%";
+    if (pct >= 100) {
+      cancelHold();
+      pressButton("factory_reset_esp", "Sent — factory reset applies if the device is currently awake");
+      return;
+    }
+    holdTimer = requestAnimationFrame(holdStep);
+  }
+  function startHold() { holdStart = Date.now(); holdTimer = requestAnimationFrame(holdStep); }
+  function cancelHold() { if (holdTimer) cancelAnimationFrame(holdTimer); holdTimer = null; holdFill.style.width = "0%"; }
+  holdBtn.addEventListener("mousedown", startHold);
+  holdBtn.addEventListener("touchstart", startHold, { passive: true });
+  ["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((ev) => holdBtn.addEventListener(ev, cancelHold));
 
-  // History/charts are only needed once someone actually opens Advanced —
-  // skip the extra query and render for people who stay on Simple.
-  if (!isSimple) loadHistory(currentRangeHours());
-}
+  /* ---------- view toggle ---------- */
+  const tabSimple = document.getElementById("tab-simple");
+  const tabTechnical = document.getElementById("tab-technical");
+  const viewSimple = document.getElementById("view-simple");
+  const viewTechnical = document.getElementById("view-technical");
+  let currentRange = 24;
 
-function initViewToggle() {
-  document.getElementById("btn-simple").addEventListener("click", () => setView("simple"));
-  document.getElementById("btn-advanced").addEventListener("click", () => setView("advanced"));
-  const saved = localStorage.getItem("apollo-air1-view");
-  setView(saved === "advanced" ? "advanced" : "simple");
-}
+  function setView(v) {
+    const toTech = v === "technical";
+    tabSimple.setAttribute("aria-pressed", String(!toTech));
+    tabTechnical.setAttribute("aria-pressed", String(toTech));
+    viewSimple.hidden = toTech;
+    viewTechnical.hidden = !toTech;
+    const active = toTech ? viewTechnical : viewSimple;
+    active.classList.remove("view-fade");
+    void active.offsetWidth;
+    active.classList.add("view-fade");
+    localStorage.setItem("apollo-air1-view", toTech ? "technical" : "simple");
+    if (toTech) {
+      loadHistory(currentRange);
+      loadControls();
+    }
+  }
+  tabSimple.addEventListener("click", () => setView("simple"));
+  tabTechnical.addEventListener("click", () => setView("technical"));
+  document.getElementById("to-technical").addEventListener("click", () => setView("technical"));
 
-function registerServiceWorker() {
+  /* ---------- theme toggle ---------- */
+  document.getElementById("theme-toggle").addEventListener("click", (e) => {
+    const root = document.documentElement;
+    const current = root.getAttribute("data-theme") ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = current === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    e.target.textContent = next === "dark" ? "switch to light" : "switch to dark";
+    loadHistory(currentRange);
+  });
+
+  /* ---------- range toggle ---------- */
+  document.querySelectorAll("#range-toggle button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#range-toggle button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      btn.setAttribute("aria-pressed", "true");
+      currentRange = Number(btn.getAttribute("data-range"));
+      loadHistory(currentRange);
+    });
+  });
+
+  /* ---------- clock ---------- */
+  function tickClock() {
+    document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  /* ---------- service worker ---------- */
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
       // Installability is a nice-to-have; the app works fine without it.
     });
   }
-}
 
-initRangeControls();
-initViewToggle();
-registerServiceWorker();
-loadLatest();
-setInterval(loadLatest, 60000);
-setInterval(() => { if (document.getElementById("advanced-view").style.display !== "none") loadHistory(currentRangeHours()); }, 60000);
+  /* ---------- init ---------- */
+  const savedView = localStorage.getItem("apollo-air1-view");
+  setView(savedView === "technical" ? "technical" : "simple");
+  loadLatest();
+  loadOutside();
+  loadControls();
+  setInterval(loadLatest, 60000);
+  setInterval(loadOutside, 15 * 60000);
+  setInterval(loadControls, 30000);
+  setInterval(() => { if (!viewTechnical.hidden) loadHistory(currentRange); }, 60000);
+})();

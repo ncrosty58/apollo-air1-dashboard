@@ -1,12 +1,12 @@
 {
-  "name": "Apollo AIR-1",
+  "name": "Apollo AIR-1 — Cosmos Lab",
   "short_name": "Air Quality",
   "description": "Live air quality readings from the Apollo AIR-1 sensor.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#fcfcfb",
-  "theme_color": "#2a78d6",
+  "background_color": "#14171a",
+  "theme_color": "#5fc9c1",
   "orientation": "portrait",
   "icons": [
     { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
