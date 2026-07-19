@@ -385,21 +385,22 @@
     if (!viewTechnical.hidden) loadHistory(currentRange);
   });
 
-  // Mechanical formatting only (lowercase, underscores to spaces) -- not a
-  // translation, just Google's own enum value made readable, e.g.
-  // "PARTS_PER_BILLION" -> "parts per billion".
+  // Google's own enum value, abbreviated to the unit symbol everyone reads
+  // at a glance -- spelled out ("parts per billion") it's fine in a
+  // sentence but overwhelms a small readout tile.
   function formatConcentrationUnits(units) {
-    return (units || "").replace(/_/g, " ").toLowerCase();
+    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
+    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
   }
 
   function pollutantFactorsHtml(pollutants) {
     return (pollutants || []).map((p) => {
-      const valueText = typeof p.aqi === "number"
+      const valueHtml = typeof p.aqi === "number"
         ? String(p.aqi)
         : typeof p.concentration_value === "number"
-          ? `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`
+          ? `${p.concentration_value}<span class="op-unit">${formatConcentrationUnits(p.concentration_units)}</span>`
           : "—";
-      return `<span class="outside-pollutant">${p.parameter}<span class="op-value">${valueText}</span></span>`;
+      return `<span class="outside-pollutant">${p.parameter}<span class="op-value">${valueHtml}</span></span>`;
     }).join("");
   }
 
