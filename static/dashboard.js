@@ -413,14 +413,47 @@
     return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
   }
 
+  // Google gives a raw concentration, not an AQI, so there's no aqi field
+  // to hand to bandFromAqi() the way AirNow's pollutants have. These are
+  // EPA's own AQI breakpoints (current/2024 revision for PM2.5) -- just the
+  // three thresholds this app's 4-band system needs (good/fair/poor/bad),
+  // collapsed the same way bandFromAqi() already collapses AirNow's 6 EPA
+  // categories. Units must match what Google reports: ppb for gases except
+  // CO (EPA's CO breakpoints are in ppm), µg/m³ for particulates.
+  const CONCENTRATION_THRESHOLDS = {
+    "PM2.5": [9.1, 35.5, 55.5],
+    "PM10": [55, 155, 255],
+    "O3": [55, 71, 86],
+    "NO2": [54, 101, 361],
+    "SO2": [36, 76, 186],
+    "CO": [4.5, 9.5, 12.5],
+  };
+  function bandForConcentration(parameter, value, units) {
+    const thresholds = CONCENTRATION_THRESHOLDS[parameter];
+    if (typeof value !== "number" || !thresholds) return null;
+    const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
+    const [fairMin, poorMin, badMin] = thresholds;
+    if (v >= badMin) return "bad";
+    if (v >= poorMin) return "poor";
+    if (v >= fairMin) return "fair";
+    return "good";
+  }
+
   function pollutantFactorsHtml(pollutants) {
     return (pollutants || []).map((p) => {
-      const valueHtml = typeof p.aqi === "number"
-        ? String(p.aqi)
-        : typeof p.concentration_value === "number"
-          ? `${p.concentration_value}<span class="op-unit">${formatConcentrationUnits(p.concentration_units)}</span>`
-          : "—";
-      return `<span class="outside-pollutant">${p.parameter}<span class="op-value">${valueHtml}</span></span>`;
+      let valueHtml;
+      let band = null;
+      if (typeof p.aqi === "number") {
+        valueHtml = String(p.aqi);
+        band = bandFromAqi(p.aqi);
+      } else if (typeof p.concentration_value === "number") {
+        valueHtml = `${p.concentration_value}<span class="op-unit">${formatConcentrationUnits(p.concentration_units)}</span>`;
+        band = bandForConcentration(p.parameter, p.concentration_value, p.concentration_units);
+      } else {
+        valueHtml = "—";
+      }
+      const colorStyle = band ? ` style="color: ${bandVar(band)}"` : "";
+      return `<span class="outside-pollutant">${p.parameter}<span class="op-value"${colorStyle}>${valueHtml}</span></span>`;
     }).join("");
   }
 

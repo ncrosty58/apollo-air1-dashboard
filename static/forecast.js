@@ -16,6 +16,50 @@
     return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
   }
 
+  function bandFromAqi(aqi) {
+    if (typeof aqi !== "number") return null;
+    if (aqi > 150) return "bad";
+    if (aqi > 100) return "poor";
+    if (aqi > 50) return "fair";
+    return "good";
+  }
+
+  // AirNow's category names collapse onto the same 4-band scale as its AQI
+  // numbers -- useful for the rows where AQI is -1 (not computed) and
+  // category text is all that's available.
+  const CATEGORY_TO_BAND = {
+    "Good": "good",
+    "Moderate": "fair",
+    "Unhealthy for Sensitive Groups": "poor",
+    "Unhealthy": "bad",
+    "Very Unhealthy": "bad",
+    "Hazardous": "bad",
+  };
+
+  // Google gives a raw concentration, not an AQI. These are EPA's own AQI
+  // breakpoints (current/2024 revision for PM2.5), reduced to the three
+  // thresholds this app's 4-band system needs. Units must match what
+  // Google reports: ppb for gases except CO (EPA's CO breakpoints are in
+  // ppm), µg/m³ for particulates.
+  const CONCENTRATION_THRESHOLDS = {
+    "PM2.5": [9.1, 35.5, 55.5],
+    "PM10": [55, 155, 255],
+    "O3": [55, 71, 86],
+    "NO2": [54, 101, 361],
+    "SO2": [36, 76, 186],
+    "CO": [4.5, 9.5, 12.5],
+  };
+  function bandForConcentration(parameter, value, units) {
+    const thresholds = CONCENTRATION_THRESHOLDS[parameter];
+    if (typeof value !== "number" || !thresholds) return null;
+    const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
+    const [fairMin, poorMin, badMin] = thresholds;
+    if (v >= badMin) return "bad";
+    if (v >= poorMin) return "poor";
+    if (v >= fairMin) return "fair";
+    return "good";
+  }
+
   function pollutantsHtml(pollutants) {
     // AirNow sometimes doesn't compute a per-pollutant AQI for forecast rows
     // (AQI: -1, common during an active alert, like the "Air Quality Alert"
@@ -23,12 +67,20 @@
     // ("Moderate", "Unhealthy for Sensitive Groups") for that pollutant, so
     // fall back to that instead of a bare dash.
     return (pollutants || []).map((p) => {
-      const valueText = typeof p.aqi === "number"
-        ? String(p.aqi)
-        : typeof p.concentration_value === "number"
-          ? `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`
-          : p.category || "—";
-      return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(p.parameter)}</span><span class="fp-value">${escapeHtml(valueText)}</span></span>`;
+      let valueHtml;
+      let band;
+      if (typeof p.aqi === "number") {
+        valueHtml = String(p.aqi);
+        band = bandFromAqi(p.aqi);
+      } else if (typeof p.concentration_value === "number") {
+        valueHtml = `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`;
+        band = bandForConcentration(p.parameter, p.concentration_value, p.concentration_units);
+      } else {
+        valueHtml = escapeHtml(p.category || "—");
+        band = CATEGORY_TO_BAND[p.category] || null;
+      }
+      const colorStyle = band ? ` style="color: ${bandVar(band)}"` : "";
+      return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(p.parameter)}</span><span class="fp-value"${colorStyle}>${valueHtml}</span></span>`;
     }).join("");
   }
 
