@@ -85,15 +85,16 @@
   }
 
   // Google's per-population-group guidance -- more specific than AirNow's
-  // one paragraph for everyone. General population always shows; the rest
-  // sit behind a toggle since most readers only need the first line.
+  // one paragraph for everyone. General population and children always
+  // show (kids react differently to air quality, and it's the group most
+  // likely to matter for this household); everyone else (elderly, lung
+  // disease, heart disease, athletes, pregnant) sits behind a toggle.
   const HEALTH_GROUP_LABELS = {
     elderly: "Elderly",
     lungDiseasePopulation: "Lung disease",
     heartDiseasePopulation: "Heart disease",
     athletes: "Athletes",
     pregnantWomen: "Pregnant",
-    children: "Children",
   };
 
   function healthRecommendationsHtml(hr) {
@@ -102,8 +103,10 @@
       .filter(([key]) => hr[key])
       .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
       .join("");
+    const childrenP = hr.children ? `<p><strong>Children:</strong> ${escapeHtml(hr.children)}</p>` : "";
     return `<div class="health-guidance">
       <p class="health-guidance-text">${escapeHtml(hr.generalPopulation)}</p>
+      ${childrenP}
       ${groups ? `<button type="button" class="health-guidance-toggle" aria-expanded="false">Guidance for sensitive groups</button>
       <div class="health-guidance-groups" hidden>${groups}</div>` : ""}
     </div>`;
@@ -219,15 +222,22 @@
       areaEl.textContent = d.reporting_area || "—";
       daysEl.innerHTML = (d.days && d.days.length ? d.days.map((day) => {
         const aqiText = day.aqi != null ? `AQI ${day.aqi}` : "AQI —";
-        const pollutantsBlock = day.pollutants && day.pollutants.length
+        const hasPollutantsList = day.pollutants && day.pollutants.length;
+        const pollutantsBlock = hasPollutantsList
           ? `<div class="fd-pollutants">${pollutantsHtml(day.pollutants)}</div>`
           : `<div class="fd-pollutant">${escapeHtml(day.dominant_pollutant)}</div>`;
+        // Only add a separate "driven by" line when the full breakdown is
+        // also shown below -- otherwise it'd just repeat the fallback text.
+        const dominantHtml = hasPollutantsList && day.dominant_pollutant
+          ? `<div class="fd-dominant">Driven by ${escapeHtml(day.dominant_pollutant)}</div>`
+          : "";
         const actionBadge = day.action_day ? '<div class="fd-action-badge">Action Day</div>' : "";
         return `<div class="forecast-day">
           <div class="fd-label">${dayLabel(day.date)}</div>
           ${actionBadge}
           <div class="fd-badge" style="--band-color: ${bandVar(day.band)}">${escapeHtml(day.category)}</div>
           <div class="fd-aqi">${aqiText}</div>
+          ${dominantHtml}
           ${pollutantsBlock}
           ${healthRecommendationsHtml(day.health_recommendations)}
         </div>`;

@@ -463,14 +463,17 @@
 
   // Google's per-population-group guidance -- its equivalent of AirNow's
   // forecaster discussion, just structured differently (no narrative,
-  // tailored text per group instead).
+  // tailored text per group instead). Children get their own always-visible
+  // line, same as general population -- kids react differently to air
+  // quality than the general-population text assumes, and it's the one
+  // group most likely to matter for this household. Everyone else (elderly,
+  // lung disease, heart disease, athletes, pregnant) stays behind a toggle.
   const HEALTH_GROUP_LABELS = {
     elderly: "Elderly",
     lungDiseasePopulation: "Lung disease",
     heartDiseasePopulation: "Heart disease",
     athletes: "Athletes",
     pregnantWomen: "Pregnant",
-    children: "Children",
   };
 
   function healthRecommendationsHtml(hr) {
@@ -479,8 +482,10 @@
       .filter(([key]) => hr[key])
       .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
       .join("");
+    const childrenP = hr.children ? `<p><strong>Children:</strong> ${escapeHtml(hr.children)}</p>` : "";
     return `<div class="health-guidance">
       <p class="health-guidance-text">${escapeHtml(hr.generalPopulation)}</p>
+      ${childrenP}
       ${groups ? `<button type="button" class="health-guidance-toggle" aria-expanded="false">Guidance for sensitive groups</button>
       <div class="health-guidance-groups" hidden>${groups}</div>` : ""}
     </div>`;
@@ -519,11 +524,13 @@
       outsideBadge.style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-area").textContent = d.reporting_area || "—";
       document.getElementById("outside-sentence").textContent = d.category || "Loading…";
+      document.getElementById("outside-dominant").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
       document.getElementById("outside-updated-rel").textContent = whenText;
 
       document.getElementById("outside-aqi-tech").textContent = d.aqi ?? "—";
       document.getElementById("outside-aqi-tech").style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-category-tech").textContent = d.category || "—";
+      document.getElementById("outside-dominant-tech").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
       document.getElementById("outside-area-tech").textContent = d.reporting_area || "—";
       document.getElementById("outside-updated-tech").textContent = whenText;
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
@@ -537,6 +544,8 @@
       document.getElementById("outside-sentence").textContent = "Couldn't reach " + (currentProvider === "google" ? "Google Air Quality." : "AirNow.");
       document.getElementById("outside-aqi-tech").textContent = "—";
       document.getElementById("outside-category-tech").textContent = "Unavailable";
+      document.getElementById("outside-dominant").textContent = "";
+      document.getElementById("outside-dominant-tech").textContent = "";
       document.getElementById("outside-pollutants").innerHTML = "";
       document.getElementById("outside-factors-basic").innerHTML = "";
       document.getElementById("outside-discussion").innerHTML = "";

@@ -258,6 +258,8 @@
     text-wrap: balance;
   }
   .hero-sentence { font-size: 1.0625rem; color: var(--ink-dim); max-width: 46ch; text-wrap: balance; }
+  .hero-dominant { font-size: 0.8125rem; color: var(--ink-dim); margin: 2px 0 0; }
+  .hero-dominant:empty { margin: 0; }
   .hero-updated { font-size: 0.8125rem; color: var(--ink-dim); font-family: var(--font-mono); margin-top: 6px; }
 
   .simple-grid {
@@ -472,7 +474,9 @@
   font-family: var(--font-mono); font-weight: 700; font-size: 2.25rem;
   color: var(--band-color, var(--ink)); font-variant-numeric: tabular-nums;
 }
+.outside-tech-category-col { display: flex; flex-direction: column; gap: 2px; }
 .outside-tech-category { font-size: 0.9375rem; color: var(--ink-dim); font-weight: 600; }
+.outside-tech-dominant { font-size: 0.75rem; color: var(--ink-dim); font-weight: 400; }
 .outside-tech-pollutants { display: flex; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .outside-pollutant {
   font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-dim);
@@ -528,6 +532,7 @@
 .fd-label { font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); margin-bottom: 8px; }
 .fd-badge { font-weight: 700; font-size: 1rem; color: var(--band-color, var(--ink)); text-wrap: balance; margin-bottom: 6px; }
 .fd-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.875rem; color: var(--ink-dim); }
+.fd-dominant { font-size: 0.75rem; color: var(--ink-dim); margin-top: 2px; }
 .fd-pollutant { font-size: 0.75rem; color: var(--ink-dim); margin-top: 2px; }
 
 /* One pollutant per row, not a 2-column grid -- Google's values carry a
@@ -551,6 +556,9 @@
 }
 
 .health-guidance { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); text-align: left; }
+.health-guidance p { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
+.health-guidance p + p { margin-top: 8px; }
+.health-guidance strong { color: var(--ink); }
 .health-guidance-text { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
 .health-guidance-toggle {
   margin-top: 8px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;

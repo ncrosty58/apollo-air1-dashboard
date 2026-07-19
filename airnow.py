@@ -5,7 +5,10 @@ import requests
 
 API_URL = "https://www.airnowapi.org/aq/observation/zipCode/current/"
 FORECAST_API_URL = "https://www.airnowapi.org/aq/forecast/zipCode/"
-CACHE_TTL_S = 55 * 60  # AirNow refreshes hourly; a little headroom avoids edge-of-hour misses
+CACHE_TTL_S = 20 * 60  # AirNow refreshes hourly, but the exact publish moment within the
+# hour isn't fixed and its own reporting lag varies -- a shorter cache
+# means a fetch that lands just before AirNow publishes a new hour
+# doesn't sit stale for most of the following hour too.
 FORECAST_CACHE_TTL_S = 3 * 60 * 60  # forecasts are issued at most a couple times a day
 
 # AirNow resolves a zip to its nearest reporting area within this radius.
