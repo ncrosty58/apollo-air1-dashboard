@@ -81,7 +81,7 @@ def _fetch_current(lat, lon):
         params={"key": os.environ["GOOGLE_AQ_API_KEY"]},
         json={
             "location": {"latitude": lat, "longitude": lon},
-            "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION"],
+            "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION", "HEALTH_RECOMMENDATIONS"],
             "languageCode": "en",
         },
         timeout=10,
@@ -103,6 +103,9 @@ def _fetch_current(lat, lon):
         "observed_hour": None,
         "time": body.get("dateTime"),
         "pollutants": _pollutants_from(raw_pollutants),
+        # Google's equivalent of AirNow's forecaster discussion -- no
+        # narrative text, but tailored per-population-group guidance.
+        "health_recommendations": body.get("healthRecommendations"),
     }
 
 

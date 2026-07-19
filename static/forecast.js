@@ -50,10 +50,10 @@
       .filter(([key]) => hr[key])
       .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
       .join("");
-    return `<div class="fd-health">
-      <p class="fd-health-text">${escapeHtml(hr.generalPopulation)}</p>
-      ${groups ? `<button type="button" class="fd-health-toggle" aria-expanded="false">Guidance for sensitive groups</button>
-      <div class="fd-health-groups" hidden>${groups}</div>` : ""}
+    return `<div class="health-guidance">
+      <p class="health-guidance-text">${escapeHtml(hr.generalPopulation)}</p>
+      ${groups ? `<button type="button" class="health-guidance-toggle" aria-expanded="false">Guidance for sensitive groups</button>
+      <div class="health-guidance-groups" hidden>${groups}</div>` : ""}
     </div>`;
   }
 
@@ -208,7 +208,7 @@
   // Day cards are rebuilt on every loadForecast(), so this is delegated
   // rather than bound to specific elements that won't exist yet.
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".fd-health-toggle");
+    const btn = e.target.closest(".health-guidance-toggle");
     if (!btn) return;
     const groups = btn.nextElementSibling;
     const expanded = btn.getAttribute("aria-expanded") === "true";

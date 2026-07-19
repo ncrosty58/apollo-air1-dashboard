@@ -147,6 +147,17 @@ def api_outside():
         return jsonify({"error": "airnow request failed"}), 502
     if data is None:
         return jsonify({"error": "no data for this location"}), 404
+
+    # AirNow's forecaster discussion only exists on the forecast endpoint,
+    # not current conditions -- reuse get_forecast's own cache (already hit
+    # by the Forecast page) rather than a separate lookup. Best-effort: a
+    # forecast hiccup shouldn't take down the current-conditions reading.
+    try:
+        forecast = airnow.get_forecast(os.environ["AIRNOW_ZIP"])
+        data["discussion"] = forecast.get("discussion") if forecast else None
+    except Exception:
+        logging.exception("Failed to fetch forecast discussion from AirNow")
+        data["discussion"] = None
     return jsonify(data)
 
 

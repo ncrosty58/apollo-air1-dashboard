@@ -444,7 +444,9 @@
 .simple-hero--outside .hero-sentence { margin: 0; }
 .simple-hero--outside .hero-updated { margin: 8px 0 0; }
 .simple-hero--outside .outside-factors { margin-top: 10px; }
+.simple-hero--outside .outside-discussion { margin-top: 4px; align-self: stretch; }
 .simple-hero--outside .hero-forecast-link { margin-top: 12px; }
+.simple-hero--outside .outside-discussion:empty { margin-top: 0; }
 
 .outside-factors { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 
@@ -548,17 +550,17 @@
   background: var(--poor-bg); border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;
 }
 
-.fd-health { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); text-align: left; }
-.fd-health-text { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
-.fd-health-toggle {
+.health-guidance { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); text-align: left; }
+.health-guidance-text { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
+.health-guidance-toggle {
   margin-top: 8px; font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
   background: none; border: none; color: var(--ink-dim); cursor: pointer; padding: 0;
   text-decoration: underline; text-underline-offset: 3px;
 }
-.fd-health-groups { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.fd-health-groups[hidden] { display: none; }
-.fd-health-groups p { margin: 0; font-size: 0.8125rem; color: var(--ink-dim); }
-.fd-health-groups strong { color: var(--ink); }
+.health-guidance-groups { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.health-guidance-groups[hidden] { display: none; }
+.health-guidance-groups p { margin: 0; font-size: 0.8125rem; color: var(--ink-dim); }
+.health-guidance-groups strong { color: var(--ink); }
 
 .forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
 .discussion-toggle {

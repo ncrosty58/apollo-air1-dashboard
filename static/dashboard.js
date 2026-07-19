@@ -424,6 +424,53 @@
     }).join("");
   }
 
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // Google's per-population-group guidance -- its equivalent of AirNow's
+  // forecaster discussion, just structured differently (no narrative,
+  // tailored text per group instead).
+  const HEALTH_GROUP_LABELS = {
+    elderly: "Elderly",
+    lungDiseasePopulation: "Lung disease",
+    heartDiseasePopulation: "Heart disease",
+    athletes: "Athletes",
+    pregnantWomen: "Pregnant",
+    children: "Children",
+  };
+
+  function healthRecommendationsHtml(hr) {
+    if (!hr || !hr.generalPopulation) return "";
+    const groups = Object.entries(HEALTH_GROUP_LABELS)
+      .filter(([key]) => hr[key])
+      .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
+      .join("");
+    return `<div class="health-guidance">
+      <p class="health-guidance-text">${escapeHtml(hr.generalPopulation)}</p>
+      ${groups ? `<button type="button" class="health-guidance-toggle" aria-expanded="false">Guidance for sensitive groups</button>
+      <div class="health-guidance-groups" hidden>${groups}</div>` : ""}
+    </div>`;
+  }
+
+  function outsideDiscussionHtml(d) {
+    if (currentProvider === "google") return healthRecommendationsHtml(d.health_recommendations);
+    if (!d.discussion) return "";
+    return `<div class="forecast-discussion">
+      <button type="button" class="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
+      <p class="discussion-text" hidden>${escapeHtml(d.discussion)}</p>
+    </div>`;
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".discussion-toggle, .health-guidance-toggle");
+    if (!btn) return;
+    const body = btn.nextElementSibling;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    body.hidden = expanded;
+  });
+
   /* ---------- outside (AirNow or Google) ---------- */
   async function loadOutside() {
     try {
@@ -451,6 +498,7 @@
       const factorsHtml = pollutantFactorsHtml(d.pollutants);
       document.getElementById("outside-pollutants").innerHTML = factorsHtml;
       document.getElementById("outside-factors-basic").innerHTML = factorsHtml;
+      document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
     } catch (e) {
       document.getElementById("outside-badge").textContent = "—";
       document.getElementById("outside-sentence").textContent = "Couldn't reach " + (currentProvider === "google" ? "Google Air Quality." : "AirNow.");
@@ -458,6 +506,7 @@
       document.getElementById("outside-category-tech").textContent = "Unavailable";
       document.getElementById("outside-pollutants").innerHTML = "";
       document.getElementById("outside-factors-basic").innerHTML = "";
+      document.getElementById("outside-discussion").innerHTML = "";
     }
   }
   /* ---------- controls (real MQTT bridge) ---------- */
