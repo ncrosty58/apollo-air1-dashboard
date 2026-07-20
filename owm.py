@@ -8,8 +8,8 @@ OWM reports every component as a raw µg/m³ concentration plus its own 1-5
 index; both convert to the EPA 0-500 AQI scale here so the number means the
 same thing it does on every other provider."""
 
-import influx
 import epa_aqi
+import influx
 
 # OWM component -> (EPA parameter, display label). NH3 has no EPA AQI
 # breakpoints, so it's shown as a concentration only.

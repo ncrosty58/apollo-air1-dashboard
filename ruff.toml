@@ -1,0 +1,11 @@
+# Lint config for CI. Kept intentionally light — matches the current code,
+# which already passes with defaults. Pin the target so ruff version drift in
+# CI can't change the ruleset out from under us.
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",  # line length is enforced loosely; long Flux/SQL strings are fine
+]

@@ -1,6 +1,6 @@
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -149,7 +149,7 @@ def get_current_observation():
 
 
 def _fetch_forecast(lat, lon):
-    start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    start = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     end = start + timedelta(hours=FORECAST_SPAN_HOURS)
     payload = {
         "location": {"latitude": lat, "longitude": lon},

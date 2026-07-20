@@ -263,6 +263,10 @@
   .section-title { font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--ink); }
   .section-note { font-size: 0.8125rem; color: var(--ink-dim); }
   .section-note a { display: inline-block; padding: 9px 2px; margin: -9px -2px; }
+  /* Same [hidden]-override trap as .pill-link: technical.js sets
+     forecast-link.hidden for providers without a forecast, but the explicit
+     display above would keep it visible without this rule. */
+  .section-note a[hidden] { display: none; }
 
   .readout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .readout {
@@ -498,6 +502,11 @@
   border: 1px solid var(--hairline); border-radius: 999px; padding: 8px 18px;
 }
 .pill-link:hover { background: var(--panel-sunken); }
+/* .pill-link sets an explicit display, which overrides the UA [hidden]
+   display:none -- without this rule, link.hidden = true in dashboard.js
+   (used to hide Forecast for providers that don't publish one) has no
+   visual effect and the button stays on screen. */
+.pill-link[hidden] { display: none; }
 
 .outside-tech-card {
   background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
