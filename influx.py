@@ -102,6 +102,10 @@ OUTSIDE_WEATHER_FIELDS = ["temperature_c", "humidity_pct", "pressure_hpa"]
 OWM_FIELDS = [
     "owm_aqi_epa", "owm_aqi_index", "owm_pm2_5_ugm3", "owm_pm10_ugm3",
     "owm_o3_ugm3", "owm_no2_ugm3", "owm_so2_ugm3", "owm_co_ugm3", "owm_nh3_ugm3",
+    # Per-pollutant AQI Node-RED derives from the concentrations above (NH3 has
+    # no EPA breakpoint, so it stays concentration-only). See owm.py.
+    "owm_pm2_5_aqi_epa", "owm_pm10_aqi_epa",
+    "owm_o3_aqi_epa", "owm_no2_aqi_epa", "owm_so2_aqi_epa", "owm_co_aqi_epa",
 ]
 OWM_STRING_FIELDS = ["owm_category", "owm_dominant_pollutant"]
 
@@ -142,13 +146,21 @@ GOOGLE_FIELDS = [
     "google_aqi_epa",
     "google_pm2_5_ugm3", "google_pm10_ugm3",
     "google_o3_ppb", "google_no2_ppb", "google_so2_ppb", "google_co_ppb",
+    # Per-pollutant AQI Node-RED derives from the concentrations above, so the
+    # dashboard shows every pollutant on the AQI scale (see google_aq.py).
+    "google_pm2_5_aqi_epa", "google_pm10_aqi_epa",
+    "google_o3_aqi_epa", "google_no2_aqi_epa", "google_so2_aqi_epa", "google_co_aqi_epa",
 ]
 GOOGLE_STRING_FIELDS = [
     "google_category", "google_dominant_pollutant",
     "google_health_general", "google_health_children",
 ]
 
-PURPLEAIR_FIELDS = ["purpleair_aqi_epa", "purpleair_pm2_5_ugm3", "purpleair_pm10_ugm3"]
+PURPLEAIR_FIELDS = [
+    "purpleair_aqi_epa", "purpleair_pm2_5_ugm3", "purpleair_pm10_ugm3",
+    # Per-pollutant AQI Node-RED derives from the corrected concentrations.
+    "purpleair_pm2_5_aqi_epa", "purpleair_pm10_aqi_epa",
+]
 PURPLEAIR_STRING_FIELDS = ["purpleair_category", "purpleair_dominant_pollutant"]
 
 # AirNow's own fields are the bare (unprefixed) ones in this measurement --

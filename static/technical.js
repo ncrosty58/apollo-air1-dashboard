@@ -193,16 +193,21 @@
     return PROVIDER_NAMES[currentProvider] || "AirNow";
   }
 
+  // Technical is the engineering view: prefer the raw concentration (µg/m³ /
+  // ppb) when the provider reports one, and fall back to AQI only for providers
+  // that report no concentration (AirNow). Providers now also carry a per-
+  // pollutant AQI used by the Basic dashboard; checking concentration first
+  // keeps this page showing units, not that AQI.
   function pollutantFactorsHtml(pollutants) {
     return (pollutants || []).map((p) => {
       let valueHtml;
       let band = null;
-      if (typeof p.aqi === "number") {
-        valueHtml = String(p.aqi);
-        band = bandFromAqi(p.aqi);
-      } else if (typeof p.concentration_value === "number") {
+      if (typeof p.concentration_value === "number") {
         valueHtml = `${p.concentration_value}<span class="op-unit">${formatConcentrationUnits(p.concentration_units)}</span>`;
         band = bandForConcentration(p.parameter, p.concentration_value, p.concentration_units);
+      } else if (typeof p.aqi === "number") {
+        valueHtml = String(p.aqi);
+        band = bandFromAqi(p.aqi);
       } else {
         valueHtml = "—";
       }

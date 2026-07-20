@@ -88,15 +88,17 @@ def _pollutants_from(raw_pollutants):
     ]
 
 
-# Google's Air Quality concentration fields, by EPA parameter name and the
-# unit Google reports them in (µg/m³ for particulates, ppb for gases).
+# Google's Air Quality concentration fields, by EPA parameter name, the unit
+# Google reports them in (µg/m³ for particulates, ppb for gases), and the
+# per-pollutant AQI field Node-RED derives from that concentration -- the app
+# reads the AQI rather than computing it.
 _CONCENTRATION_FIELDS = [
-    ("google_pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER"),
-    ("google_pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER"),
-    ("google_o3_ppb", "O3", "PARTS_PER_BILLION"),
-    ("google_no2_ppb", "NO2", "PARTS_PER_BILLION"),
-    ("google_so2_ppb", "SO2", "PARTS_PER_BILLION"),
-    ("google_co_ppb", "CO", "PARTS_PER_BILLION"),
+    ("google_pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER", "google_pm2_5_aqi_epa"),
+    ("google_pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER", "google_pm10_aqi_epa"),
+    ("google_o3_ppb", "O3", "PARTS_PER_BILLION", "google_o3_aqi_epa"),
+    ("google_no2_ppb", "NO2", "PARTS_PER_BILLION", "google_no2_aqi_epa"),
+    ("google_so2_ppb", "SO2", "PARTS_PER_BILLION", "google_so2_aqi_epa"),
+    ("google_co_ppb", "CO", "PARTS_PER_BILLION", "google_co_aqi_epa"),
 ]
 
 
@@ -123,14 +125,19 @@ def get_current_observation():
     aqi, category, dominant = hd
 
     pollutants = []
-    for field, parameter, units in _CONCENTRATION_FIELDS:
+    for field, parameter, units, aqi_field in _CONCENTRATION_FIELDS:
         value = row.get(field)
         if value is not None:
-            pollutants.append({
+            row_out = {
                 "parameter": parameter,
                 "concentration_value": round(value, 2),
                 "concentration_units": units,
-            })
+            }
+            # AQI drives the dashboard; the Technical page keeps the concentration.
+            aqi_value = row.get(aqi_field)
+            if aqi_value is not None:
+                row_out["aqi"] = int(round(aqi_value))
+            pollutants.append(row_out)
 
     health_recommendations = None
     if row.get("google_health_general"):
