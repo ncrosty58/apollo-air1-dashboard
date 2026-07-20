@@ -136,10 +136,13 @@
 
   const PROVIDER_NAMES = { airnow: "AirNow", google: "Google", purpleair: "PurpleAir", openweathermap: "OWM" };
   const PROVIDER_ORDER = ["airnow", "google", "purpleair", "openweathermap"];
-  // PurpleAir has no forecast product at all (real-time + historical only).
-  // OpenWeatherMap's forecast isn't built in this app yet. Either way, the
-  // Forecast link would be showing data for a different provider than the
-  // one on screen, so it's hidden rather than silently misleading.
+  // Neither of these publishes its own AQI forecast: PurpleAir is real-time +
+  // historical only, and OpenWeatherMap's pollution product has no forecast we
+  // surface here (the /forecast page is AirNow/Google only -- see app.py
+  // api_forecast). Showing a Forecast link while either is selected would hand
+  // back a *different* provider's forecast (AirNow's), which is misleading, so
+  // the link is hidden for both. Kept in sync with the server: any provider
+  // not handled by api_forecast belongs in this set.
   const PROVIDERS_WITHOUT_FORECAST = new Set(["purpleair", "openweathermap"]);
 
   function providerLabel() {

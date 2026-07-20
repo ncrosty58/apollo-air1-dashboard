@@ -41,6 +41,14 @@ if not DEBUG or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     mqtt_bridge.start()
 
 
+@app.context_processor
+def inject_links():
+    # Optional external link to the Grafana provider-comparison dashboard, shown
+    # only on the Technical/Indoor pages (it sits behind Cloudflare Access, so
+    # it's not for the family-facing Simple view). Unset -> link is omitted.
+    return {"grafana_url": os.environ.get("GRAFANA_DASHBOARD_URL", "")}
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
