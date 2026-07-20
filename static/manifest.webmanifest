@@ -1,5 +1,5 @@
 {
-  "name": "Apollo AIR-1 — Cosmos Lab",
+  "name": "Apollo AIR-1",
   "short_name": "Air Quality",
   "description": "Live air quality readings from the Apollo AIR-1 sensor.",
   "start_url": "/?source=pwa",
