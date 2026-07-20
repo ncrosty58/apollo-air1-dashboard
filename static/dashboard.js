@@ -245,12 +245,15 @@
       document.getElementById("out-sub").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
       document.getElementById("outside-rows").innerHTML = outsideRowsHtml(d.pollutants);
       document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
+      // When the selected provider's reading was last refreshed into the DB.
+      document.getElementById("out-updated").textContent = d.time ? "Updated " + timeAgo(d.time) : "";
     } catch (e) {
       document.getElementById("out-aqi").textContent = "—";
       document.getElementById("out-category").textContent = "Couldn't reach " + providerLabel() + ".";
       document.getElementById("out-sub").textContent = "";
       document.getElementById("outside-rows").innerHTML = "";
       document.getElementById("outside-discussion").innerHTML = "";
+      document.getElementById("out-updated").textContent = "";
     }
   }
 
@@ -292,6 +295,8 @@
       document.getElementById("in-category").textContent = bandLabel(band) || "Waiting for a reading…";
       document.getElementById("in-sub").textContent = insideSentence(band);
       document.getElementById("inside-rows").innerHTML = insideRowsHtml(d);
+      // When the AIR-1 last reported a reading into the DB.
+      document.getElementById("in-updated").textContent = d.time ? "Updated " + timeAgo(d.time) : "";
     } catch (e) {
       setIndoorUnavailable("Couldn't reach the sensor feed.");
     }
@@ -304,6 +309,7 @@
     inAqi.textContent = "—";
     inAqi.style.setProperty("--band-color", "var(--ink-dim)");
     document.getElementById("inside-rows").innerHTML = insideRowsHtml({});
+    document.getElementById("in-updated").textContent = "";
   }
 
   /* ---------- connection status (lamp) ---------- */

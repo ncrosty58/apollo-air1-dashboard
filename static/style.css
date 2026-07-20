@@ -494,6 +494,11 @@
 }
 .rack-foot .outside-discussion:empty { display: none; }
 .rack-foot-links { display: flex; gap: 8px; flex-wrap: wrap; flex: none; margin-left: auto; }
+/* "Updated Xm ago" freshness stamp, sitting at the left of the foot with the
+   links pushed to the right (margin-left:auto above). Recomputed on each poll,
+   like the connection lamp's "last seen" -- it doesn't tick between fetches. */
+.rack-updated { font-size: 0.75rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.rack-updated:empty { display: none; }
 
 .pill-link {
   display: inline-block;
