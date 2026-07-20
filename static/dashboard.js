@@ -106,6 +106,33 @@
       default: return "Waiting for a reading…";
     }
   }
+  function bandLabel(band) {
+    return { good: "Good", fair: "Fair", poor: "Poor", bad: "Bad" }[band] || null;
+  }
+
+  /* ---------- mini sparkline (rack-spark) ----------
+   * Deliberately simpler than the Technical charts: one flat color (the
+   * current band), no axis/grid/labels -- at 84x34px those would just be
+   * noise. Just enough to show "trending up/down/flat" at a glance. */
+  function renderMiniSpark(el, points, band) {
+    if (!el) return;
+    if (!points || points.length < 2) { el.innerHTML = ""; return; }
+    const w = el.clientWidth || 84, h = el.clientHeight || 34;
+    const vals = points.map((p) => p.v);
+    const vMin = Math.min(...vals), vMax = Math.max(...vals);
+    const pad = (vMax - vMin) * 0.15 || 1;
+    const lo = vMin - pad, hi = vMax + pad;
+    const tMin = points[0].t, tMax = points[points.length - 1].t;
+    const xAt = (t) => ((t - tMin) / (tMax - tMin || 1)) * w;
+    const yAt = (v) => h - ((v - lo) / (hi - lo || 1)) * h;
+    const d = points.map((p, i) => `${i === 0 ? "M" : "L"}${xAt(p.t).toFixed(1)},${yAt(p.v).toFixed(1)}`).join(" ");
+    const color = bandVar(band);
+    const areaD = `${d} L${w.toFixed(1)},${h} L0,${h} Z`;
+    el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-hidden="true">
+      <path d="${areaD}" fill="${color}" opacity="0.14" stroke="none" />
+      <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    </svg>`;
+  }
   /* ---------- chart rendering (SVG, hand-drawn) ----------
    * Series are plotted by real timestamp (not array index) so that sources
    * sampled at different rates — e.g. indoor readings every ~5-10min vs.
@@ -395,15 +422,25 @@
       .filter((p) => typeof p.v === "number");
   }
 
+  // AirNow is the only provider that gives *only* a computed AQI, never a
+  // raw concentration -- Google, PurpleAir, and OpenWeatherMap all report
+  // real µg/m³/ppb numbers (owm.py and purpleair.py deliberately reuse
+  // google_aq.py's own field names -- pm2_5_ugm3, o3_ppb, etc. -- for
+  // exactly this reason), so they share the same "raw concentration"
+  // History/branch as Google rather than each needing their own case.
+  function providerGivesConcentrations() {
+    return currentProvider !== "airnow";
+  }
+
   // insidePoints/outsidePoints are both needed on the same time axis --
   // called from the same place that already fetches both (see
   // loadOutsideHistorySection) rather than each chart fetching its own copy.
   //
-  // AQI is the one number both providers give on a shared 0-500 scale, so it
+  // AQI is the one number every provider gives on a shared 0-500 scale, so it
   // always overlays. Everything else only overlays where AIR-1 and the
-  // selected provider measure the *same* thing in real units: Google gives
-  // raw concentrations, so PM2.5/PM10 (already µg/m³ on both sides) overlay
-  // against it. AirNow never gives a raw concentration for anything -- only
+  // selected provider measure the *same* thing in real units: providers that
+  // give raw concentrations overlay PM2.5/PM10 (already µg/m³ on both sides)
+  // directly. AirNow never gives a raw concentration for anything -- only
   // computed AQI numbers -- so AIR-1's own raw PM2.5/PM10 convert to an
   // actual EPA AQI number (toAqiSeries/aqiFromConcentration) and overlay
   // against AirNow's pm2_5_aqi/pm10_aqi on that shared scale instead. CO/NO2
@@ -419,7 +456,7 @@
       },
     ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
 
-    if (currentProvider === "google") {
+    if (providerGivesConcentrations()) {
       renderOverlayRowChart(document.getElementById("chart-inside-outside-pollutants"), [
         {
           label: "PM2.5", unit: " µg/m³", decimals: 1,
@@ -473,16 +510,25 @@
     ], { leftLabel: rangeLabel, label: "Inside vs outside temperature, humidity, pressure history" });
   }
 
-  // Only pollutants with no indoor equivalent live here -- anything AIR-1
-  // also measures (PM2.5, PM10, and for Google CO/NO2 too) is covered by
-  // the Inside vs Outside overlay chart instead, so it isn't plotted twice.
-  // AIR-1 has no ozone or SO2 sensor, so O3 (both providers) and SO2
-  // (Google) never have an inside counterpart to overlay against.
-  function renderOutsideCharts(outsidePoints, rangeLabel) {
-    document.getElementById("card-outside-pollutants-aqi").hidden = currentProvider === "google";
-    document.getElementById("card-outside-pollutants-gases").hidden = currentProvider !== "google";
+  // Which non-overlapping pollutants (if any) this provider has beyond
+  // PM2.5/PM10 -- those already live in the Inside vs Outside overlay chart
+  // above, so they're never plotted twice here. AirNow gives per-pollutant
+  // AQI numbers; Google/OpenWeatherMap give raw gas concentrations (same
+  // field names, see providerGivesConcentrations); PurpleAir is PM-only --
+  // a single physical sensor with no gas channel at all -- so it has
+  // nothing left to show in this section once PM is excluded.
+  function outsideExtraPollutantsMode() {
+    if (currentProvider === "airnow") return "aqi";
+    if (currentProvider === "purpleair") return "none";
+    return "gases";
+  }
 
-    if (currentProvider === "google") {
+  function renderOutsideCharts(outsidePoints, rangeLabel) {
+    const mode = outsideExtraPollutantsMode();
+    document.getElementById("card-outside-pollutants-aqi").hidden = mode !== "aqi";
+    document.getElementById("card-outside-pollutants-gases").hidden = mode !== "gases";
+
+    if (mode === "gases") {
       // CO/NO2 used to overlay against AIR-1's MICS-4514 readings, but this
       // unit doesn't have that sensor -- they're outside-only now, same as
       // O3/SO2 (which never had an indoor equivalent to begin with).
@@ -492,7 +538,7 @@
         ["so2_ppb", "SO2", " ppb", 2, (v) => bandForConcentration("SO2", v, "PARTS_PER_BILLION")],
         ["co_ppb", "CO", " ppb", 2, (v) => bandForConcentration("CO", v, "PARTS_PER_BILLION")],
       ], rangeLabel, "Outside gas concentration history");
-    } else {
+    } else if (mode === "aqi") {
       renderPollutantRows("chart-outside-pollutants", outsidePoints, [
         ["o3_aqi", "O3", "", 0, bandFromAqi],
         ["no2_aqi", "NO2", "", 0, bandFromAqi],
@@ -558,21 +604,20 @@
       renderReadouts(d);
       previousLatest = d;
 
-      document.getElementById("inside-factors").innerHTML = insideFactorsHtml(d);
-
       document.getElementById("d-rssi").textContent = fmt(d.wifi_rssi_db, 0) + " dB";
       document.getElementById("d-esptemp").textContent = fmt(displayTemp(d.esp_temperature_c), 1) + " " + tempUnitLabel();
       const uptimeMin = typeof d.uptime_s === "number" ? d.uptime_s / 60 : null;
       document.getElementById("d-uptime").textContent = fmt(uptimeMin, 1) + " min";
       document.getElementById("d-firmware").textContent = d.firmware_version || "—";
+      document.getElementById("since-reading").textContent = timeAgo(d.time);
 
       const band = worseBand(bandFromAqi(d.aqi), bandFromCo2(d.co2_ppm));
-      const heroBadge = document.getElementById("hero-badge");
-      heroBadge.textContent = typeof d.aqi === "number" ? String(Math.round(d.aqi)) : "—";
-      heroBadge.style.setProperty("--band-color", bandVar(band));
-      document.getElementById("hero-sentence").textContent = insideSentence(band);
-      document.getElementById("hero-updated-rel").textContent = timeAgo(d.time);
-      document.getElementById("since-reading").textContent = timeAgo(d.time);
+      const inAqi = document.getElementById("in-aqi");
+      inAqi.textContent = typeof d.aqi === "number" ? String(Math.round(d.aqi)) : "—";
+      inAqi.style.setProperty("--band-color", bandVar(band));
+      document.getElementById("in-category").textContent = bandLabel(band) || "Waiting for a reading…";
+      document.getElementById("in-sub").textContent = insideSentence(band);
+      document.getElementById("inside-rows").innerHTML = insideRowsHtml(d);
     } catch (e) {
       setIndoorUnavailable("Couldn't reach the sensor feed.");
     }
@@ -581,13 +626,13 @@
   const INDOOR_FIELD_IDS = ["d-rssi", "d-esptemp", "d-uptime", "d-firmware"];
 
   function setIndoorUnavailable(msg) {
-    document.getElementById("hero-sentence").textContent = msg;
-    document.getElementById("hero-updated-rel").textContent = "—";
+    document.getElementById("in-category").textContent = "—";
+    document.getElementById("in-sub").textContent = msg;
     document.getElementById("since-reading").textContent = "—";
-    const heroBadge = document.getElementById("hero-badge");
-    heroBadge.textContent = "—";
-    heroBadge.style.setProperty("--band-color", "var(--ink-dim)");
-    document.getElementById("inside-factors").innerHTML = insideFactorsHtml({});
+    const inAqi = document.getElementById("in-aqi");
+    inAqi.textContent = "—";
+    inAqi.style.setProperty("--band-color", "var(--ink-dim)");
+    document.getElementById("inside-rows").innerHTML = insideRowsHtml({});
     INDOOR_FIELD_IDS.forEach((id) => { document.getElementById(id).textContent = "—"; });
     document.getElementById("readout-grid").innerHTML = "";
     previousLatest = null;
@@ -646,34 +691,47 @@
     resizeTimer = setTimeout(rerenderVisibleCharts, 200);
   });
 
-  /* ---------- provider switch (AirNow / Google) ---------- */
+  /* ---------- provider switch (AirNow / Google / PurpleAir / OpenWeatherMap) ---------- */
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
+  const PROVIDER_NAMES = { airnow: "AirNow", google: "Google", purpleair: "PurpleAir", openweathermap: "OWM" };
+  const PROVIDER_ORDER = ["airnow", "google", "purpleair", "openweathermap"];
+
   function providerLabel() {
-    return currentProvider === "google" ? "Google" : "AirNow";
+    return PROVIDER_NAMES[currentProvider] || "AirNow";
   }
 
-  function renderProviderToggles() {
-    document.querySelectorAll(".provider-toggle").forEach((wrap) => {
-      wrap.querySelectorAll("button").forEach((btn) => {
-        btn.setAttribute("aria-pressed", String(btn.getAttribute("data-provider") === currentProvider));
-      });
-    });
-    // Strategic, always-visible source attribution -- both zone banners
-    // (Basic and Technical) rather than buried only in the settings toggle,
-    // so it's clear at a glance which agency/model the outside numbers on
-    // screen came from.
-    document.querySelectorAll("#outside-source, #outside-source-tech").forEach((el) => {
-      el.textContent = providerLabel();
-    });
+  // Each chip shows that provider's own live AQI (from /api/outside/all,
+  // one best-effort call per provider server-side, no extra upstream
+  // traffic beyond what browsing them individually would cost) so tapping
+  // between sources is also how you see what the other three are reading
+  // -- not just a blind tab switch.
+  async function loadProviderChips() {
+    const wrap = document.getElementById("provider-chips");
+    if (!wrap) return;
+    try {
+      const res = await fetch("/api/outside/all");
+      const summary = res.ok ? await res.json() : {};
+      wrap.innerHTML = PROVIDER_ORDER.map((p) => {
+        const s = summary[p] || { available: false };
+        const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
+        const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";
+        return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === currentProvider}" data-unavailable="${!s.available}" style="--pc-color: ${color}">` +
+          `<span class="pc-dot"></span>${PROVIDER_NAMES[p]} <span class="pc-aqi">${aqiText}</span></button>`;
+      }).join("");
+    } catch (e) {
+      // Chips just stay at their last-rendered state.
+    }
+    document.getElementById("outside-source-tech").textContent = providerLabel();
   }
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".provider-toggle button");
+    const btn = e.target.closest(".provider-chip");
     if (!btn) return;
     currentProvider = btn.getAttribute("data-provider");
     localStorage.setItem("apollo-air1-provider", currentProvider);
-    renderProviderToggles();
+    loadProviderChips();
     loadOutside();
+    loadBasicSparks();
     if (!viewTechnical.hidden) loadOutsideHistorySection(currentRangeOutside);
   });
 
@@ -727,20 +785,23 @@
     return bandFromAqi(aqiFromConcentration(parameter, value, units));
   }
 
-  // Same badge markup/classes as the Outside hero's pollutant breakdown
-  // (outside-pollutant/op-value/op-unit) so the two hero boxes read as the
-  // same kind of thing at a glance, instead of Inside's old large standalone
-  // tile grid below the hero vs. Outside's compact row inside it. VOC index
-  // is included here even though it has no outside equivalent -- it was
-  // previously only visible in the Technical view, and it's as central an
-  // indoor air quality signal as CO2/PM2.5. Temp/Humidity have no severity
-  // bands anywhere in this app (no established thresholds), so those two
-  // stay neutral-colored like NOx does elsewhere.
-  function insideFactorsHtml(d) {
-    // The full set AIR-1's base hardware always reports (SCD40 + SEN55 +
-    // DPS310) -- as opposed to the MICS-4514 gas readings (NO2/CO/H2/
-    // ethanol/methane/ammonia), which are an optional add-on this unit
-    // doesn't have and stay Technical-only in the Gas sensors table.
+  // One row per metric instead of a badge grid -- the rack-rows list.
+  // --rr-color is a CSS custom prop the .rr-value rule already reads, so an
+  // unset (null) band just falls back to the row's default ink color rather
+  // than needing a conditional class per row.
+  function rackRow(label, valueHtml, band) {
+    const style = band ? ` style="--rr-color: ${bandVar(band)}"` : "";
+    return `<div class="rack-row"${style}><span class="rr-label">${escapeHtml(label)}</span><span class="rr-value">${valueHtml}</span></div>`;
+  }
+
+  // VOC index is included here even though it has no outside equivalent --
+  // it's as central an indoor air quality signal as CO2/PM2.5. Temp/Humidity/
+  // Pressure/NOx have no severity bands anywhere in this app (no established
+  // thresholds), so those rows stay neutral-colored. The full set AIR-1's
+  // base hardware always reports (SCD40 + SEN55 + DPS310) -- as opposed to
+  // the MICS-4514 gas readings, which are an optional add-on this unit
+  // doesn't have and stay Technical-only in the Gas sensors table.
+  function insideRowsHtml(d) {
     const items = [
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
       { label: "PM2.5", value: d.pm2_5_ugm3, decimals: 1, unit: "µg/m³", band: bandForConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER") },
@@ -752,10 +813,28 @@
     ];
     return items.map((it) => {
       const valueHtml = typeof it.value === "number"
-        ? `${fmt(it.value, it.decimals)}${it.unit ? `<span class="op-unit">${it.unit}</span>` : ""}`
+        ? `${fmt(it.value, it.decimals)}${it.unit ? `<span class="rr-unit">${it.unit}</span>` : ""}`
         : "—";
-      const colorStyle = it.band ? ` style="color: ${bandVar(it.band)}"` : "";
-      return `<span class="outside-pollutant">${it.label}<span class="op-value"${colorStyle}>${valueHtml}</span></span>`;
+      return rackRow(it.label, valueHtml, it.band);
+    }).join("");
+  }
+
+  // Same pollutant envelope every provider returns (parameter/aqi or
+  // parameter/concentration_value) -- shared by outsideRowsHtml (Basic
+  // rack) and pollutantFactorsHtml (Technical card) below.
+  function outsideRowsHtml(pollutants) {
+    return (pollutants || []).map((p) => {
+      let valueHtml, band = null;
+      if (typeof p.aqi === "number") {
+        valueHtml = String(p.aqi);
+        band = bandFromAqi(p.aqi);
+      } else if (typeof p.concentration_value === "number") {
+        valueHtml = `${p.concentration_value}<span class="rr-unit">${formatConcentrationUnits(p.concentration_units)}</span>`;
+        band = bandForConcentration(p.parameter, p.concentration_value, p.concentration_units);
+      } else {
+        valueHtml = "—";
+      }
+      return rackRow(p.parameter, valueHtml, band);
     }).join("");
   }
 
@@ -829,7 +908,7 @@
     body.hidden = expanded;
   });
 
-  /* ---------- outside (AirNow or Google) ---------- */
+  /* ---------- outside (AirNow / Google / PurpleAir / OpenWeatherMap) ---------- */
   async function loadOutside() {
     try {
       const res = await fetch(`/api/outside?provider=${currentProvider}`);
@@ -839,13 +918,14 @@
       const band = d.band;
       const whenText = d.time ? timeAgo(d.time) : formatObservedHour(d.observed_hour);
 
-      const outsideBadge = document.getElementById("outside-badge");
-      outsideBadge.textContent = typeof d.aqi === "number" ? String(d.aqi) : "—";
-      outsideBadge.style.setProperty("--band-color", bandVar(band));
+      const outAqi = document.getElementById("out-aqi");
+      outAqi.textContent = typeof d.aqi === "number" ? String(d.aqi) : "—";
+      outAqi.style.setProperty("--band-color", bandVar(band));
       document.getElementById("outside-area").textContent = d.reporting_area || "—";
-      document.getElementById("outside-sentence").textContent = d.category || "Loading…";
-      document.getElementById("outside-dominant").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
-      document.getElementById("outside-updated-rel").textContent = whenText;
+      document.getElementById("out-category").textContent = d.category || "Loading…";
+      document.getElementById("out-sub").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
+      document.getElementById("outside-rows").innerHTML = outsideRowsHtml(d.pollutants);
+      document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
 
       document.getElementById("outside-aqi-tech").textContent = d.aqi ?? "—";
       document.getElementById("outside-aqi-tech").style.setProperty("--band-color", bandVar(band));
@@ -854,21 +934,38 @@
       document.getElementById("outside-area-tech").textContent = d.reporting_area || "—";
       document.getElementById("outside-updated-tech").textContent = whenText;
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
-
-      const factorsHtml = pollutantFactorsHtml(d.pollutants);
-      document.getElementById("outside-pollutants").innerHTML = factorsHtml;
-      document.getElementById("outside-factors-basic").innerHTML = factorsHtml;
-      document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
+      document.getElementById("outside-pollutants").innerHTML = pollutantFactorsHtml(d.pollutants);
     } catch (e) {
-      document.getElementById("outside-badge").textContent = "—";
-      document.getElementById("outside-sentence").textContent = "Couldn't reach " + (currentProvider === "google" ? "Google Air Quality." : "AirNow.");
+      document.getElementById("out-aqi").textContent = "—";
+      document.getElementById("out-category").textContent = "Couldn't reach " + providerLabel() + ".";
+      document.getElementById("out-sub").textContent = "";
+      document.getElementById("outside-rows").innerHTML = "";
+      document.getElementById("outside-discussion").innerHTML = "";
       document.getElementById("outside-aqi-tech").textContent = "—";
       document.getElementById("outside-category-tech").textContent = "Unavailable";
-      document.getElementById("outside-dominant").textContent = "";
       document.getElementById("outside-dominant-tech").textContent = "";
       document.getElementById("outside-pollutants").innerHTML = "";
-      document.getElementById("outside-factors-basic").innerHTML = "";
-      document.getElementById("outside-discussion").innerHTML = "";
+    }
+  }
+
+  // Basic view's compact trend lines -- a short (6h) fetch of the same
+  // history endpoints Technical uses at whatever range is selected there,
+  // independent of that range so the at-a-glance sparkline never jumps
+  // around when someone changes Technical's range control.
+  async function loadBasicSparks() {
+    try {
+      const [insideRes, outsideRes] = await Promise.allSettled([
+        fetch("/api/history?hours=6"),
+        fetch(`/api/outside/history?hours=6&provider=${currentProvider}`),
+      ]);
+      const insidePoints = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
+      const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
+      const inSeries = seriesFor(insidePoints, "aqi", null).points;
+      const outSeries = seriesFor(outsidePoints, "aqi", null).points;
+      renderMiniSpark(document.getElementById("in-spark"), inSeries, inSeries.length ? bandFromAqi(inSeries[inSeries.length - 1].v) : null);
+      renderMiniSpark(document.getElementById("out-spark"), outSeries, outSeries.length ? bandFromAqi(outSeries[outSeries.length - 1].v) : null);
+    } catch (e) {
+      // Decorative -- fine to leave the sparklines blank on failure.
     }
   }
   /* ---------- controls (real MQTT bridge) ---------- */
@@ -1132,14 +1229,15 @@
   /* ---------- init ---------- */
   const savedView = localStorage.getItem("apollo-air1-view");
   setView(savedView === "technical" ? "technical" : "simple");
-  renderProviderToggles();
+  loadProviderChips();
   renderUnitToggle();
   renderThemeToggle();
   loadLatest();
   loadOutside();
+  loadBasicSparks();
   loadControls();
   setInterval(loadLatest, 60000);
-  setInterval(loadOutside, 15 * 60000);
+  setInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
   setInterval(loadControls, 30000);
   setInterval(() => {
     if (!viewTechnical.hidden) {

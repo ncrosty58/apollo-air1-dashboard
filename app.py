@@ -9,6 +9,8 @@ import google_aq
 import influx
 import locations as locations_store
 import mqtt_bridge
+import owm
+import purpleair
 
 load_dotenv()
 
@@ -120,33 +122,58 @@ def _resolve_latlon_for_zip(zip_code):
     return None, None, None
 
 
-@app.route("/api/outside")
-def api_outside():
-    provider = request.args.get("provider", "airnow")
-
+def _fetch_outside_current(provider):
+    """Returns (data, error_message, http_status). data is None on error."""
     if provider == "google":
         if not os.environ.get("GOOGLE_AQ_API_KEY"):
-            return jsonify({"error": "Google Air Quality isn't configured"}), 400
+            return None, "Google Air Quality isn't configured", 400
         lat, lon, label = _resolve_home_latlon()
         if lat is None:
-            return jsonify({"error": "couldn't resolve coordinates for the home location"}), 502
+            return None, "couldn't resolve coordinates for the home location", 502
         try:
             data = google_aq.get_current_observation(lat, lon)
         except Exception:
             logging.exception("Failed to fetch outdoor reading from Google")
-            return jsonify({"error": "google air quality request failed"}), 502
+            return None, "google air quality request failed", 502
         if data is None:
-            return jsonify({"error": "no data for this location"}), 404
+            return None, "no data for this location", 404
         data["reporting_area"] = label
-        return jsonify(data)
+        return data, None, 200
+
+    if provider == "purpleair":
+        if not purpleair.is_configured():
+            return None, "PurpleAir isn't configured", 400
+        lat, lon, _ = _resolve_home_latlon()
+        if lat is None:
+            return None, "couldn't resolve coordinates for the home location", 502
+        try:
+            data = purpleair.get_current_observation(lat, lon)
+        except Exception:
+            logging.exception("Failed to fetch outdoor reading from PurpleAir")
+            return None, "purpleair request failed", 502
+        if data is None:
+            return None, "no PurpleAir sensor found near the home location", 404
+        return data, None, 200
+
+    if provider == "openweathermap":
+        try:
+            data = owm.get_current_observation()
+        except Exception:
+            logging.exception("Failed to read OpenWeatherMap pollution from InfluxDB")
+            return None, "influxdb query failed", 502
+        if data is None:
+            return None, "no OpenWeatherMap pollution data yet — is OWM_API_KEY set on the nodered container?", 404
+        _, _, label = _resolve_home_latlon()
+        data["reporting_area"] = label or "Home"
+        return data, None, 200
 
     try:
         data = airnow.get_current_observation(os.environ["AIRNOW_ZIP"])
     except Exception:
         logging.exception("Failed to fetch outdoor reading from AirNow")
-        return jsonify({"error": "airnow request failed"}), 502
+        return None, "airnow request failed", 502
     if data is None:
-        return jsonify({"error": "no data for this location"}), 404
+        return None, "no data for this location", 404
 
     # AirNow's forecaster discussion only exists on the forecast endpoint,
     # not current conditions -- reuse get_forecast's own cache (already hit
@@ -158,7 +185,38 @@ def api_outside():
     except Exception:
         logging.exception("Failed to fetch forecast discussion from AirNow")
         data["discussion"] = None
+    return data, None, 200
+
+
+@app.route("/api/outside")
+def api_outside():
+    provider = request.args.get("provider", "airnow")
+    data, error, status = _fetch_outside_current(provider)
+    if data is None:
+        return jsonify({"error": error}), status
     return jsonify(data)
+
+
+@app.route("/api/outside/all")
+def api_outside_all():
+    """Compact current summary from every provider at once, for the
+    at-a-glance provider chips. Each is best-effort and served from the
+    same caches the full endpoint uses, so this costs no extra upstream
+    calls beyond what browsing the providers individually would."""
+    summary = {}
+    for provider in ("airnow", "google", "purpleair", "openweathermap"):
+        data, error, _ = _fetch_outside_current(provider)
+        if data is None:
+            summary[provider] = {"available": False, "reason": error}
+        else:
+            summary[provider] = {
+                "available": True,
+                "aqi": data.get("aqi"),
+                "band": data.get("band"),
+                "category": data.get("category"),
+                "dominant_pollutant": data.get("dominant_pollutant"),
+            }
+    return jsonify(summary)
 
 
 def _with_outside_weather(points, hours):
@@ -189,14 +247,33 @@ def api_outside_history():
     if provider == "google":
         if not os.environ.get("GOOGLE_AQ_API_KEY"):
             return jsonify({"error": "Google Air Quality isn't configured"}), 400
-        lat, lon, _ = _resolve_home_latlon()
-        if lat is None:
-            return jsonify({"error": "couldn't resolve coordinates for the home location"}), 502
         try:
-            points = google_aq.get_history(lat, lon, hours)
+            points = google_aq.get_history(hours)
         except Exception:
-            logging.exception("Failed to fetch outside history from Google")
-            return jsonify({"error": "google air quality request failed"}), 502
+            logging.exception("Failed to read Google history from InfluxDB")
+            return jsonify({"error": "influxdb query failed"}), 502
+        return jsonify(_with_outside_weather(points, hours))
+
+    if provider == "purpleair":
+        if not purpleair.is_configured():
+            return jsonify({"error": "PurpleAir isn't configured"}), 400
+        try:
+            points = purpleair.get_history(hours)
+        except Exception:
+            logging.exception("Failed to read PurpleAir history from InfluxDB")
+            return jsonify({"error": "influxdb query failed"}), 502
+        # PurpleAir's own temp/humidity/pressure ride along with its current
+        # reading but aren't persisted to Influx (out of scope for the
+        # pollutant history this stores) -- the outside-weather merge fills
+        # temp/humidity/pressure in from the shared feed instead.
+        return jsonify(_with_outside_weather(points, hours))
+
+    if provider == "openweathermap":
+        try:
+            points = owm.get_history(hours)
+        except Exception:
+            logging.exception("Failed to read OpenWeatherMap history from InfluxDB")
+            return jsonify({"error": "influxdb query failed"}), 502
         return jsonify(_with_outside_weather(points, hours))
 
     try:

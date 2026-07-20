@@ -61,13 +61,6 @@
 <div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
   <div class="settings-panel-head">Settings</div>
   <div class="settings-row">
-    <span class="cl-name">Data source</span>
-    <div class="settings-rail provider-toggle" role="tablist" aria-label="Air quality data source">
-      <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
-      <button type="button" data-provider="google" aria-pressed="false">Google</button>
-    </div>
-  </div>
-  <div class="settings-row">
     <span class="cl-name">Units</span>
     <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
       <button type="button" data-unit="f" aria-pressed="true">°F</button>
@@ -87,29 +80,43 @@
 
   <!-- ============ BASIC VIEW ============ -->
   <section class="view view-fade" id="view-simple">
-    <div class="zone-banner zone-banner--inside">
-      <span class="zone-dot"></span> Inside <span class="zone-sub">— bedroom sensor</span>
-    </div>
-    <div class="simple-hero simple-hero--dense" id="hero-inside">
-      <div class="hero-badge-label">AQI</div>
-      <div class="hero-badge" id="hero-badge" style="--band-color: var(--ink-dim);">—</div>
-      <p class="hero-sentence" id="hero-sentence">Waiting for a reading…</p>
-      <p class="hero-updated"><span id="hero-updated-rel">—</span></p>
-      <div class="outside-factors" id="inside-factors"></div>
-    </div>
+    <div class="rack-grid">
 
-    <div class="zone-banner zone-banner--outside">
-      <span class="zone-dot"></span> Outside <span class="zone-sub">— <span id="outside-area">—</span> · via <span id="outside-source">—</span></span>
-    </div>
-    <div class="simple-hero simple-hero--outside simple-hero--dense" id="hero-outside">
-      <div class="hero-badge-label">AQI</div>
-      <div class="hero-badge" id="outside-badge" style="--band-color: var(--ink-dim);">—</div>
-      <p class="hero-sentence" id="outside-sentence">Loading…</p>
-      <p class="hero-dominant" id="outside-dominant"></p>
-      <p class="hero-updated"><span id="outside-updated-rel">—</span></p>
-      <div class="outside-factors" id="outside-factors-basic"></div>
-      <div class="outside-discussion" id="outside-discussion"></div>
-      <a class="pill-link hero-forecast-link" href="/forecast">Forecast →</a>
+      <div class="rack rack--inside">
+        <div class="rack-head">
+          <div class="rack-zone"><span class="zone-dot"></span> Inside</div>
+          <div class="rack-stat">
+            <span class="rack-aqi" id="in-aqi" style="--band-color: var(--ink-dim);">—</span>
+            <div class="rack-stat-text">
+              <span class="rack-category" id="in-category">Waiting for a reading…</span>
+              <span class="rack-sub" id="in-sub">—</span>
+            </div>
+            <div class="rack-spark" id="in-spark"></div>
+          </div>
+        </div>
+        <div class="rack-rows" id="inside-rows"></div>
+      </div>
+
+      <div class="rack rack--outside">
+        <div class="rack-head">
+          <div class="rack-zone"><span class="zone-dot"></span> Outside <span class="rack-area" id="outside-area">—</span></div>
+          <div class="provider-chips" id="provider-chips"></div>
+          <div class="rack-stat">
+            <span class="rack-aqi" id="out-aqi" style="--band-color: var(--ink-dim);">—</span>
+            <div class="rack-stat-text">
+              <span class="rack-category" id="out-category">Loading…</span>
+              <span class="rack-sub" id="out-sub">—</span>
+            </div>
+            <div class="rack-spark" id="out-spark"></div>
+          </div>
+        </div>
+        <div class="rack-rows" id="outside-rows"></div>
+        <div class="rack-foot">
+          <div class="outside-discussion" id="outside-discussion"></div>
+          <a class="pill-link" href="/forecast">Forecast →</a>
+        </div>
+      </div>
+
     </div>
 
     <p class="simple-footnote">

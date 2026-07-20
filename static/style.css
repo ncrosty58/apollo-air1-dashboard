@@ -265,25 +265,6 @@
   @keyframes viewfade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ---------- SIMPLE VIEW ---------- */
-  .simple-hero {
-    background: var(--panel-raised);
-    border-radius: var(--radius-simple);
-    box-shadow: var(--shadow-raised);
-    padding: 40px 32px;
-    text-align: center;
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-  }
-  .hero-badge {
-    font-family: var(--font-body); font-weight: 700;
-    font-size: clamp(2.25rem, 7vw, 3.5rem);
-    color: var(--band-color);
-    text-wrap: balance;
-  }
-  .hero-sentence { font-size: 1.0625rem; color: var(--ink-dim); max-width: 46ch; text-wrap: balance; }
-  .hero-dominant { font-size: 0.8125rem; color: var(--ink-dim); margin: 2px 0 0; }
-  .hero-dominant:empty { margin: 0; }
-  .hero-updated { font-size: 0.8125rem; color: var(--ink-dim); font-family: var(--font-mono); margin-top: 6px; }
-
   .simple-footnote {
     margin-top: 22px; text-align: center; font-size: 0.875rem; color: var(--ink-dim);
   }
@@ -447,26 +428,86 @@
 .zone-banner--outside .zone-dot { background: var(--zone-outside); }
 .zone-banner .zone-sub { text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink-dim); opacity: 0.8; }
 
-.simple-hero { border-top: 3px solid var(--accent); }
-.simple-hero--outside { border-top-color: var(--zone-outside); }
+/* ---------- rack (Basic view: Inside / Outside instrument panels) ----------
+   Two panel modules reading as one system with the header faceplate and the
+   Technical view's readout tiles -- same raised-panel/hairline/mono-caps
+   vocabulary, just arranged as a dense "rack" of metric rows with one
+   headline stat each, instead of the old giant centered hero + badge grid.
+   That's a deliberate move toward the instrument-panel register (matches
+   .chart-card/.control-card's --radius-tech) rather than the softer
+   --radius-simple pill the old hero used -- Basic is still the friendly
+   view, but "friendly" here means scannable at a glance, not big and empty. */
+.rack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .rack-grid { grid-template-columns: 1fr; } }
 
-/* Shared by both hero boxes now that Inside carries the same kind of
-   structured content (label, badge, sentence, updated, factor row) as
-   Outside -- not really an "outside" thing, just what a denser hero needs. */
-.simple-hero--dense { padding: 24px 24px; gap: 2px; }
-.simple-hero--dense .hero-sentence { margin: 0; }
-.simple-hero--dense .hero-updated { margin: 8px 0 0; }
-.simple-hero--dense .outside-factors { margin-top: 10px; }
-.simple-hero--dense .outside-discussion { margin-top: 4px; align-self: stretch; }
-.simple-hero--dense .hero-forecast-link { margin-top: 12px; }
-.simple-hero--dense .outside-discussion:empty { margin-top: 0; }
-
-.outside-factors { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
-
-.hero-badge-label {
-  font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--ink-dim); font-weight: 600;
+.rack {
+  background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+  border-top: 3px solid var(--accent); overflow: hidden;
 }
+.rack--outside { border-top-color: var(--zone-outside); }
+
+.rack-head { padding: 16px 18px 14px; }
+.rack-zone {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-dim);
+}
+.rack-zone .zone-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.rack--inside .zone-dot { background: var(--accent); }
+.rack--outside .zone-dot { background: var(--zone-outside); }
+.rack-area { text-transform: none; letter-spacing: normal; font-weight: 500; opacity: 0.8; }
+
+/* Each chip carries its own provider's live AQI, not just a selected state --
+   closer to the outside-tech pollutant badges than to a plain tab control,
+   since tapping one is also how you learn what the other three are reading. */
+.provider-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.provider-chip {
+  display: flex; align-items: center; gap: 6px; border: none;
+  font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.02em;
+  background: var(--panel-sunken); color: var(--ink-dim);
+  border-radius: 999px; padding: 7px 11px 7px 9px; cursor: pointer; min-height: 30px;
+  box-shadow: var(--shadow-inset);
+}
+.provider-chip[aria-pressed="true"] {
+  background: var(--panel-raised); color: var(--ink); box-shadow: var(--shadow-raised);
+  outline: 1.5px solid var(--zone-outside); outline-offset: -1px;
+}
+.provider-chip[data-unavailable="true"] { opacity: 0.45; }
+.provider-chip .pc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--pc-color, var(--ink-dim)); }
+.provider-chip .pc-aqi { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+.rack-stat { display: flex; align-items: center; gap: 12px; }
+.rack-aqi {
+  font-family: var(--font-mono); font-weight: 700; font-size: clamp(2rem, 8vw, 2.5rem);
+  color: var(--band-color); font-variant-numeric: tabular-nums; flex: none; line-height: 1;
+}
+.rack-stat-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.rack-category { font-size: 0.9375rem; font-weight: 600; overflow-wrap: break-word; }
+.rack-sub { font-size: 0.75rem; color: var(--ink-dim); overflow-wrap: break-word; }
+.rack-spark { width: 84px; height: 34px; flex: none; }
+.rack-spark svg { display: block; width: 100%; height: 100%; }
+@media (max-width: 420px) { .rack-spark { width: 60px; } }
+
+.rack-rows { display: flex; flex-direction: column; padding: 2px 18px; border-top: 1px solid var(--hairline); }
+.rack-rows:empty { display: none; border-top: none; }
+.rack-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 0.8125rem;
+}
+.rack-row:last-child { border-bottom: none; }
+.rack-row .rr-label { color: var(--ink-dim); }
+.rack-row .rr-value {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600;
+  color: var(--rr-color, var(--ink)); white-space: nowrap;
+}
+.rack-row .rr-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.6875rem; margin-left: 3px; }
+
+.rack-foot {
+  padding: 12px 18px 16px; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--hairline); margin-top: 2px;
+}
+.rack-foot .outside-discussion:empty { display: none; }
+
 .pill-link {
   display: inline-block;
   font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.03em;

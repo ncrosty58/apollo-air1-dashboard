@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -5,14 +6,13 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 import airnow
+import influx
 
 CURRENT_URL = "https://airquality.googleapis.com/v1/currentConditions:lookup"
 FORECAST_URL = "https://airquality.googleapis.com/v1/forecast:lookup"
-HISTORY_URL = "https://airquality.googleapis.com/v1/history:lookup"
 
 CACHE_TTL_S = 55 * 60  # matches airnow.py's cadence
 FORECAST_CACHE_TTL_S = 3 * 60 * 60
-HISTORY_CACHE_TTL_S = 30 * 60
 # Google's forecast supports up to 96h out, but rejects a period request
 # starting at the exact current instant ("next hour onwards" only) and one
 # landing right on the 96h edge ("time period not supported"). Starting at
@@ -31,7 +31,6 @@ POLLUTANT_CODE_LABELS = {
 
 _cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
 _forecast_cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
-_history_cache = {}  # (lat, lon, hours) -> {"fetched_at": ..., "data": ...}
 
 
 def _cache_key(lat, lon):
@@ -94,11 +93,25 @@ def _fetch_current(lat, lon):
 
     raw_pollutants = body.get("pollutants") or []
     aqi = idx.get("aqi")
+    category = idx.get("category")
+    dominant_pollutant = _dominant_label(raw_pollutants, idx.get("dominantPollutant"))
+
+    # Google has its own 30-day history API, but every provider's *live*
+    # reading gets persisted here too so History reads the same way for all
+    # four providers (see influx.write_outside_reading) -- best-effort, a
+    # write hiccup shouldn't break serving the reading that's already in hand.
+    try:
+        fields = {"google_aqi": aqi, "google_category": category, "google_dominant_pollutant": dominant_pollutant}
+        fields.update({f"google_{k}": v for k, v in _flat_concentrations(raw_pollutants).items()})
+        influx.write_outside_reading(fields)
+    except Exception:
+        logging.exception("Failed to persist Google reading to Influx")
+
     return {
         "aqi": aqi,
         "band": airnow.band_for_aqi(aqi),
-        "category": idx.get("category"),
-        "dominant_pollutant": _dominant_label(raw_pollutants, idx.get("dominantPollutant")),
+        "category": category,
+        "dominant_pollutant": dominant_pollutant,
         "reporting_area": None,  # coordinate-based, no named station -- caller fills in a location label
         "observed_hour": None,
         "time": body.get("dateTime"),
@@ -225,42 +238,26 @@ def _flat_concentrations(raw_pollutants):
     return out
 
 
-def _fetch_history(lat, lon, hours):
-    hours = max(1, min(hours, 720))  # Google's own cap is 30 days
-    payload = {
-        "location": {"latitude": lat, "longitude": lon},
-        "hours": hours,
-        "pageSize": 100,
-        "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION"],
-        "languageCode": "en",
-    }
-
+def get_history(hours):
+    """Reads back what get_current_observation() has been persisting to
+    InfluxDB (see influx.write_outside_reading) instead of calling Google's
+    own history API -- keeps every provider's History sourced the same way.
+    Field names are stripped back to the shared flat shape (aqi/pm2_5_ugm3/
+    o3_ppb/...) the frontend's overlay charts already expect, same
+    convention as owm.py's get_history."""
     points = []
-    for _ in range(10):  # safety cap against an unbounded pagination loop
-        resp = requests.post(HISTORY_URL, params={"key": os.environ["GOOGLE_AQ_API_KEY"]}, json=payload, timeout=15)
-        resp.raise_for_status()
-        body = resp.json()
-        for h in body.get("hoursInfo") or []:
-            idx = _best_index(h.get("indexes") or [])
-            point = {"time": h["dateTime"], "aqi": idx.get("aqi") if idx else None}
-            point.update(_flat_concentrations(h.get("pollutants") or []))
-            points.append(point)
-        page_token = body.get("nextPageToken")
-        if not page_token:
-            break
-        payload["pageToken"] = page_token
-
-    points.sort(key=lambda p: p["time"])
+    for row in influx.query_google_history(hours):
+        point = {
+            "time": row["time"],
+            "aqi": row.get("google_aqi"),
+            "pm2_5_ugm3": row.get("google_pm2_5_ugm3"),
+            "pm10_ugm3": row.get("google_pm10_ugm3"),
+            "o3_ppb": row.get("google_o3_ppb"),
+            "no2_ppb": row.get("google_no2_ppb"),
+            "so2_ppb": row.get("google_so2_ppb"),
+            "co_ppb": row.get("google_co_ppb"),
+        }
+        cleaned = {k: v for k, v in point.items() if v is not None}
+        if len(cleaned) > 1:  # more than just "time"
+            points.append(cleaned)
     return points
-
-
-def get_history(lat, lon, hours):
-    key = (_cache_key(lat, lon), hours)
-    now = time.time()
-    cached = _history_cache.get(key)
-    if cached is not None and (now - cached["fetched_at"]) < HISTORY_CACHE_TTL_S:
-        return cached["data"]
-
-    data = _fetch_history(lat, lon, hours)
-    _history_cache[key] = {"fetched_at": now, "data": data}
-    return data
