@@ -38,7 +38,7 @@
       <span class="lamp pulse-once" id="lamp" data-state="mqtt" role="img" aria-label="Connection status"></span>
       <div class="device-name-block">
         <span class="device-name">INDOOR</span>
-        <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span></span>
+        <span class="device-sub" id="device-sub"><span id="conn-status" aria-live="polite">Connecting…</span></span>
       </div>
     </div>
     <div class="header-controls">
@@ -239,6 +239,9 @@
 
 <div class="toast-stack" id="toast-stack"></div>
 
+<script src="{{ url_for('static', filename='aqi.js') }}"></script>
+<script src="{{ url_for('static', filename='common.js') }}"></script>
+<script src="{{ url_for('static', filename='chart.js') }}"></script>
 <script src="{{ url_for('static', filename='indoor.js') }}"></script>
 </body>
 </html>

@@ -1,10 +1,9 @@
 import os
-import time
 from datetime import UTC, datetime, timedelta
 
 import requests
 
-import airnow
+import aq_shared
 import epa_aqi
 import influx
 
@@ -27,7 +26,7 @@ POLLUTANT_CODE_LABELS = {
     "co": "CO",
 }
 
-_forecast_cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
+_forecast_cache = aq_shared.TTLCache(FORECAST_CACHE_TTL_S)  # keyed by (lat, lon)
 
 
 def _cache_key(lat, lon):
@@ -89,7 +88,8 @@ def _pollutants_from(raw_pollutants):
     ]
 
 
-# Google's Air Quality concentration fields, by EPA parameter name.
+# Google's Air Quality concentration fields, by EPA parameter name and the
+# unit Google reports them in (µg/m³ for particulates, ppb for gases).
 _CONCENTRATION_FIELDS = [
     ("google_pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER"),
     ("google_pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER"),
@@ -107,13 +107,20 @@ def get_current_observation():
     pattern as owm.py, and the dashboard no longer makes this call itself
     for any provider's current reading. Google's Forecast API is a
     different, on-demand feature and still calls Google live -- see
-    get_forecast below."""
+    get_forecast below.
+
+    The headline AQI, category, and dominant pollutant are read straight
+    from the fields Node-RED computed (google_aqi_epa / google_category /
+    google_dominant_pollutant), not recomputed from the concentrations --
+    same number Grafana reads. Category falls back to a lookup on the AQI
+    only if the stored label is somehow absent (e.g. pre-migration points)."""
     row = influx.query_google_latest()
     if row is None:
         return None
-    aqi = row.get("google_aqi")
-    if aqi is None:
+    hd = aq_shared.headline(row, "google_aqi_epa", "google_category", "google_dominant_pollutant", epa_aqi.category_name)
+    if hd is None:
         return None
+    aqi, category, dominant = hd
 
     pollutants = []
     for field, parameter, units in _CONCENTRATION_FIELDS:
@@ -136,10 +143,10 @@ def get_current_observation():
         }
 
     return {
-        "aqi": int(aqi),
-        "band": airnow.band_for_aqi(aqi),
-        "category": row.get("google_category"),
-        "dominant_pollutant": row.get("google_dominant_pollutant"),
+        "aqi": aqi,
+        "band": epa_aqi.band_for_aqi(aqi),
+        "category": category,
+        "dominant_pollutant": dominant,
         "reporting_area": None,  # caller fills in the home label
         "observed_hour": None,
         "time": row.get("time"),
@@ -182,31 +189,26 @@ def _fetch_forecast(lat, lon):
     # "worst" hour is picked by our own recomputed AQI (_recomputed_aqi),
     # not Google's indexes[].aqi, so the hour selected and the number shown
     # for it are always derived the same way.
-    by_date = {}
-    for point in hourly:
-        by_date.setdefault(point["dateTime"][:10], []).append(point)
+    worst = aq_shared.worst_hour_per_day(
+        hourly,
+        date_of=lambda p: p["dateTime"][:10],
+        aqi_of=lambda p: _recomputed_aqi(p.get("pollutants") or [])[0],
+    )
 
     days = []
-    for date in sorted(by_date):
-        scored = []
-        for point in by_date[date]:
-            aqi, category, dominant = _recomputed_aqi(point.get("pollutants") or [])
-            if aqi is not None:
-                scored.append((aqi, category, dominant, point))
-        if not scored:
-            continue
-        aqi, category, dominant_pollutant, dominant_point = max(scored, key=lambda s: s[0])
+    for date, (_, point) in worst.items():
+        aqi, category, dominant_pollutant = _recomputed_aqi(point.get("pollutants") or [])
         days.append({
             "date": date,
             "aqi": aqi,
             "category": category,
-            "band": airnow.band_for_aqi(aqi),
+            "band": epa_aqi.band_for_aqi(aqi),
             "dominant_pollutant": dominant_pollutant,
             # Per-population-group guidance for this day's worst hour --
             # more specific than AirNow's one-size-fits-all forecaster
             # discussion, which Google doesn't have an equivalent of.
-            "health_recommendations": dominant_point.get("healthRecommendations"),
-            "pollutants": _pollutants_from(dominant_point.get("pollutants") or []),
+            "health_recommendations": point.get("healthRecommendations"),
+            "pollutants": _pollutants_from(point.get("pollutants") or []),
         })
 
     return {
@@ -217,15 +219,20 @@ def _fetch_forecast(lat, lon):
 
 
 def get_forecast(lat, lon, force=False):
-    key = _cache_key(lat, lon)
-    now = time.time()
-    cached = _forecast_cache.get(key)
-    if not force and cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
-        return cached["data"]
+    return _forecast_cache.get(_cache_key(lat, lon), lambda: _fetch_forecast(lat, lon), force=force)
 
-    data = _fetch_forecast(lat, lon)
-    _forecast_cache[key] = {"fetched_at": now, "data": data}
-    return data
+
+# Stored concentration field -> flat history key. Google already reports gases
+# in ppb, so every mapping is identity; the shared history_points helper reads
+# the AQI from google_aqi_epa (not recomputed here).
+_HISTORY_FIELD_MAP = {
+    "pm2_5_ugm3": ("google_pm2_5_ugm3", aq_shared.identity),
+    "pm10_ugm3": ("google_pm10_ugm3", aq_shared.identity),
+    "o3_ppb": ("google_o3_ppb", aq_shared.identity),
+    "no2_ppb": ("google_no2_ppb", aq_shared.identity),
+    "so2_ppb": ("google_so2_ppb", aq_shared.identity),
+    "co_ppb": ("google_co_ppb", aq_shared.identity),
+}
 
 
 def get_history(hours):
@@ -235,19 +242,4 @@ def get_history(hours):
     are stripped back to the shared flat shape (aqi/pm2_5_ugm3/o3_ppb/...)
     the frontend's overlay charts already expect, same convention as
     owm.py's get_history."""
-    points = []
-    for row in influx.query_google_history(hours):
-        point = {
-            "time": row["time"],
-            "aqi": row.get("google_aqi"),
-            "pm2_5_ugm3": row.get("google_pm2_5_ugm3"),
-            "pm10_ugm3": row.get("google_pm10_ugm3"),
-            "o3_ppb": row.get("google_o3_ppb"),
-            "no2_ppb": row.get("google_no2_ppb"),
-            "so2_ppb": row.get("google_so2_ppb"),
-            "co_ppb": row.get("google_co_ppb"),
-        }
-        cleaned = {k: v for k, v in point.items() if v is not None}
-        if len(cleaned) > 1:  # more than just "time"
-            points.append(cleaned)
-    return points
+    return aq_shared.history_points(influx.query_google_history(hours), "google_aqi_epa", _HISTORY_FIELD_MAP)

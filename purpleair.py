@@ -11,6 +11,7 @@ one AirNow's own Fire & Smoke map applies to PurpleAir sensors) before
 converting to an AQI, so this provider's number is comparable to AirNow's
 rather than reading systematically high."""
 
+import aq_shared
 import epa_aqi
 import influx
 
@@ -21,12 +22,18 @@ SENSOR_NAME = "St. Marys"
 
 
 def get_current_observation():
+    """Headline AQI, category, and dominant pollutant are read straight from
+    the fields Node-RED computed (purpleair_aqi_epa / purpleair_category /
+    purpleair_dominant_pollutant) from the EPA-corrected PM concentrations --
+    the app no longer recomputes them, so the dashboard, Grafana, and
+    Node-RED all agree on the number."""
     row = influx.query_purpleair_latest()
     if row is None:
         return None
-    aqi = row.get("purpleair_aqi")
-    if aqi is None:
+    hd = aq_shared.headline(row, "purpleair_aqi_epa", "purpleair_category", "purpleair_dominant_pollutant", epa_aqi.category_name)
+    if hd is None:
         return None
+    aqi, category, dominant = hd
 
     pollutants = []
     if row.get("purpleair_pm2_5_ugm3") is not None:
@@ -43,10 +50,10 @@ def get_current_observation():
         })
 
     return {
-        "aqi": int(aqi),
+        "aqi": aqi,
         "band": epa_aqi.band_for_aqi(aqi),
-        "category": row.get("purpleair_category"),
-        "dominant_pollutant": row.get("purpleair_dominant_pollutant"),
+        "category": category,
+        "dominant_pollutant": dominant,
         "reporting_area": SENSOR_NAME,
         "observed_hour": None,
         "time": row.get("time"),
@@ -63,15 +70,8 @@ def get_history(hours):
     shared flat shape (aqi/pm2_5_ugm3/pm10_ugm3) the frontend's overlay
     charts already expect, same convention as owm.py/google_aq.py's
     get_history."""
-    points = []
-    for row in influx.query_purpleair_history(hours):
-        point = {
-            "time": row["time"],
-            "aqi": row.get("purpleair_aqi"),
-            "pm2_5_ugm3": row.get("purpleair_pm2_5_ugm3"),
-            "pm10_ugm3": row.get("purpleair_pm10_ugm3"),
-        }
-        cleaned = {k: v for k, v in point.items() if v is not None}
-        if len(cleaned) > 1:  # more than just "time"
-            points.append(cleaned)
-    return points
+    field_map = {
+        "pm2_5_ugm3": ("purpleair_pm2_5_ugm3", aq_shared.identity),
+        "pm10_ugm3": ("purpleair_pm10_ugm3", aq_shared.identity),
+    }
+    return aq_shared.history_points(influx.query_purpleair_history(hours), "purpleair_aqi_epa", field_map)

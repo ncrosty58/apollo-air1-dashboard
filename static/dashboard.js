@@ -1,22 +1,11 @@
 (function () {
   "use strict";
 
-  /* ---------- formatting / bands ---------- */
-  function fmt(value, decimals) {
-    if (value === undefined || value === null || Number.isNaN(value)) return "—";
-    return Number(value).toFixed(decimals);
-  }
-
-  function timeAgo(isoOrEpochSeconds) {
-    if (!isoOrEpochSeconds) return "—";
-    const ms = typeof isoOrEpochSeconds === "number" ? isoOrEpochSeconds * 1000 : new Date(isoOrEpochSeconds).getTime();
-    if (Number.isNaN(ms)) return "—";
-    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-    if (s < 60) return "just now";
-    if (s < 3600) return `${Math.round(s / 60)}m ago`;
-    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-    return `${Math.round(s / 86400)}d ago`;
-  }
+  // fmt / timeAgo / escapeHtml / bandVar / formatConcentrationUnits /
+  // bandFromCo2 / bandForVocIndex / seriesFor and the provider constants come
+  // from common.js; bandFromAqi / bandForConcentration from aqi.js (both loaded
+  // first). Theme toggle, settings panel, clock, and SW registration self-init
+  // in common.js.
 
   /* ---------- temperature unit (F/C) ---------- */
   let currentUnit = localStorage.getItem("apollo-air1-unit") || "f";
@@ -47,32 +36,10 @@
 
   const BAND_ORDER = ["good", "fair", "poor", "bad"];
 
-  function bandFromAqi(aqi) {
-    if (aqi === undefined || aqi === null || Number.isNaN(aqi)) return null;
-    if (aqi > 150) return "bad";
-    if (aqi > 100) return "poor";
-    if (aqi > 50) return "fair";
-    return "good";
-  }
-  function bandFromCo2(co2) {
-    if (co2 === undefined || co2 === null || Number.isNaN(co2)) return null;
-    if (co2 > 2000) return "bad";
-    if (co2 > 1500) return "poor";
-    if (co2 > 1000) return "fair";
-    return "good";
-  }
-  function bandForVocIndex(v) {
-    if (typeof v !== "number") return null;
-    return v > 250 ? "bad" : v > 150 ? "poor" : null;
-  }
-
   function worseBand(a, b) {
     if (!a) return b;
     if (!b) return a;
     return BAND_ORDER.indexOf(a) >= BAND_ORDER.indexOf(b) ? a : b;
-  }
-  function bandVar(band) {
-    return band ? `var(--${band})` : "var(--ink-dim)";
   }
 
   function insideSentence(band) {
@@ -121,31 +88,12 @@
     </svg>`;
   }
 
-  function seriesFor(points, key, color, area) {
-    return {
-      color,
-      area: !!area,
-      points: points
-        .filter((p) => typeof p[key] === "number")
-        .map((p) => ({ t: new Date(p.time).getTime(), v: p[key] })),
-    };
-  }
-
   /* ---------- provider switch (AirNow / Google / PurpleAir / OpenWeatherMap) ----------
    * The only screen with a switcher -- Technical and Forecast just display
-   * whichever provider is currently selected (shared via localStorage). */
+   * whichever provider is currently selected (shared via localStorage).
+   * PROVIDER_NAMES / PROVIDER_ORDER / PROVIDERS_WITHOUT_FORECAST live in
+   * common.js so this page and the server's api_forecast set can't drift. */
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-
-  const PROVIDER_NAMES = { airnow: "AirNow", google: "Google", purpleair: "PurpleAir", openweathermap: "OWM" };
-  const PROVIDER_ORDER = ["airnow", "google", "purpleair", "openweathermap"];
-  // Neither of these publishes its own AQI forecast: PurpleAir is real-time +
-  // historical only, and OpenWeatherMap's pollution product has no forecast we
-  // surface here (the /forecast page is AirNow/Google only -- see app.py
-  // api_forecast). Showing a Forecast link while either is selected would hand
-  // back a *different* provider's forecast (AirNow's), which is misleading, so
-  // the link is hidden for both. Kept in sync with the server: any provider
-  // not handled by api_forecast belongs in this set.
-  const PROVIDERS_WITHOUT_FORECAST = new Set(["purpleair", "openweathermap"]);
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
@@ -188,44 +136,6 @@
     loadOutside();
     loadBasicSparks();
   });
-
-  // Google's own enum value, abbreviated to the unit symbol everyone reads
-  // at a glance.
-  function formatConcentrationUnits(units) {
-    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
-    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
-  }
-
-  // EPA's own AQI breakpoint tables (current/2024 revision for PM2.5), each
-  // row [concLo, concHi, aqiLo, aqiHi] -- lets a raw concentration convert
-  // to the actual EPA AQI number via the same piecewise-linear interpolation
-  // EPA uses. Units must match what the source reports: ppb for gases
-  // except CO (EPA's own CO breakpoints are in ppm), µg/m³ for particulates.
-  const AQI_BREAKPOINTS = {
-    "PM2.5": [[0.0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]],
-    "PM10": [[0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150], [255, 354, 151, 200], [355, 424, 201, 300], [425, 604, 301, 500]],
-    "O3": [[0, 54, 0, 50], [55, 70, 51, 100], [71, 85, 101, 150], [86, 105, 151, 200], [106, 200, 201, 300]],
-    "NO2": [[0, 53, 0, 50], [54, 100, 51, 100], [101, 360, 101, 150], [361, 649, 151, 200], [650, 1249, 201, 300], [1250, 2049, 301, 500]],
-    "SO2": [[0, 35, 0, 50], [36, 75, 51, 100], [76, 185, 101, 150], [186, 304, 151, 200]],
-    "CO": [[0.0, 4.4, 0, 50], [4.5, 9.4, 51, 100], [9.5, 12.4, 101, 150], [12.5, 15.4, 151, 200]],
-  };
-  function aqiFromConcentration(parameter, value, units) {
-    const table = AQI_BREAKPOINTS[parameter];
-    if (typeof value !== "number" || !table) return null;
-    const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
-    if (v <= 0) return 0;
-    let row = table[0];
-    for (const candidate of table) {
-      if (v >= candidate[0]) row = candidate;
-      else break;
-    }
-    const [concLo, concHi, aqiLo, aqiHi] = row;
-    const aqi = ((aqiHi - aqiLo) / (concHi - concLo)) * (v - concLo) + aqiLo;
-    return Math.round(Math.max(0, Math.min(500, aqi)));
-  }
-  function bandForConcentration(parameter, value, units) {
-    return bandFromAqi(aqiFromConcentration(parameter, value, units));
-  }
 
   // One row per metric instead of a badge grid -- the rack-rows list.
   // --rr-color is a CSS custom prop the .rr-value rule already reads, so an
@@ -277,10 +187,6 @@
       }
       return rackRow(p.parameter, valueHtml, band);
     }).join("");
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   // Google's per-population-group guidance -- its equivalent of AirNow's
@@ -429,87 +335,15 @@
     }
   }
 
-  /* ---------- theme toggle ---------- */
-  function currentTheme() {
-    return document.documentElement.getAttribute("data-theme") ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  }
-  function renderThemeToggle() {
-    const theme = currentTheme();
-    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
-      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
-    });
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".theme-toggle button");
-    if (!btn) return;
-    const next = btn.getAttribute("data-theme-choice");
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("apollo-air1-theme", next);
-    renderThemeToggle();
-  });
-
-  /* ---------- settings panel ---------- */
-  const settingsToggle = document.getElementById("settings-toggle");
-  const settingsPanel = document.getElementById("settings-panel");
-  const settingsBackdrop = document.getElementById("settings-backdrop");
-
-  function positionSettingsPanel() {
-    if (window.innerWidth <= 560) {
-      settingsPanel.style.top = "";
-      settingsPanel.style.right = "";
-      return;
-    }
-    const rect = settingsToggle.getBoundingClientRect();
-    const margin = 20;
-    settingsPanel.style.top = `${rect.bottom + 8}px`;
-    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
-  }
-  function openSettings() {
-    positionSettingsPanel();
-    settingsPanel.hidden = false;
-    settingsBackdrop.hidden = false;
-    settingsToggle.setAttribute("aria-expanded", "true");
-    window.addEventListener("resize", positionSettingsPanel);
-  }
-  function closeSettings() {
-    settingsPanel.hidden = true;
-    settingsBackdrop.hidden = true;
-    settingsToggle.setAttribute("aria-expanded", "false");
-    window.removeEventListener("resize", positionSettingsPanel);
-  }
-  settingsToggle.addEventListener("click", () => {
-    if (settingsPanel.hidden) openSettings(); else closeSettings();
-  });
-  settingsBackdrop.addEventListener("click", closeSettings);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
-  });
-
-  /* ---------- clock ---------- */
-  function tickClock() {
-    document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-
-  /* ---------- service worker ---------- */
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Installability is a nice-to-have; the app works fine without it.
-    });
-  }
-
   /* ---------- init ---------- */
   loadProviderChips();
   renderForecastLinkVisibility();
   renderUnitToggle();
-  renderThemeToggle();
   loadLatest();
   loadOutside();
   loadBasicSparks();
   loadControls();
-  setInterval(loadLatest, 60000);
-  setInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
-  setInterval(loadControls, 30000);
+  pollInterval(loadLatest, 60000);
+  pollInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
+  pollInterval(loadControls, 30000);
 })();

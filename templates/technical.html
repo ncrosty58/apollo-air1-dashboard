@@ -38,7 +38,7 @@
       <span class="lamp pulse-once" id="lamp" data-state="mqtt" role="img" aria-label="Connection status"></span>
       <div class="device-name-block">
         <span class="device-name">OUTDOOR</span>
-        <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span></span>
+        <span class="device-sub" id="device-sub"><span id="conn-status" aria-live="polite">Connecting…</span></span>
       </div>
     </div>
     <div class="header-controls">
@@ -89,7 +89,7 @@
         <div class="outside-tech-main">
           <div class="outside-tech-aqi" id="outside-aqi-tech" style="--band-color: var(--ink-dim);">—</div>
           <div class="outside-tech-category-col">
-            <div class="outside-tech-category" id="outside-category-tech">Loading…</div>
+            <div class="outside-tech-category" id="outside-category-tech" aria-live="polite">Loading…</div>
             <div class="outside-tech-dominant" id="outside-dominant-tech"></div>
           </div>
         </div>
@@ -166,6 +166,9 @@
   </footer>
 </div>
 
+<script src="{{ url_for('static', filename='aqi.js') }}"></script>
+<script src="{{ url_for('static', filename='common.js') }}"></script>
+<script src="{{ url_for('static', filename='chart.js') }}"></script>
 <script src="{{ url_for('static', filename='technical.js') }}"></script>
 </body>
 </html>

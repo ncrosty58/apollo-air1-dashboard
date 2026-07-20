@@ -1,8 +1,8 @@
-"""EPA AQI math shared by providers that only give raw concentrations
-(PurpleAir, OpenWeatherMap). AirNow computes AQI itself and Google returns
-its usa_epa index, so neither needs this."""
-
-import airnow
+"""EPA AQI math shared by every provider: breakpoint tables, the
+concentration -> AQI interpolation, category names, and the good/fair/poor/bad
+severity bands. This is the single Python source of truth for AQI math; the
+Node-RED formatters and static/aqi.js carry parallel copies that
+tests/aqi_parity checks against these tables."""
 
 # EPA's AQI breakpoint tables (current/2024 revision for PM2.5), each row
 # [conc_lo, conc_hi, aqi_lo, aqi_hi]. Units are EPA's own: µg/m³ for
@@ -76,4 +76,30 @@ def category_name(aqi):
 
 
 def band_for_aqi(aqi):
-    return airnow.band_for_aqi(aqi)
+    """The good/fair/poor/bad split used for both indoor and outdoor AQI, so
+    every card is directly comparable at a glance. Provider-agnostic -- lives
+    here (not in airnow.py) since all providers band the same way."""
+    if aqi is None:
+        return None
+    if aqi > 150:
+        return "bad"
+    if aqi > 100:
+        return "poor"
+    if aqi > 50:
+        return "fair"
+    return "good"
+
+
+def band_for_category(number):
+    """Fallback for forecast rows where AirNow reports AQI as -1 (not
+    computed, e.g. during an active smoke/alert day) but still gives a
+    Category.Number on its own 1-6 scale. Thresholds mirror band_for_aqi."""
+    if number is None:
+        return None
+    if number >= 4:
+        return "bad"
+    if number == 3:
+        return "poor"
+    if number == 2:
+        return "fair"
+    return "good"

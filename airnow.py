@@ -1,7 +1,9 @@
 import os
-import time
 
 import requests
+
+import aq_shared
+from epa_aqi import band_for_aqi, band_for_category  # used internally; band math lives in epa_aqi
 
 API_URL = "https://www.airnowapi.org/aq/observation/zipCode/current/"
 FORECAST_API_URL = "https://www.airnowapi.org/aq/forecast/zipCode/"
@@ -50,37 +52,8 @@ def _format_reporting_area(area, state_code):
     return f"{area}, {state_code}"
 
 
-_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
-_forecast_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
-
-
-def band_for_aqi(aqi):
-    """Same good/fair/poor/bad split used for the indoor AQI reading, so
-    Inside/Outside cards are directly comparable at a glance."""
-    if aqi is None:
-        return None
-    if aqi > 150:
-        return "bad"
-    if aqi > 100:
-        return "poor"
-    if aqi > 50:
-        return "fair"
-    return "good"
-
-
-def band_for_category(number):
-    """Fallback for forecast rows where AirNow reports AQI as -1 (not
-    computed, e.g. during an active smoke/alert day) but still gives a
-    Category.Number on its own 1-6 scale. Thresholds mirror band_for_aqi."""
-    if number is None:
-        return None
-    if number >= 4:
-        return "bad"
-    if number == 3:
-        return "poor"
-    if number == 2:
-        return "fair"
-    return "good"
+_cache = aq_shared.TTLCache(CACHE_TTL_S)  # current-conditions, keyed by zip
+_forecast_cache = aq_shared.TTLCache(FORECAST_CACHE_TTL_S)  # forecast, keyed by zip
 
 
 def _fetch(zip_code):
@@ -121,14 +94,45 @@ def _fetch(zip_code):
 
 
 def get_current_observation(zip_code):
-    now = time.time()
-    cached = _cache.get(zip_code)
-    if cached is not None and (now - cached["fetched_at"]) < CACHE_TTL_S:
-        return cached["data"]
+    return _cache.get(zip_code, lambda: _fetch(zip_code))
 
-    data = _fetch(zip_code)
-    _cache[zip_code] = {"fetched_at": now, "data": data}
-    return data
+
+# Node-RED writes each AirNow parameter's AQI to a <param>_aqi field, keyed by
+# the same lower-cased/underscored ParameterName it reports (see the "Format
+# AirNow Fields & Tags" function) -- mapped back to display labels here.
+_ROW_POLLUTANT_FIELDS = [
+    ("pm2_5_aqi", "PM2.5"), ("pm10_aqi", "PM10"), ("o3_aqi", "O3"),
+    ("no2_aqi", "NO2"), ("co_aqi", "CO"), ("so2_aqi", "SO2"),
+]
+
+
+def observation_from_row(row):
+    """Build the same current-observation shape _fetch returns, but from a
+    stored InfluxDB row (influx.query_airnow_latest) instead of a live AirNow
+    call -- current conditions are polled into the DB by Node-RED, so the
+    dashboard reads them back like every other provider. The forecast, which
+    carries the forecaster discussion and isn't persisted, stays live."""
+    if row is None:
+        return None
+    aqi = row.get("aqi")
+    if aqi is None:
+        return None
+    aqi = int(round(aqi))
+    pollutants = []
+    for field, parameter in _ROW_POLLUTANT_FIELDS:
+        value = row.get(field)
+        if value is not None:
+            pollutants.append({"parameter": parameter, "aqi": int(round(value)), "category": None})
+    return {
+        "aqi": aqi,
+        "category": row.get("category"),
+        "band": band_for_aqi(aqi),
+        "dominant_pollutant": row.get("dominant_pollutant"),
+        "reporting_area": row.get("reporting_area"),
+        "observed_hour": None,
+        "time": row.get("time"),
+        "pollutants": pollutants,
+    }
 
 
 def _fetch_forecast(zip_code):
@@ -192,11 +196,4 @@ def _fetch_forecast(zip_code):
 
 
 def get_forecast(zip_code, force=False):
-    now = time.time()
-    cached = _forecast_cache.get(zip_code)
-    if not force and cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
-        return cached["data"]
-
-    data = _fetch_forecast(zip_code)
-    _forecast_cache[zip_code] = {"fetched_at": now, "data": data}
-    return data
+    return _forecast_cache.get(zip_code, lambda: _fetch_forecast(zip_code), force=force)

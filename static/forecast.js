@@ -1,28 +1,10 @@
 (function () {
   "use strict";
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
-
-  function bandVar(band) {
-    return band ? `var(--${band})` : "var(--ink-dim)";
-  }
-
-  // Same mechanical enum-to-words formatting dashboard.js uses for Google's
-  // concentration units, abbreviated for the tight per-day grid.
-  function formatConcentrationUnits(units) {
-    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
-    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
-  }
-
-  function bandFromAqi(aqi) {
-    if (typeof aqi !== "number") return null;
-    if (aqi > 150) return "bad";
-    if (aqi > 100) return "poor";
-    if (aqi > 50) return "fair";
-    return "good";
-  }
+  // escapeHtml / bandVar / formatConcentrationUnits come from common.js;
+  // bandFromAqi / aqiFromConcentration / bandForConcentration from aqi.js (both
+  // loaded first). Theme toggle, settings panel, and clock self-init in
+  // common.js.
 
   // AirNow's category names collapse onto the same 4-band scale as its AQI
   // numbers -- useful for the rows where AQI is -1 (not computed) and
@@ -35,30 +17,6 @@
     "Very Unhealthy": "bad",
     "Hazardous": "bad",
   };
-
-  // Google gives a raw concentration, not an AQI. These are EPA's own AQI
-  // breakpoints (current/2024 revision for PM2.5), reduced to the three
-  // thresholds this app's 4-band system needs. Units must match what
-  // Google reports: ppb for gases except CO (EPA's CO breakpoints are in
-  // ppm), µg/m³ for particulates.
-  const CONCENTRATION_THRESHOLDS = {
-    "PM2.5": [9.1, 35.5, 55.5],
-    "PM10": [55, 155, 255],
-    "O3": [55, 71, 86],
-    "NO2": [54, 101, 361],
-    "SO2": [36, 76, 186],
-    "CO": [4.5, 9.5, 12.5],
-  };
-  function bandForConcentration(parameter, value, units) {
-    const thresholds = CONCENTRATION_THRESHOLDS[parameter];
-    if (typeof value !== "number" || !thresholds) return null;
-    const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
-    const [fairMin, poorMin, badMin] = thresholds;
-    if (v >= badMin) return "bad";
-    if (v >= poorMin) return "poor";
-    if (v >= fairMin) return "fair";
-    return "good";
-  }
 
   function pollutantsHtml(pollutants) {
     // AirNow sometimes doesn't compute a per-pollutant AQI for forecast rows
@@ -133,8 +91,9 @@
 
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
+  const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow" };
   function providerLabel(provider) {
-    return (provider || currentProvider) === "google" ? "Google Air Quality" : "AirNow";
+    return PROVIDER_LABELS[provider || currentProvider] || "AirNow";
   }
 
   function renderProviderToggles() {
@@ -334,74 +293,8 @@
     document.getElementById("add-location-form").hidden = true;
   });
 
-  /* ---------- theme toggle ---------- */
-  function currentTheme() {
-    return document.documentElement.getAttribute("data-theme") ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  }
-  function renderThemeToggle() {
-    const theme = currentTheme();
-    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
-      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
-    });
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".theme-toggle button");
-    if (!btn) return;
-    const next = btn.getAttribute("data-theme-choice");
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("apollo-air1-theme", next);
-    renderThemeToggle();
-  });
-
-  /* ---------- settings panel ---------- */
-  const settingsToggle = document.getElementById("settings-toggle");
-  const settingsPanel = document.getElementById("settings-panel");
-  const settingsBackdrop = document.getElementById("settings-backdrop");
-
-  function positionSettingsPanel() {
-    // Below 560px the panel is a fixed bottom sheet (CSS handles left/
-    // right/bottom) -- clear any inline position so that isn't fought.
-    if (window.innerWidth <= 560) {
-      settingsPanel.style.top = "";
-      settingsPanel.style.right = "";
-      return;
-    }
-    const rect = settingsToggle.getBoundingClientRect();
-    const margin = 20;
-    settingsPanel.style.top = `${rect.bottom + 8}px`;
-    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
-  }
-  function openSettings() {
-    positionSettingsPanel();
-    settingsPanel.hidden = false;
-    settingsBackdrop.hidden = false;
-    settingsToggle.setAttribute("aria-expanded", "true");
-    window.addEventListener("resize", positionSettingsPanel);
-  }
-  function closeSettings() {
-    settingsPanel.hidden = true;
-    settingsBackdrop.hidden = true;
-    settingsToggle.setAttribute("aria-expanded", "false");
-    window.removeEventListener("resize", positionSettingsPanel);
-  }
-  settingsToggle.addEventListener("click", () => {
-    if (settingsPanel.hidden) openSettings(); else closeSettings();
-  });
-  settingsBackdrop.addEventListener("click", closeSettings);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
-  });
-
-  function tickClock() {
-    document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-
   renderProviderToggles();
-  renderThemeToggle();
   loadLocations();
   loadForecast();
-  setInterval(loadForecast, 15 * 60000);
+  pollInterval(loadForecast, 15 * 60000);
 })();

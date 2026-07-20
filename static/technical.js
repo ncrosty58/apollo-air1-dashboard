@@ -1,22 +1,11 @@
 (function () {
   "use strict";
 
-  /* ---------- formatting / bands ---------- */
-  function fmt(value, decimals) {
-    if (value === undefined || value === null || Number.isNaN(value)) return "—";
-    return Number(value).toFixed(decimals);
-  }
-
-  function timeAgo(isoOrEpochSeconds) {
-    if (!isoOrEpochSeconds) return "—";
-    const ms = typeof isoOrEpochSeconds === "number" ? isoOrEpochSeconds * 1000 : new Date(isoOrEpochSeconds).getTime();
-    if (Number.isNaN(ms)) return "—";
-    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-    if (s < 60) return "just now";
-    if (s < 3600) return `${Math.round(s / 60)}m ago`;
-    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-    return `${Math.round(s / 86400)}d ago`;
-  }
+  // fmt / timeAgo / bandVar / escapeHtml / formatConcentrationUnits /
+  // seriesFor and the provider constants come from common.js; the SVG chart
+  // renderers (measureWidth / renderRowChart / renderOverlayRowChart) from
+  // chart.js; bandFromAqi / aqiFromConcentration / bandForConcentration from
+  // aqi.js. Theme toggle, settings panel, and clock self-init in common.js.
 
   function formatObservedHour(hour) {
     if (typeof hour !== "number") return "—";
@@ -53,168 +42,10 @@
     loadOutsideHistorySection(currentRangeOutside);
   });
 
-  function bandFromAqi(aqi) {
-    if (aqi === undefined || aqi === null || Number.isNaN(aqi)) return null;
-    if (aqi > 150) return "bad";
-    if (aqi > 100) return "poor";
-    if (aqi > 50) return "fair";
-    return "good";
-  }
-  function bandVar(band) {
-    return band ? `var(--${band})` : "var(--ink-dim)";
-  }
-
-  /* ---------- chart rendering (SVG, hand-drawn, row-based) ----------
-   * Series are plotted by real timestamp (not array index) so that sources
-   * sampled at different rates — e.g. indoor readings every ~5-10min vs.
-   * AirNow's hourly outdoor readings — overlay correctly on one chart.
-   *
-   * The viewBox width is the wrap element's own measured pixel width, not a
-   * fixed constant -- with CSS sizing the svg to width:100%/height:auto,
-   * a fixed viewBox gets scaled to fit whatever the container actually is,
-   * and that scale applies to EVERYTHING inside, including fixed-px text
-   * and row heights. Measuring the real width and using it 1:1 as the
-   * viewBox width means 1 unit = 1 real CSS pixel, so text/stroke/
-   * row-height stay true size on every screen. */
-  function measureWidth(el) {
-    return Math.max(el.clientWidth, 240);
-  }
-
-  function seriesFor(points, key, color, area) {
-    return {
-      color,
-      area: !!area,
-      points: points
-        .filter((p) => typeof p[key] === "number")
-        .map((p) => ({ t: new Date(p.time).getTime(), v: p[key] })),
-    };
-  }
-
-  // One SVG, N horizontal lanes -- all rows share the same time axis (drawn
-  // once, at the bottom) but each gets its own y-scale sized to its own
-  // min/max, so a small-magnitude series (CO ~0.1ppb) is never squashed flat
-  // by a big one (O3 ~45ppb) sharing its axis. Identity isn't color-coded
-  // here (each row is already labeled by name) -- color instead tracks
-  // severity, per point, via the row's own bandFor(value).
-  const ROW_H = 58, ROW_PAD_TOP = 17, ROW_PAD_BOTTOM = 8;
-  const ROW_PAD = { l: 2, r: 4 };
-
-  // rows: [{ label, unit, decimals, points: [{t, v}], bandFor(v) => band|null }]
-  function renderRowChart(el, rows, opts) {
-    const nonEmpty = rows.filter((r) => r.points.length > 0);
-    if (nonEmpty.length === 0) {
-      el.innerHTML = '<div class="empty-state">No data in this range yet.</div>';
-      return;
-    }
-    const W = measureWidth(el);
-    const allTimes = nonEmpty.flatMap((r) => r.points.map((p) => p.t));
-    const tMin = Math.min(...allTimes), tMax = Math.max(...allTimes);
-    const totalH = nonEmpty.length * ROW_H + 14;
-
-    let svg = `<svg viewBox="0 0 ${W} ${totalH}" preserveAspectRatio="none" role="img" aria-label="${opts.label || "chart"}">`;
-    nonEmpty.forEach((r, i) => {
-      const top = i * ROW_H;
-      if (i > 0) {
-        svg += `<line class="chart-grid-line" x1="${ROW_PAD.l}" y1="${top.toFixed(1)}" x2="${W - ROW_PAD.r}" y2="${top.toFixed(1)}" />`;
-      }
-      const dotY = top + ROW_PAD_TOP - 8;
-      const labelY = top + ROW_PAD_TOP - 5;
-      const vals = r.points.map((p) => p.v);
-      const vMin = Math.min(...vals), vMax = Math.max(...vals);
-      const pad = (vMax - vMin) * 0.12 || 1;
-      const lo = vMin - pad, hi = vMax + pad;
-      const xw = W - ROW_PAD.l - ROW_PAD.r;
-      const yh = ROW_H - ROW_PAD_TOP - ROW_PAD_BOTTOM;
-      const xAt = (t) => ROW_PAD.l + ((t - tMin) / (tMax - tMin || 1)) * xw;
-      const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
-
-      for (let j = 1; j < r.points.length; j++) {
-        const p0 = r.points[j - 1], p1 = r.points[j];
-        const segColor = bandVar(r.bandFor(p1.v));
-        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round" />`;
-      }
-
-      const last = r.points[r.points.length - 1];
-      const lastColor = bandVar(r.bandFor(last.v));
-      const ex = xAt(last.t), ey = yAt(last.v);
-      svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${lastColor}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
-      svg += `<circle cx="${(ROW_PAD.l + 3).toFixed(1)}" cy="${dotY.toFixed(1)}" r="3" fill="${lastColor}" />`;
-      svg += `<text class="chart-axis-label" x="${(ROW_PAD.l + 10).toFixed(1)}" y="${labelY.toFixed(1)}">${escapeHtml(r.label)} <tspan style="fill:${lastColor}">${fmt(last.v, r.decimals)}${r.unit}</tspan></text>`;
-    });
-    const bottomY = nonEmpty.length * ROW_H + 10;
-    svg += `<text class="chart-axis-label" x="${ROW_PAD.l}" y="${bottomY}">${opts.leftLabel || ""}</text>`;
-    svg += `<text class="chart-axis-label" x="${W - ROW_PAD.r}" y="${bottomY}" text-anchor="end">now</text>`;
-    svg += "</svg>";
-    el.innerHTML = svg;
-  }
-
-  // Same idea as renderRowChart, but each row overlays two series (Inside
-  // and Outside) sharing one y-scale within that row. Color still tracks
-  // severity per point on each line; Inside/Outside identity comes from
-  // line style (Inside dashed, Outside solid) and the "In"/"Out" label
-  // prefix instead, since color is already spoken for.
-  // rows: [{ label, unit, decimals, inside: {points, bandFor}, outside: {points, bandFor} }]
-  function renderOverlayRowChart(el, rows, opts) {
-    const nonEmpty = rows.filter((r) => r.inside.points.length > 0 || r.outside.points.length > 0);
-    if (nonEmpty.length === 0) {
-      el.innerHTML = '<div class="empty-state">No data in this range yet.</div>';
-      return;
-    }
-    const W = measureWidth(el);
-    const allTimes = nonEmpty.flatMap((r) => [...r.inside.points, ...r.outside.points].map((p) => p.t));
-    const tMin = Math.min(...allTimes), tMax = Math.max(...allTimes);
-    const totalH = nonEmpty.length * ROW_H + 14;
-
-    let svg = `<svg viewBox="0 0 ${W} ${totalH}" preserveAspectRatio="none" role="img" aria-label="${opts.label || "chart"}">`;
-    nonEmpty.forEach((r, i) => {
-      const top = i * ROW_H;
-      if (i > 0) {
-        svg += `<line class="chart-grid-line" x1="${ROW_PAD.l}" y1="${top.toFixed(1)}" x2="${W - ROW_PAD.r}" y2="${top.toFixed(1)}" />`;
-      }
-      const combined = [...r.inside.points, ...r.outside.points];
-      const vals = combined.map((p) => p.v);
-      const vMin = Math.min(...vals), vMax = Math.max(...vals);
-      const pad = (vMax - vMin) * 0.12 || 1;
-      const lo = vMin - pad, hi = vMax + pad;
-      const xw = W - ROW_PAD.l - ROW_PAD.r;
-      const yh = ROW_H - ROW_PAD_TOP - ROW_PAD_BOTTOM;
-      const xAt = (t) => ROW_PAD.l + ((t - tMin) / (tMax - tMin || 1)) * xw;
-      const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
-
-      const drawSeries = (series, dashed) => {
-        for (let j = 1; j < series.points.length; j++) {
-          const p0 = series.points[j - 1], p1 = series.points[j];
-          const segColor = bandVar(series.bandFor(p1.v));
-          const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
-          svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
-        }
-        if (series.points.length === 0) return null;
-        const last = series.points[series.points.length - 1];
-        const color = bandVar(series.bandFor(last.v));
-        const ex = xAt(last.t), ey = yAt(last.v);
-        if (dashed) {
-          svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="var(--panel-raised)" stroke="${color}" stroke-width="2" />`;
-        } else {
-          svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
-        }
-        return last;
-      };
-
-      const lastIn = drawSeries(r.inside, true);
-      const lastOut = drawSeries(r.outside, false);
-      const inColor = lastIn ? bandVar(r.inside.bandFor(lastIn.v)) : "var(--ink-dim)";
-      const outColor = lastOut ? bandVar(r.outside.bandFor(lastOut.v)) : "var(--ink-dim)";
-      const inText = lastIn ? `In ${fmt(lastIn.v, r.decimals)}${r.unit}` : "In —";
-      const outText = lastOut ? `Out ${fmt(lastOut.v, r.decimals)}${r.unit}` : "Out —";
-      const labelY = top + ROW_PAD_TOP - 5;
-      svg += `<text class="chart-axis-label" x="${ROW_PAD.l.toFixed(1)}" y="${labelY.toFixed(1)}">${escapeHtml(r.label)} <tspan style="fill:${inColor}">${inText}</tspan> · <tspan style="fill:${outColor}">${outText}</tspan></text>`;
-    });
-    const bottomY = nonEmpty.length * ROW_H + 10;
-    svg += `<text class="chart-axis-label" x="${ROW_PAD.l}" y="${bottomY}">${opts.leftLabel || ""}</text>`;
-    svg += `<text class="chart-axis-label" x="${W - ROW_PAD.r}" y="${bottomY}" text-anchor="end">now</text>`;
-    svg += "</svg>";
-    el.innerHTML = svg;
-  }
+  // bandVar / measureWidth / renderRowChart / renderOverlayRowChart come from
+  // common.js + chart.js (loaded first). Charts plot by real timestamp so
+  // sources sampled at different rates (indoor ~5-10min vs AirNow hourly)
+  // overlay correctly.
 
   // defs: [key, label, unit, decimals, bandFor(v)][]
   function renderPollutantRows(chartElId, points, defs, rangeLabel, chartLabel) {
@@ -354,55 +185,12 @@
     }
   }
 
-  /* ---------- provider (read-only here -- switching only happens on Basic) ---------- */
+  /* ---------- provider (read-only here -- switching only happens on Basic) ----------
+   * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. */
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-  const PROVIDER_NAMES = { airnow: "AirNow", google: "Google", purpleair: "PurpleAir", openweathermap: "OWM" };
-  // PurpleAir has no forecast product; OpenWeatherMap's forecast isn't
-  // built in this app yet -- either way the Forecast link would point at a
-  // different provider's data than what's on screen, so it's hidden.
-  const PROVIDERS_WITHOUT_FORECAST = new Set(["purpleair", "openweathermap"]);
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
-  }
-
-  // Google's own enum value, abbreviated to the unit symbol everyone reads
-  // at a glance.
-  function formatConcentrationUnits(units) {
-    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
-    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
-  }
-
-  // EPA's own AQI breakpoint tables (current/2024 revision for PM2.5), each
-  // row [concLo, concHi, aqiLo, aqiHi] -- lets a raw concentration convert
-  // to the actual EPA AQI number via the same piecewise-linear interpolation
-  // EPA uses, not just a good/fair/poor/bad bucket. Units must match what
-  // the source reports: ppb for gases except CO (EPA's own CO breakpoints
-  // are in ppm), µg/m³ for particulates.
-  const AQI_BREAKPOINTS = {
-    "PM2.5": [[0.0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]],
-    "PM10": [[0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150], [255, 354, 151, 200], [355, 424, 201, 300], [425, 604, 301, 500]],
-    "O3": [[0, 54, 0, 50], [55, 70, 51, 100], [71, 85, 101, 150], [86, 105, 151, 200], [106, 200, 201, 300]],
-    "NO2": [[0, 53, 0, 50], [54, 100, 51, 100], [101, 360, 101, 150], [361, 649, 151, 200], [650, 1249, 201, 300], [1250, 2049, 301, 500]],
-    "SO2": [[0, 35, 0, 50], [36, 75, 51, 100], [76, 185, 101, 150], [186, 304, 151, 200]],
-    "CO": [[0.0, 4.4, 0, 50], [4.5, 9.4, 51, 100], [9.5, 12.4, 101, 150], [12.5, 15.4, 151, 200]],
-  };
-  function aqiFromConcentration(parameter, value, units) {
-    const table = AQI_BREAKPOINTS[parameter];
-    if (typeof value !== "number" || !table) return null;
-    const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
-    if (v <= 0) return 0;
-    let row = table[0];
-    for (const candidate of table) {
-      if (v >= candidate[0]) row = candidate;
-      else break;
-    }
-    const [concLo, concHi, aqiLo, aqiHi] = row;
-    const aqi = ((aqiHi - aqiLo) / (concHi - concLo)) * (v - concLo) + aqiLo;
-    return Math.round(Math.max(0, Math.min(500, aqi)));
-  }
-  function bandForConcentration(parameter, value, units) {
-    return bandFromAqi(aqiFromConcentration(parameter, value, units));
   }
 
   function pollutantFactorsHtml(pollutants) {
@@ -421,10 +209,6 @@
       const colorStyle = band ? ` style="color: ${bandVar(band)}"` : "";
       return `<span class="outside-pollutant">${p.parameter}<span class="op-value"${colorStyle}>${valueHtml}</span></span>`;
     }).join("");
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   /* ---------- outside current reading ---------- */
@@ -512,63 +296,6 @@
     }
   }
 
-  /* ---------- theme toggle ---------- */
-  function currentTheme() {
-    return document.documentElement.getAttribute("data-theme") ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  }
-  function renderThemeToggle() {
-    const theme = currentTheme();
-    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
-      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
-    });
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".theme-toggle button");
-    if (!btn) return;
-    const next = btn.getAttribute("data-theme-choice");
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("apollo-air1-theme", next);
-    renderThemeToggle();
-  });
-
-  /* ---------- settings panel ---------- */
-  const settingsToggle = document.getElementById("settings-toggle");
-  const settingsPanel = document.getElementById("settings-panel");
-  const settingsBackdrop = document.getElementById("settings-backdrop");
-
-  function positionSettingsPanel() {
-    if (window.innerWidth <= 560) {
-      settingsPanel.style.top = "";
-      settingsPanel.style.right = "";
-      return;
-    }
-    const rect = settingsToggle.getBoundingClientRect();
-    const margin = 20;
-    settingsPanel.style.top = `${rect.bottom + 8}px`;
-    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
-  }
-  function openSettings() {
-    positionSettingsPanel();
-    settingsPanel.hidden = false;
-    settingsBackdrop.hidden = false;
-    settingsToggle.setAttribute("aria-expanded", "true");
-    window.addEventListener("resize", positionSettingsPanel);
-  }
-  function closeSettings() {
-    settingsPanel.hidden = true;
-    settingsBackdrop.hidden = true;
-    settingsToggle.setAttribute("aria-expanded", "false");
-    window.removeEventListener("resize", positionSettingsPanel);
-  }
-  settingsToggle.addEventListener("click", () => {
-    if (settingsPanel.hidden) openSettings(); else closeSettings();
-  });
-  settingsBackdrop.addEventListener("click", closeSettings);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
-  });
-
   /* ---------- range toggle ---------- */
   let currentRangeOutside = 24;
   document.querySelectorAll("#range-toggle-outside button").forEach((btn) => {
@@ -580,23 +307,15 @@
     });
   });
 
-  /* ---------- clock ---------- */
-  function tickClock() {
-    document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-
   /* ---------- init ---------- */
   renderUnitToggle();
-  renderThemeToggle();
   document.getElementById("outside-source-tech").textContent = providerLabel();
   const forecastLink = document.getElementById("forecast-link");
   if (forecastLink) forecastLink.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
   loadOutside();
   loadOutsideHistorySection(currentRangeOutside);
   loadConnectionStatus();
-  setInterval(loadOutside, 15 * 60000);
-  setInterval(loadConnectionStatus, 30000);
-  setInterval(() => { loadOutsideHistorySection(currentRangeOutside); }, 60000);
+  pollInterval(loadOutside, 15 * 60000);
+  pollInterval(loadConnectionStatus, 30000);
+  pollInterval(() => { loadOutsideHistorySection(currentRangeOutside); }, 60000);
 })();

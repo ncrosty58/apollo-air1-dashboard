@@ -39,7 +39,7 @@
       <span class="lamp pulse-once" id="lamp" data-state="mqtt" role="img" aria-label="Connection status"></span>
       <div class="device-name-block">
         <span class="device-name">APOLLO AIR-1</span>
-        <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span></span>
+        <span class="device-sub" id="device-sub"><span id="conn-status" aria-live="polite">Connecting…</span></span>
       </div>
     </div>
     <div class="header-controls">
@@ -84,7 +84,7 @@
           <div class="rack-stat">
             <span class="rack-aqi" id="in-aqi" style="--band-color: var(--ink-dim);">—</span>
             <div class="rack-stat-text">
-              <span class="rack-category" id="in-category">Waiting for a reading…</span>
+              <span class="rack-category" id="in-category" aria-live="polite">Waiting for a reading…</span>
               <span class="rack-sub" id="in-sub">—</span>
             </div>
             <div class="rack-spark" id="in-spark"></div>
@@ -93,7 +93,7 @@
         <div class="rack-rows" id="inside-rows"></div>
         <div class="rack-foot">
           <div class="rack-foot-links">
-            <a class="pill-link" href="/indoor">Indoor →</a>
+            <a class="pill-link" href="/indoor">Details →</a>
           </div>
         </div>
       </div>
@@ -105,7 +105,7 @@
           <div class="rack-stat">
             <span class="rack-aqi" id="out-aqi" style="--band-color: var(--ink-dim);">—</span>
             <div class="rack-stat-text">
-              <span class="rack-category" id="out-category">Loading…</span>
+              <span class="rack-category" id="out-category" aria-live="polite">Loading…</span>
               <span class="rack-sub" id="out-sub">—</span>
             </div>
             <div class="rack-spark" id="out-spark"></div>
@@ -115,7 +115,7 @@
         <div class="rack-foot">
           <div class="outside-discussion" id="outside-discussion"></div>
           <div class="rack-foot-links">
-            <a class="pill-link" href="/technical">Technical →</a>
+            <a class="pill-link" href="/technical">Details →</a>
             <a class="pill-link" href="/forecast" id="forecast-link">Forecast →</a>
           </div>
         </div>
@@ -131,6 +131,8 @@
 </div>
 
 
+<script src="{{ url_for('static', filename='aqi.js') }}"></script>
+<script src="{{ url_for('static', filename='common.js') }}"></script>
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 </body>
 </html>

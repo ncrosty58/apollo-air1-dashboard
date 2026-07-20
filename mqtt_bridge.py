@@ -56,26 +56,52 @@ def _on_message(client, userdata, msg):
 
 
 def start():
-    """Start the background MQTT client. Safe to call once at app boot."""
+    """Start the background MQTT client. Safe to call once at app boot.
+
+    Never raises: this dashboard is mostly read-only Influx views, and those
+    must stay up even if the broker is unreachable. connect_async + loop_start
+    means the initial connect happens on the network thread (with automatic
+    retry via reconnect_delay_set), so a down broker at boot degrades to
+    "controls unavailable" instead of crashing the whole app."""
     global _client
     if _client is not None:
         return
 
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    username = os.environ.get("MQTT_USERNAME")
-    if username:
-        client.username_pw_set(username, os.environ.get("MQTT_PASSWORD"))
-    client.on_connect = _on_connect
-    client.on_disconnect = _on_disconnect
-    client.on_message = _on_message
-    client.reconnect_delay_set(min_delay=1, max_delay=60)
+    try:
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        username = os.environ.get("MQTT_USERNAME")
+        if username:
+            client.username_pw_set(username, os.environ.get("MQTT_PASSWORD"))
+        client.on_connect = _on_connect
+        client.on_disconnect = _on_disconnect
+        client.on_message = _on_message
+        client.reconnect_delay_set(min_delay=1, max_delay=60)
 
-    broker = os.environ["MQTT_BROKER"]
-    port = int(os.environ.get("MQTT_PORT", 1883))
-    client.connect(broker, port, keepalive=60)
-    client.loop_start()
-    _client = client
-    logger.info("mqtt_bridge: connecting to %s:%s", broker, port)
+        broker = os.environ["MQTT_BROKER"]
+        port = int(os.environ.get("MQTT_PORT", 1883))
+        client.connect_async(broker, port, keepalive=60)
+        client.loop_start()
+        _client = client
+        logger.info("mqtt_bridge: connecting to %s:%s (async)", broker, port)
+    except Exception:
+        logger.exception("mqtt_bridge: failed to start MQTT client; controls disabled")
+
+
+def available():
+    """True when we actually have a live broker connection to publish onto.
+
+    The control endpoints check this to return a clean 503 (rather than an
+    AttributeError, or a hollow "published: True" into a dropped message) when
+    the broker is unreachable. Note this reflects the app<->broker link, which
+    stays up even while the AIR-1 itself deep-sleeps -- so a command to a
+    sleeping device still returns 200 best-effort, exactly as before; only a
+    genuinely down broker trips the 503."""
+    if _client is None:
+        return False
+    try:
+        return _client.is_connected()
+    except Exception:
+        return False
 
 
 def _val(snapshot, suffix):

@@ -8,6 +8,12 @@ OWM reports every component as a raw µg/m³ concentration plus its own 1-5
 index; both convert to the EPA 0-500 AQI scale here so the number means the
 same thing it does on every other provider."""
 
+import os
+from datetime import UTC, datetime
+
+import requests
+
+import aq_shared
 import epa_aqi
 import influx
 
@@ -21,6 +27,26 @@ COMPONENTS = [
     ("owm_so2_ugm3", "SO2"),
     ("owm_co_ugm3", "CO"),
 ]
+
+# OWM's air_pollution forecast endpoint returns components under these raw
+# keys (all µg/m³), rather than the owm_-prefixed Influx field names above.
+# Same EPA parameters, so _aqi_for/_epa_value handle them unchanged.
+FORECAST_COMPONENTS = [
+    ("pm2_5", "PM2.5"),
+    ("pm10", "PM10"),
+    ("o3", "O3"),
+    ("no2", "NO2"),
+    ("so2", "SO2"),
+    ("co", "CO"),
+]
+
+# Unlike the current-reading/history above (polled by Node-RED into Influx),
+# the forecast is fetched live and on demand -- exactly the pattern Google's
+# forecast uses. It's the one place this app calls OpenWeatherMap directly.
+FORECAST_URL = "https://api.openweathermap.org/data/2.5/air_pollution/forecast"
+FORECAST_CACHE_TTL_S = 3 * 60 * 60  # OWM refreshes the pollution model hourly
+
+_forecast_cache = aq_shared.TTLCache(FORECAST_CACHE_TTL_S)  # keyed by (lat, lon)
 
 
 def _epa_value(parameter, ugm3):
@@ -41,9 +67,21 @@ def _aqi_for(parameter, ugm3):
 
 
 def get_current_observation():
+    """Headline AQI, category, and dominant pollutant are read straight from
+    the fields Node-RED computed (owm_aqi_epa / owm_category /
+    owm_dominant_pollutant) -- the worst-of-all-components EPA AQI, the same
+    number Grafana reads -- rather than recomputed here. Per-pollutant rows
+    are shown as raw concentrations (like the Google/PurpleAir cards), so the
+    only AQI number on the card is the one authoritative headline. Category
+    and dominant fall back gracefully for points written before Node-RED
+    started storing them."""
     row = influx.query_owm_latest()
     if row is None:
         return None
+    hd = aq_shared.headline(row, "owm_aqi_epa", "owm_category", "owm_dominant_pollutant", epa_aqi.category_name)
+    if hd is None:
+        return None
+    aqi, category, dominant = hd
 
     per_pollutant = []
     for field, parameter in COMPONENTS:
@@ -52,27 +90,20 @@ def get_current_observation():
             continue
         per_pollutant.append({
             "parameter": parameter,
-            "aqi": _aqi_for(parameter, value),
             "concentration_value": round(value, 2),
             "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
         })
     if row.get("owm_nh3_ugm3") is not None:
         per_pollutant.append({
             "parameter": "NH3",
-            "aqi": None,
             "concentration_value": round(row["owm_nh3_ugm3"], 2),
             "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
         })
 
-    with_aqi = [(p["aqi"], p["parameter"]) for p in per_pollutant if p["aqi"] is not None]
-    if not with_aqi:
-        return None
-    aqi, dominant = max(with_aqi)
-
     return {
         "aqi": aqi,
         "band": epa_aqi.band_for_aqi(aqi),
-        "category": epa_aqi.category_name(aqi),
+        "category": category,
         "dominant_pollutant": dominant,
         "reporting_area": None,  # caller fills in the home label
         "observed_hour": None,
@@ -81,33 +112,109 @@ def get_current_observation():
     }
 
 
+# Gas fields are converted µg/m³ -> ppb for the overlay chart's units, which
+# is a display unit conversion, not AQI math. The AQI itself is read from the
+# stored owm_aqi_epa (not recomputed) by the shared history_points helper.
+_HISTORY_FIELD_MAP = {
+    "pm2_5_ugm3": ("owm_pm2_5_ugm3", aq_shared.identity),
+    "pm10_ugm3": ("owm_pm10_ugm3", aq_shared.identity),
+    "o3_ppb": ("owm_o3_ugm3", lambda v: epa_aqi.ugm3_to_ppb("O3", v)),
+    "no2_ppb": ("owm_no2_ugm3", lambda v: epa_aqi.ugm3_to_ppb("NO2", v)),
+    "so2_ppb": ("owm_so2_ugm3", lambda v: epa_aqi.ugm3_to_ppb("SO2", v)),
+    "co_ppb": ("owm_co_ugm3", lambda v: epa_aqi.ugm3_to_ppb("CO", v)),
+}
+
+
 def get_history(hours):
     """Points shaped like the Google provider's history (concentrations in
-    generic field names + a computed EPA AQI per point), so the frontend's
+    generic field names + the stored EPA AQI per point), so the frontend's
     concentration-overlay charts work unchanged."""
-    points = []
-    for row in influx.query_owm_history(hours):
-        pm2_5 = row.get("owm_pm2_5_ugm3")
-        point = {
-            "time": row["time"],
-            "aqi": _aqi_for("PM2.5", pm2_5),
-            "pm2_5_ugm3": pm2_5,
-            "pm10_ugm3": row.get("owm_pm10_ugm3"),
-            "o3_ppb": epa_aqi.ugm3_to_ppb("O3", row.get("owm_o3_ugm3")),
-            "no2_ppb": epa_aqi.ugm3_to_ppb("NO2", row.get("owm_no2_ugm3")),
-            "so2_ppb": epa_aqi.ugm3_to_ppb("SO2", row.get("owm_so2_ugm3")),
-            "co_ppb": epa_aqi.ugm3_to_ppb("CO", row.get("owm_co_ugm3")),
-        }
-        # Headline AQI per point is the worst of all converted components,
-        # matching how get_current_observation picks its number.
-        candidates = [
-            _aqi_for(param, row.get(field))
-            for field, param in COMPONENTS
-        ]
-        candidates = [a for a in candidates if a is not None]
-        if candidates:
-            point["aqi"] = max(candidates)
-        cleaned = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in point.items() if v is not None}
-        if len(cleaned) > 1:  # more than just "time"
-            points.append(cleaned)
-    return points
+    return aq_shared.history_points(influx.query_owm_history(hours), "owm_aqi_epa", _HISTORY_FIELD_MAP)
+
+
+def _cache_key(lat, lon):
+    return (round(lat, 3), round(lon, 3))
+
+
+def _forecast_pollutants(components):
+    """Per-pollutant concentrations for a forecast hour, shaped like every
+    other provider's forecast pollutants (concentration only, no per-
+    pollutant AQI -- the headline AQI is the worst-of below)."""
+    pollutants = []
+    for key, parameter in FORECAST_COMPONENTS:
+        value = components.get(key)
+        if value is not None:
+            pollutants.append({
+                "parameter": parameter,
+                "concentration_value": round(value, 2),
+                "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
+            })
+    if components.get("nh3") is not None:
+        pollutants.append({
+            "parameter": "NH3",
+            "concentration_value": round(components["nh3"], 2),
+            "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
+        })
+    return pollutants
+
+
+def _forecast_aqi_dominant(components):
+    """Worst EPA AQI across a forecast hour's components -> (aqi, dominant),
+    or None. Same worst-of-all logic as the stored current reading."""
+    candidates = [
+        (_aqi_for(parameter, components.get(key)), parameter)
+        for key, parameter in FORECAST_COMPONENTS
+    ]
+    candidates = [(a, p) for a, p in candidates if a is not None]
+    return max(candidates) if candidates else None
+
+
+def _forecast_date(point):
+    dt = point.get("dt")
+    return datetime.fromtimestamp(dt, UTC).strftime("%Y-%m-%d") if dt is not None else None
+
+
+def _fetch_forecast(lat, lon):
+    resp = requests.get(
+        FORECAST_URL,
+        params={"lat": lat, "lon": lon, "appid": os.environ["OWM_API_KEY"]},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    hourly = resp.json().get("list") or []
+    if not hourly:
+        return None
+
+    # Bucket the hourly forecast into UTC calendar days and take the worst
+    # hour per day as that day's headline -- same shape and day-picking logic
+    # AirNow/Google forecasts already use (shared worst_hour_per_day), and the
+    # worst hour is picked by the same EPA recompute as the number shown.
+    worst = aq_shared.worst_hour_per_day(
+        hourly,
+        date_of=_forecast_date,
+        aqi_of=lambda p: (_forecast_aqi_dominant(p.get("components") or {}) or (None,))[0],
+    )
+
+    days = []
+    for date, (aqi, point) in worst.items():
+        components = point.get("components") or {}
+        result = _forecast_aqi_dominant(components)
+        dominant_pollutant = result[1] if result else None
+        days.append({
+            "date": date,
+            "aqi": aqi,
+            "category": epa_aqi.category_name(aqi),
+            "band": epa_aqi.band_for_aqi(aqi),
+            "dominant_pollutant": dominant_pollutant,
+            "pollutants": _forecast_pollutants(components),
+        })
+
+    return {
+        "reporting_area": None,  # caller fills in the home/location label
+        "discussion": None,  # OWM has no forecaster narrative like AirNow's
+        "days": days,
+    }
+
+
+def get_forecast(lat, lon, force=False):
+    return _forecast_cache.get(_cache_key(lat, lon), lambda: _fetch_forecast(lat, lon), force=force)

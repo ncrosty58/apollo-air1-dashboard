@@ -586,9 +586,12 @@
   border-radius: 999px; padding: 8px 14px; min-height: 36px; cursor: pointer;
 }
 .refresh-btn:disabled { opacity: 0.55; cursor: default; }
-.forecast-days { display: flex; flex-wrap: wrap; gap: 12px; }
+/* auto-fit grid so any provider's day-count lays out cleanly: 1 AirNow day
+   fills the row, Google's 4 and OWM's 5 all sit across on desktop, and a
+   wrapped card keeps its column width instead of ballooning full-width
+   (the "4 + 1 orphan" the old flex layout produced for OWM's 5 days). */
+.forecast-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 12px; }
 .forecast-day {
-  flex: 1 1 230px; min-width: 230px;
   border: 1px solid var(--hairline); border-radius: var(--radius-tech);
   padding: 14px 16px 12px; text-align: center;
 }
