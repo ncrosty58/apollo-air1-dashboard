@@ -20,19 +20,25 @@ jobs:
     # clean-room PR check. If the runner is offline this job queues until it's
     # back.
     runs-on: self-hosted
+    env:
+      # bodhi runs Debian 13, which actions/setup-python has no prebuilt Python
+      # for ("version 3.11 ... not found for Debian 13"), so use the host's
+      # pyenv interpreter -- the same approach the other apps on this box take.
+      # pyenv's global is 3.12; the app only pins 3.11 for its Docker runtime,
+      # and lint/tests run fine on 3.12.
+      PATH: /home/nathan/.pyenv/shims:/home/nathan/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
+      - name: Create venv and install dependencies
+        # An isolated venv per run keeps ruff/pytest/deps out of the shared
+        # pyenv site-packages. Adding it to $GITHUB_PATH puts python/ruff/pytest
+        # on PATH for the later steps.
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff pytest
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt ruff pytest
 
       - name: Ruff lint
         run: ruff check .
