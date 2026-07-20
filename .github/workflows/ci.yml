@@ -19,7 +19,7 @@ jobs:
     # socket. If the runner is offline this job queues until it comes back.
     runs-on: [self-hosted, bodhi]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v5
         with:
@@ -47,6 +47,6 @@ jobs:
     name: Docker build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build image
         run: docker build -t apollo-air1-dashboard:ci .
