@@ -57,6 +57,13 @@
 <div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
   <div class="settings-panel-head">Settings</div>
   <div class="settings-row">
+    <span class="cl-name">Readout</span>
+    <div class="settings-rail readout-toggle" role="tablist" aria-label="Pollutant readout">
+      <button type="button" data-readout="aqi" aria-pressed="true">AQI</button>
+      <button type="button" data-readout="units" aria-pressed="false">Units</button>
+    </div>
+  </div>
+  <div class="settings-row">
     <span class="cl-name">Units</span>
     <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
       <button type="button" data-unit="f" aria-pressed="true">°F</button>

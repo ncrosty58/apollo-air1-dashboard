@@ -2,10 +2,10 @@
   "use strict";
 
   // fmt / timeAgo / escapeHtml / bandVar / formatConcentrationUnits /
-  // bandFromCo2 / bandForVocIndex / seriesFor and the provider constants come
-  // from common.js; bandFromAqi / bandForConcentration from aqi.js (both loaded
-  // first). Theme toggle, settings panel, clock, and SW registration self-init
-  // in common.js.
+  // bandFromCo2 / bandForVocIndex / seriesFor / readoutMode and the provider
+  // constants come from common.js; bandFromAqi / bandForConcentration /
+  // aqiFromConcentration from aqi.js (both loaded first). Theme toggle, readout
+  // toggle, settings panel, clock, and SW registration self-init in common.js.
 
   /* ---------- temperature unit (F/C) ---------- */
   let currentUnit = localStorage.getItem("apollo-air1-unit") || "f";
@@ -171,16 +171,28 @@
     }).join("");
   }
 
-  // The dashboard puts every provider on one comparable scale: each pollutant's
-  // AQI. Rows that don't convert to an AQI (e.g. OWM's NH3, which has no EPA
-  // breakpoint) are dropped here -- their raw concentrations still live on the
-  // Technical page. The AQI itself is derived upstream (Node-RED) and read from
-  // the DB per pollutant; the app does no AQI math.
+  // Readout=AQI (the default) puts every provider on one comparable scale --
+  // each pollutant's AQI. Anything that can't be put on that scale (OWM's NH3,
+  // which has no EPA breakpoint) is dropped here; it reappears under
+  // Readout=Units, which shows the provider's reported concentration instead,
+  // falling back to AQI for AirNow (which reports no concentration). The AQI is
+  // derived upstream (Node-RED) and read per pollutant; the concentration->AQI
+  // fallback only fills a gap for older points stored without a per-pollutant
+  // AQI -- the app does no primary AQI math.
   function outsideRowsHtml(pollutants) {
-    return (pollutants || [])
-      .filter((p) => typeof p.aqi === "number")
-      .map((p) => rackRow(p.parameter, String(p.aqi), bandFromAqi(p.aqi)))
-      .join("");
+    const units = readoutMode() === "units";
+    return (pollutants || []).map((p) => {
+      if (units) {
+        if (typeof p.concentration_value === "number") {
+          const valueHtml = `${p.concentration_value}<span class="rr-unit">${formatConcentrationUnits(p.concentration_units)}</span>`;
+          return rackRow(p.parameter, valueHtml, bandForConcentration(p.parameter, p.concentration_value, p.concentration_units));
+        }
+        return typeof p.aqi === "number" ? rackRow(p.parameter, String(p.aqi), bandFromAqi(p.aqi)) : null;
+      }
+      const aqi = typeof p.aqi === "number" ? p.aqi
+        : (typeof p.concentration_value === "number" ? aqiFromConcentration(p.parameter, p.concentration_value, p.concentration_units) : null);
+      return typeof aqi === "number" ? rackRow(p.parameter, String(aqi), bandFromAqi(aqi)) : null;
+    }).filter(Boolean).join("");
   }
 
   // Google's per-population-group guidance -- its equivalent of AirNow's
@@ -230,6 +242,9 @@
   });
 
   /* ---------- outside (AirNow / Google / PurpleAir / OpenWeatherMap) ---------- */
+  // Kept so the AQI/Units readout toggle can re-render the rows without refetching.
+  let lastOutsidePollutants = null;
+
   async function loadOutside() {
     try {
       const res = await fetch(`/api/outside?provider=${currentProvider}`);
@@ -243,6 +258,7 @@
       document.getElementById("outside-area").textContent = d.reporting_area || "—";
       document.getElementById("out-category").textContent = d.category || "Loading…";
       document.getElementById("out-sub").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
+      lastOutsidePollutants = d.pollutants;
       document.getElementById("outside-rows").innerHTML = outsideRowsHtml(d.pollutants);
       document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
       // When the selected provider's reading was last refreshed into the DB.
@@ -251,11 +267,20 @@
       document.getElementById("out-aqi").textContent = "—";
       document.getElementById("out-category").textContent = "Couldn't reach " + providerLabel() + ".";
       document.getElementById("out-sub").textContent = "";
+      lastOutsidePollutants = null;
       document.getElementById("outside-rows").innerHTML = "";
       document.getElementById("outside-discussion").innerHTML = "";
       document.getElementById("out-updated").textContent = "";
     }
   }
+
+  // Re-render the outside rows in place when the AQI/Units readout is toggled
+  // (common.js persists the choice and fires this event); no refetch needed.
+  document.addEventListener("readoutchange", () => {
+    if (lastOutsidePollutants) {
+      document.getElementById("outside-rows").innerHTML = outsideRowsHtml(lastOutsidePollutants);
+    }
+  });
 
   // Basic view's compact trend lines -- a short (6h) fetch, independent of
   // Technical's own range control (a separate page now), so the

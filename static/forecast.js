@@ -1,10 +1,10 @@
 (function () {
   "use strict";
 
-  // escapeHtml / bandVar / formatConcentrationUnits come from common.js;
-  // bandFromAqi / aqiFromConcentration / bandForConcentration from aqi.js (both
-  // loaded first). Theme toggle, settings panel, and clock self-init in
-  // common.js.
+  // escapeHtml / bandVar / formatConcentrationUnits / readoutMode come from
+  // common.js; bandFromAqi / aqiFromConcentration / bandForConcentration from
+  // aqi.js (both loaded first). Theme toggle, readout toggle, settings panel,
+  // and clock self-init in common.js.
 
   // AirNow's category names collapse onto the same 4-band scale as its AQI
   // numbers -- useful for the rows where AQI is -1 (not computed) and
@@ -18,28 +18,37 @@
     "Hazardous": "bad",
   };
 
+  function pollutantItemHtml(parameter, valueHtml, band) {
+    const colorStyle = band ? ` style="color: ${bandVar(band)}"` : "";
+    return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(parameter)}</span><span class="fp-value"${colorStyle}>${valueHtml}</span></span>`;
+  }
+
   function pollutantsHtml(pollutants) {
-    // AirNow sometimes doesn't compute a per-pollutant AQI for forecast rows
-    // (AQI: -1, common during an active alert, like the "Air Quality Alert"
-    // discussion text that comes with it) -- it still gives a category
-    // ("Moderate", "Unhealthy for Sensitive Groups") for that pollutant, so
-    // fall back to that instead of a bare dash.
+    const units = readoutMode() === "units";
     return (pollutants || []).map((p) => {
-      let valueHtml;
-      let band;
-      if (typeof p.aqi === "number") {
-        valueHtml = String(p.aqi);
-        band = bandFromAqi(p.aqi);
-      } else if (typeof p.concentration_value === "number") {
-        valueHtml = `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`;
-        band = bandForConcentration(p.parameter, p.concentration_value, p.concentration_units);
-      } else {
-        valueHtml = escapeHtml(p.category || "—");
-        band = CATEGORY_TO_BAND[p.category] || null;
+      if (units) {
+        // Engineering read: the provider's own AQI if it has one, else the raw
+        // concentration, else the category text. AirNow sometimes doesn't
+        // compute a per-pollutant AQI for forecast rows (AQI: -1, common during
+        // an active alert) but still gives a category -- fall back to that
+        // rather than a bare dash.
+        if (typeof p.aqi === "number") return pollutantItemHtml(p.parameter, String(p.aqi), bandFromAqi(p.aqi));
+        if (typeof p.concentration_value === "number") {
+          return pollutantItemHtml(p.parameter,
+            `${p.concentration_value} ${formatConcentrationUnits(p.concentration_units)}`,
+            bandForConcentration(p.parameter, p.concentration_value, p.concentration_units));
+        }
+        return pollutantItemHtml(p.parameter, escapeHtml(p.category || "—"), CATEGORY_TO_BAND[p.category] || null);
       }
-      const colorStyle = band ? ` style="color: ${bandVar(band)}"` : "";
-      return `<span class="fd-pollutant-item"><span class="fp-label">${escapeHtml(p.parameter)}</span><span class="fp-value"${colorStyle}>${valueHtml}</span></span>`;
-    }).join("");
+      // AQI read (the default): normalize every pollutant onto the 0-500 scale,
+      // computing it from the concentration when the provider gave only that
+      // (Google/OWM forecasts). Anything that can't be converted -- NH3 (no EPA
+      // breakpoint), or an alert row with neither an AQI nor a concentration --
+      // is hidden, so the family view stays to the one comparable number.
+      const aqi = typeof p.aqi === "number" ? p.aqi
+        : (typeof p.concentration_value === "number" ? aqiFromConcentration(p.parameter, p.concentration_value, p.concentration_units) : null);
+      return typeof aqi === "number" ? pollutantItemHtml(p.parameter, String(aqi), bandFromAqi(aqi)) : null;
+    }).filter(Boolean).join("");
   }
 
   // Google's per-population-group guidance -- more specific than AirNow's
@@ -169,6 +178,52 @@
     });
   }
 
+  // Held so the AQI/Units readout toggle re-renders the day cards in place,
+  // without a refetch (which for forecasts could hit the upstream API).
+  let lastForecast = null;
+
+  function renderForecastDays(d) {
+    const daysEl = document.getElementById("forecast-days");
+    if (!d.days || !d.days.length) {
+      daysEl.innerHTML = '<div class="empty-state">No forecast for this location.</div>';
+      return;
+    }
+    daysEl.innerHTML = d.days.map((day) => {
+      // The day headline is always the AQI number (there's no single
+      // concentration for a whole day); the readout toggle only affects the
+      // per-pollutant breakdown below.
+      const aqiText = day.aqi != null ? `AQI ${day.aqi}` : "AQI —";
+      // Render the breakdown first: in AQI mode it can come back empty (every
+      // pollutant filtered out as non-convertible), in which case fall back to
+      // just naming the dominant pollutant.
+      const pollutantsInner = pollutantsHtml(day.pollutants);
+      const pollutantsBlock = pollutantsInner
+        ? `<div class="fd-pollutants">${pollutantsInner}</div>`
+        : `<div class="fd-pollutant">${escapeHtml(day.dominant_pollutant || "—")}</div>`;
+      // Only add a separate "driven by" line when the full breakdown is also
+      // shown -- otherwise it'd just repeat the fallback text above.
+      const dominantHtml = pollutantsInner && day.dominant_pollutant
+        ? `<div class="fd-dominant">Driven by ${escapeHtml(day.dominant_pollutant)}</div>`
+        : "";
+      const actionBadge = day.action_day ? '<div class="fd-action-badge">Action Day</div>' : "";
+      return `<div class="forecast-day">
+        <div class="fd-label">${dayLabel(day.date)}</div>
+        ${actionBadge}
+        <div class="fd-badge" style="--band-color: ${bandVar(day.band)}">${escapeHtml(day.category)}</div>
+        <div class="fd-aqi">${aqiText}</div>
+        ${dominantHtml}
+        ${pollutantsBlock}
+        ${healthRecommendationsHtml(day.health_recommendations)}
+      </div>`;
+    }).join("");
+  }
+
+  // Re-render the day cards when AQI/Units is toggled (common.js persists it
+  // and fires this); no refetch needed.
+  document.addEventListener("readoutchange", () => {
+    if (lastForecast) renderForecastDays(lastForecast);
+  });
+
   async function loadForecast(force) {
     const daysEl = document.getElementById("forecast-days");
     const areaEl = document.getElementById("forecast-area");
@@ -199,28 +254,8 @@
       // dashboard's provider chips.
       sourceEl.textContent = `via ${providerLabel(d.provider)}`;
       areaEl.textContent = d.reporting_area || "—";
-      daysEl.innerHTML = (d.days && d.days.length ? d.days.map((day) => {
-        const aqiText = day.aqi != null ? `AQI ${day.aqi}` : "AQI —";
-        const hasPollutantsList = day.pollutants && day.pollutants.length;
-        const pollutantsBlock = hasPollutantsList
-          ? `<div class="fd-pollutants">${pollutantsHtml(day.pollutants)}</div>`
-          : `<div class="fd-pollutant">${escapeHtml(day.dominant_pollutant)}</div>`;
-        // Only add a separate "driven by" line when the full breakdown is
-        // also shown below -- otherwise it'd just repeat the fallback text.
-        const dominantHtml = hasPollutantsList && day.dominant_pollutant
-          ? `<div class="fd-dominant">Driven by ${escapeHtml(day.dominant_pollutant)}</div>`
-          : "";
-        const actionBadge = day.action_day ? '<div class="fd-action-badge">Action Day</div>' : "";
-        return `<div class="forecast-day">
-          <div class="fd-label">${dayLabel(day.date)}</div>
-          ${actionBadge}
-          <div class="fd-badge" style="--band-color: ${bandVar(day.band)}">${escapeHtml(day.category)}</div>
-          <div class="fd-aqi">${aqiText}</div>
-          ${dominantHtml}
-          ${pollutantsBlock}
-          ${healthRecommendationsHtml(day.health_recommendations)}
-        </div>`;
-      }).join("") : '<div class="empty-state">No forecast for this location.</div>');
+      lastForecast = d;
+      renderForecastDays(d);
 
       if (d.discussion) {
         discussionWrap.hidden = false;
