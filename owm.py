@@ -17,17 +17,18 @@ import aq_shared
 import epa_aqi
 import influx
 
-# OWM component -> (concentration field, EPA parameter, per-pollutant AQI
-# field). The AQI is the one Node-RED derived from the concentration and stored
-# alongside it -- the app just reads it. NH3 has no EPA AQI breakpoint, so it's
-# shown as a concentration only (and is dropped from the AQI-only dashboard).
+# OWM component -> (concentration field, EPA parameter, units, per-pollutant
+# AQI field). The AQI is the one Node-RED derived from the concentration and
+# stored alongside it -- the app just reads it. Every OWM component is µg/m³.
+# NH3 has no EPA AQI breakpoint, so it's shown as a concentration only (and is
+# dropped from the AQI-only dashboard) -- appended separately below.
 COMPONENTS = [
-    ("owm_pm2_5_ugm3", "PM2.5", "owm_pm2_5_aqi_epa"),
-    ("owm_pm10_ugm3", "PM10", "owm_pm10_aqi_epa"),
-    ("owm_o3_ugm3", "O3", "owm_o3_aqi_epa"),
-    ("owm_no2_ugm3", "NO2", "owm_no2_aqi_epa"),
-    ("owm_so2_ugm3", "SO2", "owm_so2_aqi_epa"),
-    ("owm_co_ugm3", "CO", "owm_co_aqi_epa"),
+    ("owm_pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER", "owm_pm2_5_aqi_epa"),
+    ("owm_pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER", "owm_pm10_aqi_epa"),
+    ("owm_o3_ugm3", "O3", "MICROGRAMS_PER_CUBIC_METER", "owm_o3_aqi_epa"),
+    ("owm_no2_ugm3", "NO2", "MICROGRAMS_PER_CUBIC_METER", "owm_no2_aqi_epa"),
+    ("owm_so2_ugm3", "SO2", "MICROGRAMS_PER_CUBIC_METER", "owm_so2_aqi_epa"),
+    ("owm_co_ugm3", "CO", "MICROGRAMS_PER_CUBIC_METER", "owm_co_aqi_epa"),
 ]
 
 # OWM's air_pollution forecast endpoint returns components under these raw
@@ -76,48 +77,27 @@ def get_current_observation():
     are shown as raw concentrations (like the Google/PurpleAir cards), so the
     only AQI number on the card is the one authoritative headline. Category
     and dominant fall back gracefully for points written before Node-RED
-    started storing them."""
+    started storing them. reporting_area is left None for the caller to fill
+    with the shared home label."""
     row = influx.query_owm_latest()
-    if row is None:
+    obs = aq_shared.observation(
+        row,
+        aqi_field="owm_aqi_epa",
+        category_field="owm_category",
+        dominant_field="owm_dominant_pollutant",
+        concentration_fields=COMPONENTS,
+    )
+    if obs is None:
         return None
-    hd = aq_shared.headline(row, "owm_aqi_epa", "owm_category", "owm_dominant_pollutant", epa_aqi.category_name)
-    if hd is None:
-        return None
-    aqi, category, dominant = hd
-
-    per_pollutant = []
-    for field, parameter, aqi_field in COMPONENTS:
-        value = row.get(field)
-        if value is None:
-            continue
-        row_out = {
-            "parameter": parameter,
-            "concentration_value": round(value, 2),
-            "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
-        }
-        # AQI is present for every criteria pollutant; the dashboard renders it,
-        # the Technical page keeps showing the concentration.
-        aqi_value = row.get(aqi_field)
-        if aqi_value is not None:
-            row_out["aqi"] = int(round(aqi_value))
-        per_pollutant.append(row_out)
+    # NH3 has no EPA breakpoint, so it isn't in COMPONENTS -- append it as a
+    # concentration-only row after the criteria pollutants.
     if row.get("owm_nh3_ugm3") is not None:
-        per_pollutant.append({
+        obs["pollutants"].append({
             "parameter": "NH3",
             "concentration_value": round(row["owm_nh3_ugm3"], 2),
             "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
         })
-
-    return {
-        "aqi": aqi,
-        "band": epa_aqi.band_for_aqi(aqi),
-        "category": category,
-        "dominant_pollutant": dominant,
-        "reporting_area": None,  # caller fills in the home label
-        "observed_hour": None,
-        "time": row.get("time"),
-        "pollutants": per_pollutant,
-    }
+    return obs
 
 
 # Gas fields are converted µg/m³ -> ppb for the overlay chart's units, which

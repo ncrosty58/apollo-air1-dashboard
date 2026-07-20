@@ -115,51 +115,30 @@ def get_current_observation():
     from the fields Node-RED computed (google_aqi_epa / google_category /
     google_dominant_pollutant), not recomputed from the concentrations --
     same number Grafana reads. Category falls back to a lookup on the AQI
-    only if the stored label is somehow absent (e.g. pre-migration points)."""
+    only if the stored label is somehow absent (e.g. pre-migration points).
+    reporting_area is left None for the caller to fill with the home label."""
     row = influx.query_google_latest()
-    if row is None:
+    obs = aq_shared.observation(
+        row,
+        aqi_field="google_aqi_epa",
+        category_field="google_category",
+        dominant_field="google_dominant_pollutant",
+        concentration_fields=_CONCENTRATION_FIELDS,
+    )
+    if obs is None:
         return None
-    hd = aq_shared.headline(row, "google_aqi_epa", "google_category", "google_dominant_pollutant", epa_aqi.category_name)
-    if hd is None:
-        return None
-    aqi, category, dominant = hd
 
-    pollutants = []
-    for field, parameter, units, aqi_field in _CONCENTRATION_FIELDS:
-        value = row.get(field)
-        if value is not None:
-            row_out = {
-                "parameter": parameter,
-                "concentration_value": round(value, 2),
-                "concentration_units": units,
-            }
-            # AQI drives the dashboard; the Technical page keeps the concentration.
-            aqi_value = row.get(aqi_field)
-            if aqi_value is not None:
-                row_out["aqi"] = int(round(aqi_value))
-            pollutants.append(row_out)
-
-    health_recommendations = None
+    # Only the general-population + children lines are persisted (see the
+    # Node-RED flow) -- the per-sensitive-group breakdown isn't stored, so it's
+    # simply absent here rather than fabricated. Key is always present (None
+    # when Google gave no guidance for this reading).
+    obs["health_recommendations"] = None
     if row.get("google_health_general"):
-        # Only the general-population + children lines are persisted (see
-        # the Node-RED flow) -- the per-sensitive-group breakdown isn't
-        # stored, so it's simply absent here rather than fabricated.
-        health_recommendations = {
+        obs["health_recommendations"] = {
             "generalPopulation": row.get("google_health_general"),
             "children": row.get("google_health_children"),
         }
-
-    return {
-        "aqi": aqi,
-        "band": epa_aqi.band_for_aqi(aqi),
-        "category": category,
-        "dominant_pollutant": dominant,
-        "reporting_area": None,  # caller fills in the home label
-        "observed_hour": None,
-        "time": row.get("time"),
-        "pollutants": pollutants,
-        "health_recommendations": health_recommendations,
-    }
+    return obs
 
 
 def _fetch_forecast(lat, lon):

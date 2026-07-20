@@ -12,7 +12,6 @@ converting to an AQI, so this provider's number is comparable to AirNow's
 rather than reading systematically high."""
 
 import aq_shared
-import epa_aqi
 import influx
 
 # The nearest outdoor sensor to home, picked once and hardcoded directly in
@@ -20,53 +19,31 @@ import influx
 # comment. If that sensor ever goes offline, both need a manual update.
 SENSOR_NAME = "St. Marys"
 
+# (concentration field, EPA parameter, units, per-pollutant AQI field). The AQI
+# is the one Node-RED derived from the EPA-corrected concentration; the app
+# reads it for the dashboard while the Technical page keeps the concentration.
+_CONCENTRATION_FIELDS = [
+    ("purpleair_pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER", "purpleair_pm2_5_aqi_epa"),
+    ("purpleair_pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER", "purpleair_pm10_aqi_epa"),
+]
+
 
 def get_current_observation():
     """Headline AQI, category, and dominant pollutant are read straight from
     the fields Node-RED computed (purpleair_aqi_epa / purpleair_category /
     purpleair_dominant_pollutant) from the EPA-corrected PM concentrations --
     the app no longer recomputes them, so the dashboard, Grafana, and
-    Node-RED all agree on the number."""
-    row = influx.query_purpleair_latest()
-    if row is None:
-        return None
-    hd = aq_shared.headline(row, "purpleair_aqi_epa", "purpleair_category", "purpleair_dominant_pollutant", epa_aqi.category_name)
-    if hd is None:
-        return None
-    aqi, category, dominant = hd
-
-    # (concentration field, EPA parameter, per-pollutant AQI field). The AQI is
-    # the one Node-RED derived from the corrected concentration; the app reads
-    # it for the dashboard while the Technical page keeps the concentration.
-    pollutant_fields = [
-        ("purpleair_pm2_5_ugm3", "PM2.5", "purpleair_pm2_5_aqi_epa"),
-        ("purpleair_pm10_ugm3", "PM10", "purpleair_pm10_aqi_epa"),
-    ]
-    pollutants = []
-    for field, parameter, aqi_field in pollutant_fields:
-        value = row.get(field)
-        if value is None:
-            continue
-        row_out = {
-            "parameter": parameter,
-            "concentration_value": value,
-            "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
-        }
-        aqi_value = row.get(aqi_field)
-        if aqi_value is not None:
-            row_out["aqi"] = int(round(aqi_value))
-        pollutants.append(row_out)
-
-    return {
-        "aqi": aqi,
-        "band": epa_aqi.band_for_aqi(aqi),
-        "category": category,
-        "dominant_pollutant": dominant,
-        "reporting_area": SENSOR_NAME,
-        "observed_hour": None,
-        "time": row.get("time"),
-        "pollutants": pollutants,
-    }
+    Node-RED all agree on the number. Concentrations pass through raw (already
+    the corrected values), so no extra rounding here."""
+    return aq_shared.observation(
+        influx.query_purpleair_latest(),
+        aqi_field="purpleair_aqi_epa",
+        category_field="purpleair_category",
+        dominant_field="purpleair_dominant_pollutant",
+        concentration_fields=_CONCENTRATION_FIELDS,
+        reporting_area=SENSOR_NAME,
+        round_concentration=False,
+    )
 
 
 def get_history(hours):

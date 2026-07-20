@@ -4,6 +4,8 @@ one place instead of being copy-pasted per provider."""
 
 import time
 
+import epa_aqi
+
 
 class TTLCache:
     """A tiny time-to-live cache keyed by anything hashable. Used for both the
@@ -38,6 +40,55 @@ def headline(row, aqi_field, category_field=None, dominant_field=None, category_
         category = category_fallback(aqi)
     dominant = row.get(dominant_field) if dominant_field else None
     return aqi, category, dominant
+
+
+def observation(row, *, aqi_field, category_field, dominant_field,
+                concentration_fields, reporting_area=None, round_concentration=True):
+    """Build the current-observation dict the DB-backed providers
+    (google_aq/purpleair/owm) return, from a stored InfluxDB row. Collapses the
+    identical shape each used to assemble by hand: headline via `headline()`
+    (with epa_aqi.category_name as the category fallback), then a per-pollutant
+    row {parameter, concentration_value, concentration_units, aqi?} for each
+    present concentration.
+
+    `concentration_fields` is a list of (field, parameter, units, aqi_field)
+    tuples. `round_concentration` rounds the stored concentration to 2 dp
+    (PurpleAir passes it through raw). Returns None when the row is missing or
+    carries no headline AQI. Callers tack on any provider-specific extras (e.g.
+    OWM's NH3 concentration row, Google's health block) onto the result."""
+    if row is None:
+        return None
+    hd = headline(row, aqi_field, category_field, dominant_field, epa_aqi.category_name)
+    if hd is None:
+        return None
+    aqi, category, dominant = hd
+
+    pollutants = []
+    for field, parameter, units, pollutant_aqi_field in concentration_fields:
+        value = row.get(field)
+        if value is None:
+            continue
+        row_out = {
+            "parameter": parameter,
+            "concentration_value": round(value, 2) if round_concentration else value,
+            "concentration_units": units,
+        }
+        # AQI drives the dashboard; the Technical page keeps the concentration.
+        aqi_value = row.get(pollutant_aqi_field)
+        if aqi_value is not None:
+            row_out["aqi"] = int(round(aqi_value))
+        pollutants.append(row_out)
+
+    return {
+        "aqi": aqi,
+        "band": epa_aqi.band_for_aqi(aqi),
+        "category": category,
+        "dominant_pollutant": dominant,
+        "reporting_area": reporting_area,
+        "observed_hour": None,
+        "time": row.get("time"),
+        "pollutants": pollutants,
+    }
 
 
 def history_points(rows, aqi_field, field_map):

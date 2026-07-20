@@ -1,11 +1,20 @@
 import json
 import os
 import re
+import threading
 
 DATA_DIR = os.environ.get("DATA_DIR", "data")
 LOCATIONS_FILE = os.path.join(DATA_DIR, "locations.json")
 
 ZIP_RE = re.compile(r"^\d{5}$")
+
+# Serializes the read-modify-write in the mutating functions below. gunicorn
+# runs one worker but many threads (see docker-compose.yml), so two concurrent
+# add/remove requests would otherwise each _load(), mutate their own copy, and
+# _save() -- the atomic os.replace keeps the file from corrupting, but the
+# second writer still clobbers the first's change (a lost update). Holding this
+# across load+save makes each mutation see the other's result.
+_write_lock = threading.Lock()
 
 
 def _load():
@@ -44,16 +53,23 @@ def validate_new(label, zip_code):
 
 
 def add_location(label, zip_code, lat=None, lon=None):
-    locations = _load()
-    locations.append({"label": label, "zip": zip_code, "lat": lat, "lon": lon})
-    _save(locations)
-    return locations
+    with _write_lock:
+        locations = _load()
+        # Re-check under the lock: validate_new's duplicate check runs before
+        # the (slow) AirNow verification in the route, so a second request for
+        # the same zip can slip past it and reach here concurrently. Dedup here
+        # rather than raising -- the route already reported success semantics.
+        if not any(loc["zip"] == zip_code for loc in locations):
+            locations.append({"label": label, "zip": zip_code, "lat": lat, "lon": lon})
+            _save(locations)
+        return locations
 
 
 def remove_location(zip_code):
-    locations = _load()
-    remaining = [loc for loc in locations if loc["zip"] != zip_code]
-    if len(remaining) == len(locations):
-        raise ValueError("no saved location with that zip")
-    _save(remaining)
-    return remaining
+    with _write_lock:
+        locations = _load()
+        remaining = [loc for loc in locations if loc["zip"] != zip_code]
+        if len(remaining) == len(locations):
+            raise ValueError("no saved location with that zip")
+        _save(remaining)
+        return remaining
