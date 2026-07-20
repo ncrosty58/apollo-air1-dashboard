@@ -191,10 +191,10 @@ def _fetch_forecast(zip_code):
     }
 
 
-def get_forecast(zip_code):
+def get_forecast(zip_code, force=False):
     now = time.time()
     cached = _forecast_cache.get(zip_code)
-    if cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
+    if not force and cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
         return cached["data"]
 
     data = _fetch_forecast(zip_code)

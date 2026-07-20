@@ -51,6 +51,11 @@ def forecast_page():
     return render_template("forecast.html")
 
 
+@app.route("/technical")
+def technical_page():
+    return render_template("technical.html")
+
+
 @app.route("/manifest.webmanifest")
 def manifest():
     return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")
@@ -290,6 +295,7 @@ def api_forecast():
     if not locations_store.ZIP_RE.match(zip_code):
         return jsonify({"error": "zip must be 5 digits"}), 400
     provider = request.args.get("provider", "airnow")
+    force = request.args.get("refresh") in ("1", "true")
 
     if provider == "google":
         if not os.environ.get("GOOGLE_AQ_API_KEY"):
@@ -298,22 +304,24 @@ def api_forecast():
         if lat is None:
             return jsonify({"error": "couldn't resolve coordinates for that zip"}), 502
         try:
-            data = google_aq.get_forecast(lat, lon)
+            data = google_aq.get_forecast(lat, lon, force=force)
         except Exception:
             logging.exception("Failed to fetch forecast from Google")
             return jsonify({"error": "google air quality request failed"}), 502
         if data is None:
             return jsonify({"error": "no forecast for this location"}), 404
         data["reporting_area"] = label
+        data["provider"] = "google"
         return jsonify(data)
 
     try:
-        data = airnow.get_forecast(zip_code)
+        data = airnow.get_forecast(zip_code, force=force)
     except Exception:
         logging.exception("Failed to fetch forecast from AirNow")
         return jsonify({"error": "airnow request failed"}), 502
     if data is None:
         return jsonify({"error": "no forecast for this location"}), 404
+    data["provider"] = "airnow"
     return jsonify(data)
 
 

@@ -84,7 +84,13 @@
     </form>
 
     <div class="forecast-card">
-      <div class="forecast-area eyebrow" id="forecast-area">—</div>
+      <div class="forecast-card-head">
+        <div class="forecast-area eyebrow" id="forecast-area">—</div>
+        <div class="forecast-meta">
+          <span class="forecast-source" id="forecast-source">—</span>
+          <button type="button" class="refresh-btn" id="forecast-refresh">Refresh</button>
+        </div>
+      </div>
       <div class="forecast-days" id="forecast-days"></div>
       <div class="forecast-discussion" id="forecast-discussion" hidden>
         <button type="button" class="discussion-toggle" id="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>

@@ -155,18 +155,10 @@
   .id-divider { width: 1px; height: 22px; background: var(--hairline); flex: none; }
   /* Below this width device-id and header-controls don't fit on one line.
      Hiding the wordmark also orphans the divider next to a bare icon, so
-     that goes too. flex-wrap alone would leave header-controls pinned to
-     the left on its own row (a lone wrapped flex item collapses to
-     flex-start) with dead space to its right -- instead the mode switch
-     fills the row (same full-width-button idea as .settings-row's rail)
-     and the gear sits fixed at the end, so the whole row is used instead of
-     a small pill floating awkwardly against one edge. */
+     that goes too. */
   @media (max-width: 480px) {
     .brand-word { display: none; }
     .id-divider { display: none; }
-    .header-controls { width: 100%; }
-    .header-controls .mode-switch { flex: 1 1 auto; }
-    .header-controls .mode-switch button { flex: 1 1 0; }
   }
   .lamp {
     width: 13px; height: 13px; border-radius: 50%; flex: none;
@@ -190,21 +182,21 @@
 
   .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-  /* The header only ever holds the one control you reach for constantly --
-     Basic/Technical -- plus a single gear that opens everything you set
-     once and forget (source, units, theme). A rocker-plate idiom: a sunken
-     track holding a raised, shadowed "on" pill. */
-  .mode-switch, .settings-rail {
+  /* The header holds just a single gear that opens everything you set once
+     and forget (units, theme). A rocker-plate idiom: a sunken track
+     holding a raised, shadowed "on" pill -- also reused by the provider
+     chips and range toggles elsewhere. */
+  .settings-rail {
     display: flex; align-items: stretch; background: var(--panel-sunken); border-radius: 999px; padding: 3px;
     box-shadow: var(--shadow-inset);
   }
-  .mode-switch button, .settings-rail button {
+  .settings-rail button {
     border: none; background: transparent; color: var(--ink-dim); cursor: pointer;
     padding: 12px 14px; min-height: 40px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
     font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
-  .mode-switch button[aria-pressed="true"], .settings-rail button[aria-pressed="true"] {
+  .settings-rail button[aria-pressed="true"] {
     background: var(--panel-raised); color: var(--ink); box-shadow: var(--shadow-raised);
   }
 
@@ -263,16 +255,6 @@
   .view[hidden] { display: none; }
   .view-fade { animation: viewfade 260ms ease both; }
   @keyframes viewfade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-
-  /* ---------- SIMPLE VIEW ---------- */
-  .simple-footnote {
-    margin-top: 22px; text-align: center; font-size: 0.875rem; color: var(--ink-dim);
-  }
-  .simple-footnote button {
-    background: none; border: 1px solid var(--hairline); color: var(--ink);
-    border-radius: 999px; padding: 8px 18px; font: inherit; font-size: 0.8125rem; cursor: pointer;
-    font-family: var(--font-mono); letter-spacing: 0.03em;
-  }
 
   /* ---------- TECHNICAL VIEW ---------- */
   .section { margin-top: 40px; }
@@ -507,6 +489,7 @@
   gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--hairline); margin-top: 2px;
 }
 .rack-foot .outside-discussion:empty { display: none; }
+.rack-foot-links { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
 
 .pill-link {
   display: inline-block;
@@ -584,7 +567,16 @@
   background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
   padding: 18px 20px;
 }
-.forecast-area { margin-bottom: 12px; }
+.forecast-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.forecast-area { margin-bottom: 0; }
+.forecast-meta { display: flex; align-items: center; gap: 10px; }
+.forecast-source { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-dim); white-space: nowrap; }
+.refresh-btn {
+  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
+  border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
+  border-radius: 999px; padding: 8px 14px; min-height: 36px; cursor: pointer;
+}
+.refresh-btn:disabled { opacity: 0.55; cursor: default; }
 .forecast-days { display: flex; flex-wrap: wrap; gap: 12px; }
 .forecast-day {
   flex: 1 1 230px; min-width: 230px;

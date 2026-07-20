@@ -133,12 +133,17 @@
 
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
+  function providerLabel(provider) {
+    return (provider || currentProvider) === "google" ? "Google Air Quality" : "AirNow";
+  }
+
   function renderProviderToggles() {
     document.querySelectorAll(".provider-toggle").forEach((wrap) => {
       wrap.querySelectorAll("button").forEach((btn) => {
         btn.setAttribute("aria-pressed", String(btn.getAttribute("data-provider") === currentProvider));
       });
     });
+    document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
   }
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".provider-toggle button");
@@ -205,15 +210,17 @@
     });
   }
 
-  async function loadForecast() {
+  async function loadForecast(force) {
     const daysEl = document.getElementById("forecast-days");
     const areaEl = document.getElementById("forecast-area");
+    const sourceEl = document.getElementById("forecast-source");
     const discussionWrap = document.getElementById("forecast-discussion");
     const discussionText = document.getElementById("discussion-text");
     const discussionToggle = document.getElementById("discussion-toggle");
 
     const zipParam = selectedZip ? `zip=${encodeURIComponent(selectedZip)}&` : "";
-    const url = `/api/forecast?${zipParam}provider=${currentProvider}`;
+    const refreshParam = force ? "&refresh=1" : "";
+    const url = `/api/forecast?${zipParam}provider=${currentProvider}${refreshParam}`;
     try {
       const res = await fetch(url);
       let d;
@@ -226,6 +233,12 @@
       }
       if (!res.ok) throw new Error(d.error || "request failed");
 
+      // The response's own "provider" field is the source of truth for what
+      // actually served this data (not just currentProvider, which could
+      // theoretically be stale across tabs) -- always show which agency/
+      // model the forecast on screen came from, same principle as the main
+      // dashboard's provider chips.
+      sourceEl.textContent = `via ${providerLabel(d.provider)}`;
       areaEl.textContent = d.reporting_area || "—";
       daysEl.innerHTML = (d.days && d.days.length ? d.days.map((day) => {
         const aqiText = day.aqi != null ? `AQI ${day.aqi}` : "AQI —";
@@ -259,12 +272,22 @@
         discussionWrap.hidden = true;
       }
     } catch (e) {
-      const providerName = currentProvider === "google" ? "Google Air Quality" : "AirNow";
+      sourceEl.textContent = `via ${providerLabel()}`;
       areaEl.textContent = "—";
-      daysEl.innerHTML = `<div class="empty-state">Couldn't reach ${providerName} — ${escapeHtml(e.message)}</div>`;
+      daysEl.innerHTML = `<div class="empty-state">Couldn't reach ${providerLabel()} — ${escapeHtml(e.message)}</div>`;
       discussionWrap.hidden = true;
     }
   }
+
+  document.getElementById("forecast-refresh").addEventListener("click", async () => {
+    const btn = document.getElementById("forecast-refresh");
+    btn.disabled = true;
+    btn.textContent = "Refreshing…";
+    await loadForecast(true);
+    btn.disabled = false;
+    btn.textContent = "Refresh";
+    toast("Forecast refreshed");
+  });
 
   document.getElementById("discussion-toggle").addEventListener("click", () => {
     const btn = document.getElementById("discussion-toggle");

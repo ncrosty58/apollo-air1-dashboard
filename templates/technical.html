@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Technical — Apollo AIR-1 — Cosmos Lab</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#5fc9c1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AIR-1">
+  <script>
+    // Applied before first paint so a saved dark-mode choice never flashes light.
+    (function () {
+      var t = localStorage.getItem("apollo-air1-theme");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+</head>
+<body>
+
+<div class="faceplate">
+  <div class="faceplate-inner">
+    <div class="device-id">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" role="img" aria-label="Cosmos Lab">
+          <rect x="0" y="0" width="64" height="64" rx="14" fill="var(--panel-sunken)" />
+          <ellipse cx="32" cy="32" rx="21" ry="12.5" fill="none" stroke="var(--accent)" stroke-width="3.2" transform="rotate(-28 32 32)" />
+          <circle cx="45.5" cy="20" r="4.4" fill="var(--accent)" />
+          <circle cx="32" cy="32" r="2.1" fill="var(--ink)" />
+        </svg>
+        <span class="brand-word">Cosmos Lab</span>
+      </div>
+      <span class="id-divider"></span>
+      <span class="lamp pulse-once" id="lamp" data-state="mqtt" role="img" aria-label="Connection status"></span>
+      <div class="device-name-block">
+        <span class="device-name">TECHNICAL</span>
+        <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span></span>
+      </div>
+    </div>
+    <div class="header-controls">
+      <a class="pill-link" href="/">← Dashboard</a>
+      <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M12 3v2.4M12 18.6V21M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M3 12h2.4M18.6 12H21M5.4 18.6l1.7-1.7M16.9 7.1l1.7-1.7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="settings-backdrop" hidden></div>
+<div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
+  <div class="settings-panel-head">Settings</div>
+  <div class="settings-row">
+    <span class="cl-name">Units</span>
+    <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
+      <button type="button" data-unit="f" aria-pressed="true">°F</button>
+      <button type="button" data-unit="c" aria-pressed="false">°C</button>
+    </div>
+  </div>
+  <div class="settings-row">
+    <span class="cl-name">Theme</span>
+    <div class="settings-rail theme-toggle" role="tablist" aria-label="Color theme">
+      <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <section class="view view-fade">
+
+    <div class="zone-banner zone-banner--inside">
+      <span class="zone-dot"></span> Inside <span class="zone-sub">— bedroom sensor</span>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Live readout</span>
+        <span class="section-note">Last reading <strong id="since-reading">—</strong></span>
+      </div>
+      <div class="readout-grid" id="readout-grid"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">History</span>
+        <div class="range-toggle" id="range-toggle">
+          <button type="button" data-range="6" aria-pressed="false">6h</button>
+          <button type="button" data-range="24" aria-pressed="true">24h</button>
+          <button type="button" data-range="72" aria-pressed="false">3d</button>
+          <button type="button" data-range="168" aria-pressed="false">7d</button>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h4>CO2 <span class="eyebrow" style="font-weight:500">ppm</span></h4>
+        <div class="chart-svg-wrap" id="chart-co2"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Particulate matter <span class="eyebrow" style="font-weight:500">µg/m³</span></h4>
+        <div class="chart-svg-wrap" id="chart-pm"></div>
+      </div>
+      <div class="chart-card">
+        <h4>VOC / NOx index</h4>
+        <div class="chart-svg-wrap" id="chart-voc"></div>
+      </div>
+      <div class="two-col">
+        <div class="chart-card">
+          <h4>Temperature <span class="eyebrow" style="font-weight:500" id="chart-temp-unit">°F</span></h4>
+          <div class="chart-svg-wrap" id="chart-temp"></div>
+        </div>
+        <div class="chart-card">
+          <h4>Humidity <span class="eyebrow" style="font-weight:500">%</span></h4>
+          <div class="chart-svg-wrap" id="chart-hum"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="table-wrap">
+        <table>
+          <caption>Diagnostics</caption>
+          <tbody>
+            <tr><th>WiFi signal</th><td id="d-rssi">—</td></tr>
+            <tr><th>ESP temperature</th><td id="d-esptemp">—</td></tr>
+            <tr><th>Awake for</th><td id="d-uptime">—</td></tr>
+            <tr><th>Firmware</th><td id="d-firmware">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><span class="section-title">Device activity</span></div>
+      <div class="activity-card">
+        <span class="act-title">No live log feed</span>
+        <p>Connect to the device's local IP to watch <code>ESP_LOG</code> output in real time — this dashboard only gets one snapshot per wake cycle.</p>
+      </div>
+    </div>
+
+    <div class="zone-banner zone-banner--outside">
+      <span class="zone-dot"></span> Outside <span class="zone-sub">— near <span id="outside-area-tech">—</span> · via <span id="outside-source-tech">—</span></span>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Current reading</span>
+        <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast">Forecast →</a></span>
+      </div>
+      <div class="outside-tech-card" id="outside-tech-card" style="--edge-color: var(--hairline);">
+        <div class="outside-tech-main">
+          <div class="outside-tech-aqi" id="outside-aqi-tech" style="--band-color: var(--ink-dim);">—</div>
+          <div class="outside-tech-category-col">
+            <div class="outside-tech-category" id="outside-category-tech">Loading…</div>
+            <div class="outside-tech-dominant" id="outside-dominant-tech"></div>
+          </div>
+        </div>
+        <div class="outside-tech-pollutants" id="outside-pollutants"></div>
+      </div>
+    </div>
+
+    <!-- AQI is the one signal every provider gives on a shared 0-500 scale,
+         so it's the universal inside/outside overlay. Providers that give
+         raw concentrations (Google, PurpleAir, OpenWeatherMap) overlay
+         PM2.5/PM10 (already µg/m³ on both sides) in real units too. AirNow
+         never gives a raw concentration, only its own computed AQI -- so
+         for AirNow, AIR-1's raw PM2.5/PM10 convert to an actual EPA AQI
+         number (aqiFromConcentration) and overlay against AirNow's own
+         pm2_5_aqi/pm10_aqi on that scale instead. CO/NO2 would need the
+         optional MICS-4514, which this unit doesn't have, so they stay
+         outside-only (see the Outside only section below) rather than
+         overlay. Inside and Outside share one row per metric (not separate
+         rows) since they're the same scale -- dashed vs solid tells them
+         apart since color here is already spoken for by severity. -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Inside vs Outside</span>
+        <div class="range-toggle" id="range-toggle-outside">
+          <button type="button" data-range="6" aria-pressed="false">6h</button>
+          <button type="button" data-range="24" aria-pressed="true">24h</button>
+          <button type="button" data-range="72" aria-pressed="false">3d</button>
+          <button type="button" data-range="168" aria-pressed="false">7d</button>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h4>AQI <span class="eyebrow" style="font-weight:500">dashed = inside, solid = outside</span></h4>
+        <div class="chart-svg-wrap" id="chart-aqi-compare"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Pollutants</h4>
+        <div class="chart-svg-wrap" id="chart-inside-outside-pollutants"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Temperature, humidity, pressure <span class="eyebrow" style="font-weight:500">your sensor only</span></h4>
+        <div class="chart-svg-wrap" id="chart-inside-outside-weather"></div>
+      </div>
+    </div>
+
+    <!-- Rows are colored by severity, not pollutant identity -- each row
+         is already labeled by name. Only pollutants with no indoor overlay
+         are here: O3/SO2 have no indoor sensor at all, and CO/NO2 would
+         need the optional MICS-4514 this unit doesn't have. PM2.5/PM10 do
+         overlay (providers with raw concentrations), so those live in the
+         Inside vs Outside section above instead and aren't plotted twice
+         here. Placed last since it's the least central of the outside
+         charts -- everything more directly useful (the current reading,
+         the inside/outside comparison) comes before it. -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Outside only</span>
+        <span class="section-note">Same range as above</span>
+      </div>
+      <div class="chart-card" id="card-outside-pollutants-aqi">
+        <h4>Outside pollutants <span class="eyebrow" style="font-weight:500">AQI per pollutant</span></h4>
+        <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
+      </div>
+      <div class="chart-card" id="card-outside-pollutants-gases" hidden>
+        <h4>Outside gases <span class="eyebrow" style="font-weight:500">ppb</span></h4>
+        <div class="chart-svg-wrap" id="chart-outside-gases"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Controls</span>
+      </div>
+      <div class="control-groups">
+
+        <div class="control-card">
+          <h3>Sleep</h3>
+          <div class="control-row">
+            <div class="control-label">
+              <span class="cl-name">Keep awake</span>
+              <span class="cl-help">Stops the deep-sleep cycle — for OTA updates or debugging</span>
+            </div>
+            <button class="rocker" id="rocker-sleep" aria-pressed="false" aria-label="Keep awake"></button>
+          </div>
+          <div class="control-row">
+            <div class="control-label">
+              <span class="cl-name">Sleep duration</span>
+            </div>
+            <div class="stepper">
+              <button type="button" data-step="sleep" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-sleep">—</span> <span class="stepper-unit">min</span></span>
+              <button type="button" data-step="sleep" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-card">
+          <h3>Calibration offsets</h3>
+          <div class="control-row">
+            <div class="control-label"><span class="cl-name">SEN55 temperature</span></div>
+            <div class="stepper">
+              <button type="button" data-step="toffset" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-toffset">—</span> <span class="stepper-unit" id="unit-toffset">°F</span></span>
+              <button type="button" data-step="toffset" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <div class="control-label"><span class="cl-name">SEN55 humidity</span></div>
+            <div class="stepper">
+              <button type="button" data-step="hoffset" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-hoffset">—</span> <span class="stepper-unit">%</span></span>
+              <button type="button" data-step="hoffset" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <div class="control-label"><span class="cl-name">DPS310 pressure</span></div>
+            <div class="stepper">
+              <button type="button" data-step="poffset" data-dir="-1" aria-label="Decrease">−</button>
+              <span class="stepper-value"><span id="val-poffset">—</span> <span class="stepper-unit">hPa</span></span>
+              <button type="button" data-step="poffset" data-dir="1" aria-label="Increase">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-card">
+          <h3>Maintenance</h3>
+          <button class="btn" type="button" id="btn-calibrate">
+            <span>Calibrate CO2 sensor to 420ppm</span>
+            <span class="btn-id">Run outdoors or after airing the room out</span>
+          </button>
+          <button class="btn" type="button" id="btn-clean">
+            <span>Clean particulate sensor</span>
+            <span class="btn-id">Runs the fan autoclean</span>
+          </button>
+        </div>
+
+        <div class="control-card danger-card">
+          <h3>Device</h3>
+          <button class="btn" type="button" id="btn-reboot">
+            <span>Restart device</span>
+          </button>
+          <button class="btn hold-btn" type="button" id="btn-factory-reset">
+            <span class="hold-fill" id="hold-fill"></span>
+            <span class="btn-label-inner">
+              <span>Hold to factory reset</span>
+              <span class="btn-id">Erases WiFi + MQTT settings</span>
+            </span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+  <footer class="page-footer">
+    <span>Cosmos Lab · apollo-air1-dashboard</span>
+    <span id="footer-clock"></span>
+  </footer>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script src="{{ url_for('static', filename='technical.js') }}"></script>
+</body>
+</html>

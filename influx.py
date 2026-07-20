@@ -191,11 +191,23 @@ def get_write_api():
 def write_outside_reading(fields):
     """fields: flat dict of already-prefixed field names -> value (numeric
     or string), e.g. {"google_aqi": 42, "google_category": "Moderate", ...}.
-    None values are dropped rather than written as an explicit null."""
+    None values are dropped rather than written as an explicit null.
+
+    InfluxDB locks a field's type on its first write, and a source that
+    sometimes reports a whole number (24) and sometimes a decimal (24.11)
+    for the same field alternates between int/float and gets every
+    conflicting point dropped with a "field type conflict" error. AQI
+    numbers are always whole (EPA never publishes a fractional AQI), so
+    those are written as int; concentrations genuinely carry decimals, so
+    those are written as float -- matching how each field type already got
+    locked in practice."""
     point = Point(OUTSIDE_MEASUREMENT).tag("zip", os.environ.get("AIRNOW_ZIP", ""))
     for key, value in fields.items():
-        if value is not None:
-            point = point.field(key, value)
+        if value is None:
+            continue
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            value = int(round(value)) if key.endswith("_aqi") else float(value)
+        point = point.field(key, value)
     get_write_api().write(bucket=os.environ["INFLUX_BUCKET"], record=point)
 
 

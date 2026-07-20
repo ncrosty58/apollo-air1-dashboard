@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 import airnow
+import epa_aqi
 import influx
 
 CURRENT_URL = "https://airquality.googleapis.com/v1/currentConditions:lookup"
@@ -37,20 +38,40 @@ def _cache_key(lat, lon):
     return (round(lat, 3), round(lon, 3))
 
 
-def _index(indexes, code):
-    return next((i for i in indexes if i.get("code") == code), None)
-
-
 def _pollutant_label(code):
     code = (code or "").lower()
     return POLLUTANT_CODE_LABELS.get(code, code.upper())
 
 
-def _best_index(indexes):
-    # usa_epa is Google's US EPA-equivalent index -- same 0-500 scale AirNow
-    # uses, so switching providers doesn't change what a given number means.
-    # uaqi (Google's own 0-100 scale) is the fallback if a location only has that.
-    return _index(indexes, "usa_epa") or _index(indexes, "uaqi")
+# Google's own indexes[].aqi/category/dominantPollutant can be inconsistent
+# with its own pollutants[] concentrations for the same hour -- confirmed
+# directly against the live API: one forecast hour reported usa_epa aqi=55
+# ("Moderate"), while that same hour's own PM2.5 concentration (1.82 µg/m³)
+# independently computes to single-digit "Good" via EPA's own breakpoint
+# math, and its own healthRecommendations text already said "no
+# limitations, enjoy the outdoors" -- i.e. two of Google's three fields
+# agreed, only the index number was the outlier. Recomputing AQI straight
+# from the concentrations (same epa_aqi.py math already used for
+# OpenWeatherMap/PurpleAir) guarantees the headline number, category, and
+# per-pollutant breakdown are always self-consistent, instead of trusting a
+# number that can silently disagree with the data sitting right next to it.
+def _recomputed_aqi(raw_pollutants):
+    best = None
+    for p in raw_pollutants:
+        parameter = p.get("displayName") or _pollutant_label(p.get("code"))
+        concentration = p.get("concentration") or {}
+        value = concentration.get("value")
+        if value is None:
+            continue
+        if parameter == "CO" and concentration.get("units") == "PARTS_PER_BILLION":
+            value = value / 1000  # epa_aqi's CO breakpoints are in ppm
+        aqi = epa_aqi.aqi_from_concentration(parameter, value)
+        if aqi is not None and (best is None or aqi > best[0]):
+            best = (aqi, parameter)
+    if best is None:
+        return None, None, None
+    aqi, dominant = best
+    return aqi, epa_aqi.category_name(aqi), dominant
 
 
 def _pollutants_from(raw_pollutants):
@@ -69,11 +90,6 @@ def _pollutants_from(raw_pollutants):
     ]
 
 
-def _dominant_label(raw_pollutants, code):
-    match = next((p for p in raw_pollutants if p.get("code") == code), None)
-    return (match or {}).get("displayName") or _pollutant_label(code)
-
-
 def _fetch_current(lat, lon):
     resp = requests.post(
         CURRENT_URL,
@@ -87,14 +103,10 @@ def _fetch_current(lat, lon):
     )
     resp.raise_for_status()
     body = resp.json()
-    idx = _best_index(body.get("indexes") or [])
-    if idx is None:
-        return None
-
     raw_pollutants = body.get("pollutants") or []
-    aqi = idx.get("aqi")
-    category = idx.get("category")
-    dominant_pollutant = _dominant_label(raw_pollutants, idx.get("dominantPollutant"))
+    aqi, category, dominant_pollutant = _recomputed_aqi(raw_pollutants)
+    if aqi is None:
+        return None
 
     # Google has its own 30-day history API, but every provider's *live*
     # reading gets persisted here too so History reads the same way for all
@@ -164,34 +176,35 @@ def _fetch_forecast(lat, lon):
 
     # Bucket hourly points into calendar days (UTC) and take the worst hour
     # per day as that day's headline number -- mirrors how AirNow's own
-    # per-day forecast already condenses a full day into one reading.
+    # per-day forecast already condenses a full day into one reading. The
+    # "worst" hour is picked by our own recomputed AQI (_recomputed_aqi),
+    # not Google's indexes[].aqi, so the hour selected and the number shown
+    # for it are always derived the same way.
     by_date = {}
     for point in hourly:
         by_date.setdefault(point["dateTime"][:10], []).append(point)
 
-    def hour_aqi(point):
-        idx = _best_index(point.get("indexes") or [])
-        return idx.get("aqi", 0) if idx else 0
-
     days = []
     for date in sorted(by_date):
-        dominant_point = max(by_date[date], key=hour_aqi)
-        idx = _best_index(dominant_point.get("indexes") or [])
-        if idx is None:
+        scored = []
+        for point in by_date[date]:
+            aqi, category, dominant = _recomputed_aqi(point.get("pollutants") or [])
+            if aqi is not None:
+                scored.append((aqi, category, dominant, point))
+        if not scored:
             continue
-        raw_pollutants = dominant_point.get("pollutants") or []
-        aqi = idx.get("aqi")
+        aqi, category, dominant_pollutant, dominant_point = max(scored, key=lambda s: s[0])
         days.append({
             "date": date,
             "aqi": aqi,
-            "category": idx.get("category"),
+            "category": category,
             "band": airnow.band_for_aqi(aqi),
-            "dominant_pollutant": _dominant_label(raw_pollutants, idx.get("dominantPollutant")),
+            "dominant_pollutant": dominant_pollutant,
             # Per-population-group guidance for this day's worst hour --
             # more specific than AirNow's one-size-fits-all forecaster
             # discussion, which Google doesn't have an equivalent of.
             "health_recommendations": dominant_point.get("healthRecommendations"),
-            "pollutants": _pollutants_from(raw_pollutants),
+            "pollutants": _pollutants_from(dominant_point.get("pollutants") or []),
         })
 
     return {
@@ -201,11 +214,11 @@ def _fetch_forecast(lat, lon):
     }
 
 
-def get_forecast(lat, lon):
+def get_forecast(lat, lon, force=False):
     key = _cache_key(lat, lon)
     now = time.time()
     cached = _forecast_cache.get(key)
-    if cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
+    if not force and cached is not None and (now - cached["fetched_at"]) < FORECAST_CACHE_TTL_S:
         return cached["data"]
 
     data = _fetch_forecast(lat, lon)
