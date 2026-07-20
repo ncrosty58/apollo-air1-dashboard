@@ -108,9 +108,11 @@ def api_history():
 
 
 def _resolve_home_latlon():
-    """Google's API needs coordinates, not a zip -- AirNow's own response for
-    the home zip already resolved that, so reuse its (cached) call instead
-    of adding a separate geocoding dependency."""
+    """Google's/OWM's forecast APIs need coordinates, not a zip -- AirNow's
+    own response for the home zip already resolved that, so reuse its
+    (cached) call instead of adding a separate geocoding dependency. Only the
+    live forecast path needs this now; current conditions read the home label
+    from the DB (see _home_reporting_area)."""
     try:
         obs = airnow.get_current_observation(os.environ["AIRNOW_ZIP"])
     except Exception:
@@ -118,6 +120,22 @@ def _resolve_home_latlon():
     if obs is None or obs.get("lat") is None:
         return None, None, None
     return obs["lat"], obs["lon"], obs.get("reporting_area") or "Home"
+
+
+def _home_reporting_area():
+    """The home reporting-area label for provider cards that don't carry
+    their own (Google/OpenWeatherMap). Read from AirNow's stored reading in
+    InfluxDB rather than a live AirNow call, so a current-conditions view
+    never depends on hitting an upstream API. Falls back to "Home" if AirNow
+    hasn't been polled into the DB yet."""
+    try:
+        row = influx.query_airnow_latest()
+    except Exception:
+        logging.exception("Failed to read AirNow home label from InfluxDB")
+        return "Home"
+    if row and row.get("reporting_area"):
+        return row["reporting_area"]
+    return "Home"
 
 
 def _resolve_latlon_for_zip(zip_code):
@@ -140,60 +158,60 @@ def _resolve_latlon_for_zip(zip_code):
     return None, None, None
 
 
+def _read_from_db(fetch, label, missing_msg):
+    """Run a provider's DB read and map it to (data, error, status): a query
+    exception -> 502, no data -> 404 with the provider's own hint, otherwise
+    (data, None, 200). Collapses the identical boilerplate every provider's
+    current-conditions read used to repeat."""
+    try:
+        data = fetch()
+    except Exception:
+        logging.exception("Failed to read %s from InfluxDB", label)
+        return None, "influxdb query failed", 502
+    if data is None:
+        return None, missing_msg, 404
+    return data, None, 200
+
+
+# provider -> (fetch, log label, 404 hint). All read current conditions back
+# from InfluxDB (Node-RED polls every provider in); AirNow is the default.
+_CURRENT_READERS = {
+    "google": (google_aq.get_current_observation, "Google air quality",
+               "no Google air quality data yet — is GOOGLE_AQ_API_KEY set on the nodered container?"),
+    "purpleair": (purpleair.get_current_observation, "PurpleAir",
+                  "no PurpleAir data yet — is PURPLEAIR_API_KEY set on the nodered container?"),
+    "openweathermap": (owm.get_current_observation, "OpenWeatherMap pollution",
+                       "no OpenWeatherMap pollution data yet — is OWM_API_KEY set on the nodered container?"),
+    "airnow": (lambda: airnow.observation_from_row(influx.query_airnow_latest()), "AirNow",
+               "no AirNow data yet — is AIRNOW_API_KEY set on the nodered container?"),
+}
+# Providers whose reading carries no reporting-area of its own -> stamp the
+# shared home label (from AirNow's stored reading).
+_NEEDS_HOME_LABEL = {"google", "openweathermap"}
+
+
 def _fetch_outside_current(provider):
     """Returns (data, error_message, http_status). data is None on error."""
-    if provider == "google":
-        try:
-            data = google_aq.get_current_observation()
-        except Exception:
-            logging.exception("Failed to read Google air quality from InfluxDB")
-            return None, "influxdb query failed", 502
-        if data is None:
-            return None, "no Google air quality data yet — is GOOGLE_AQ_API_KEY set on the nodered container?", 404
-        _, _, label = _resolve_home_latlon()
-        data["reporting_area"] = label or "Home"
-        return data, None, 200
-
-    if provider == "purpleair":
-        try:
-            data = purpleair.get_current_observation()
-        except Exception:
-            logging.exception("Failed to read PurpleAir from InfluxDB")
-            return None, "influxdb query failed", 502
-        if data is None:
-            return None, "no PurpleAir data yet — is PURPLEAIR_API_KEY set on the nodered container?", 404
-        return data, None, 200
-
-    if provider == "openweathermap":
-        try:
-            data = owm.get_current_observation()
-        except Exception:
-            logging.exception("Failed to read OpenWeatherMap pollution from InfluxDB")
-            return None, "influxdb query failed", 502
-        if data is None:
-            return None, "no OpenWeatherMap pollution data yet — is OWM_API_KEY set on the nodered container?", 404
-        _, _, label = _resolve_home_latlon()
-        data["reporting_area"] = label or "Home"
-        return data, None, 200
-
-    try:
-        data = airnow.get_current_observation(os.environ["AIRNOW_ZIP"])
-    except Exception:
-        logging.exception("Failed to fetch outdoor reading from AirNow")
-        return None, "airnow request failed", 502
+    fetch, label, missing_msg = _CURRENT_READERS.get(provider, _CURRENT_READERS["airnow"])
+    data, error, status = _read_from_db(fetch, label, missing_msg)
     if data is None:
-        return None, "no data for this location", 404
+        return data, error, status
 
-    # AirNow's forecaster discussion only exists on the forecast endpoint,
-    # not current conditions -- reuse get_forecast's own cache (already hit
-    # by the Forecast page) rather than a separate lookup. Best-effort: a
-    # forecast hiccup shouldn't take down the current-conditions reading.
-    try:
-        forecast = airnow.get_forecast(os.environ["AIRNOW_ZIP"])
-        data["discussion"] = forecast.get("discussion") if forecast else None
-    except Exception:
-        logging.exception("Failed to fetch forecast discussion from AirNow")
-        data["discussion"] = None
+    if provider in _NEEDS_HOME_LABEL:
+        data["reporting_area"] = _home_reporting_area()
+
+    if provider == "airnow":
+        # AirNow's forecaster discussion only exists on the forecast endpoint,
+        # not current conditions, and the forecast isn't persisted -- reuse
+        # get_forecast's own cache (already hit by the Forecast page, the one
+        # sanctioned live AirNow call) rather than a separate lookup. Best-
+        # effort: a forecast hiccup shouldn't take down the current reading.
+        try:
+            forecast = airnow.get_forecast(os.environ["AIRNOW_ZIP"])
+            data["discussion"] = forecast.get("discussion") if forecast else None
+        except Exception:
+            logging.exception("Failed to fetch forecast discussion from AirNow")
+            data["discussion"] = None
     return data, None, 200
 
 
@@ -314,6 +332,23 @@ def api_forecast():
             return jsonify({"error": "no forecast for this location"}), 404
         data["reporting_area"] = label
         data["provider"] = "google"
+        return jsonify(data)
+
+    if provider == "openweathermap":
+        if not os.environ.get("OWM_API_KEY"):
+            return jsonify({"error": "OpenWeatherMap isn't configured"}), 400
+        lat, lon, label = _resolve_latlon_for_zip(zip_code)
+        if lat is None:
+            return jsonify({"error": "couldn't resolve coordinates for that zip"}), 502
+        try:
+            data = owm.get_forecast(lat, lon, force=force)
+        except Exception:
+            logging.exception("Failed to fetch forecast from OpenWeatherMap")
+            return jsonify({"error": "openweathermap request failed"}), 502
+        if data is None:
+            return jsonify({"error": "no forecast for this location"}), 404
+        data["reporting_area"] = label
+        data["provider"] = "openweathermap"
         return jsonify(data)
 
     try:

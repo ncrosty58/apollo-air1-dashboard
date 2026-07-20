@@ -16,13 +16,8 @@
     return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
   }
 
-  function bandFromAqi(aqi) {
-    if (typeof aqi !== "number") return null;
-    if (aqi > 150) return "bad";
-    if (aqi > 100) return "poor";
-    if (aqi > 50) return "fair";
-    return "good";
-  }
+  // bandFromAqi / aqiFromConcentration / bandForConcentration come from
+  // static/aqi.js (loaded first), shared with the other pages.
 
   // AirNow's category names collapse onto the same 4-band scale as its AQI
   // numbers -- useful for the rows where AQI is -1 (not computed) and
@@ -35,30 +30,6 @@
     "Very Unhealthy": "bad",
     "Hazardous": "bad",
   };
-
-  // Google gives a raw concentration, not an AQI. These are EPA's own AQI
-  // breakpoints (current/2024 revision for PM2.5), reduced to the three
-  // thresholds this app's 4-band system needs. Units must match what
-  // Google reports: ppb for gases except CO (EPA's CO breakpoints are in
-  // ppm), µg/m³ for particulates.
-  const CONCENTRATION_THRESHOLDS = {
-    "PM2.5": [9.1, 35.5, 55.5],
-    "PM10": [55, 155, 255],
-    "O3": [55, 71, 86],
-    "NO2": [54, 101, 361],
-    "SO2": [36, 76, 186],
-    "CO": [4.5, 9.5, 12.5],
-  };
-  function bandForConcentration(parameter, value, units) {
-    const thresholds = CONCENTRATION_THRESHOLDS[parameter];
-    if (typeof value !== "number" || !thresholds) return null;
-    const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
-    const [fairMin, poorMin, badMin] = thresholds;
-    if (v >= badMin) return "bad";
-    if (v >= poorMin) return "poor";
-    if (v >= fairMin) return "fair";
-    return "good";
-  }
 
   function pollutantsHtml(pollutants) {
     // AirNow sometimes doesn't compute a per-pollutant AQI for forecast rows
@@ -133,8 +104,9 @@
 
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
+  const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow" };
   function providerLabel(provider) {
-    return (provider || currentProvider) === "google" ? "Google Air Quality" : "AirNow";
+    return PROVIDER_LABELS[provider || currentProvider] || "AirNow";
   }
 
   function renderProviderToggles() {

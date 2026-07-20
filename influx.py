@@ -28,11 +28,6 @@ def get_client():
     return _client
 
 
-def _field_filter():
-    all_fields = FIELDS + STRING_FIELDS
-    return " or ".join(f'r._field == "{f}"' for f in all_fields)
-
-
 def _rows_from(tables):
     points = []
     for table in tables:
@@ -45,38 +40,40 @@ def _rows_from(tables):
     return points
 
 
-def query_latest():
+def _flux(fields, range_start, *, measurement, latest=False, sort=False):
+    """Build the one Flux shape every query here uses: filter a measurement to
+    a set of fields over a range, pivot fields into columns, and optionally
+    take the latest point or sort by time. `latest` and `sort` are mutually
+    exclusive in practice (latest collapses to one point)."""
     bucket = os.environ["INFLUX_BUCKET"]
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -7d)
-      |> filter(fn: (r) => r._measurement == "{MEASUREMENT}")
-      |> filter(fn: (r) => {_field_filter()})
-      |> last()
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-    '''
-    tables = get_client().query_api().query(flux)
-    for table in tables:
-        for record in table.records:
-            row = dict(record.values)
-            row["time"] = record.get_time().isoformat()
-            for key in ("result", "table", "_start", "_stop", "_measurement", "_time"):
-                row.pop(key, None)
-            return row
-    return None
+    field_filter = " or ".join(f'r._field == "{f}"' for f in fields)
+    pipeline = [
+        f'from(bucket: "{bucket}")',
+        f'|> range(start: {range_start})',
+        f'|> filter(fn: (r) => r._measurement == "{measurement}")',
+        f'|> filter(fn: (r) => {field_filter})',
+    ]
+    if latest:
+        pipeline.append('|> last()')
+    pipeline.append('|> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")')
+    if sort:
+        pipeline.append('|> sort(columns: ["_time"])')
+    return "\n  ".join(pipeline)
+
+
+def _query(fields, range_start, *, measurement=None, latest=False, sort=False):
+    measurement = measurement or OUTSIDE_MEASUREMENT
+    flux = _flux(fields, range_start, measurement=measurement, latest=latest, sort=sort)
+    return _rows_from(get_client().query_api().query(flux))
+
+
+def query_latest():
+    rows = _query(FIELDS + STRING_FIELDS, "-7d", measurement=MEASUREMENT, latest=True)
+    return rows[-1] if rows else None
 
 
 def query_history(hours):
-    bucket = os.environ["INFLUX_BUCKET"]
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -{hours}h)
-      |> filter(fn: (r) => r._measurement == "{MEASUREMENT}")
-      |> filter(fn: (r) => {_field_filter()})
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> sort(columns: ["_time"])
-    '''
-    return _rows_from(get_client().query_api().query(flux))
+    return _query(FIELDS + STRING_FIELDS, f"-{hours}h", measurement=MEASUREMENT, sort=True)
 
 
 OUTSIDE_MEASUREMENT = "outside_air_quality"
@@ -85,18 +82,7 @@ OUTSIDE_STRING_FIELDS = ["category", "dominant_pollutant", "reporting_area"]
 
 
 def query_outside_history(hours):
-    bucket = os.environ["INFLUX_BUCKET"]
-    all_fields = OUTSIDE_FIELDS + OUTSIDE_STRING_FIELDS
-    field_filter = " or ".join(f'r._field == "{f}"' for f in all_fields)
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -{hours}h)
-      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
-      |> filter(fn: (r) => {field_filter})
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> sort(columns: ["_time"])
-    '''
-    return _rows_from(get_client().query_api().query(flux))
+    return _query(OUTSIDE_FIELDS + OUTSIDE_STRING_FIELDS, f"-{hours}h", sort=True)
 
 
 # Outside temperature/humidity/pressure -- not from AirNow or Google (neither
@@ -108,56 +94,29 @@ OUTSIDE_WEATHER_FIELDS = ["temperature_c", "humidity_pct", "pressure_hpa"]
 
 # OpenWeatherMap air_pollution components, written by Node-RED with an owm_
 # prefix precisely so they stay separable from AirNow's fields in the same
-# measurement (see the Apollo AIR-1 Node-RED tab).
+# measurement (see the Apollo AIR-1 Node-RED tab). owm_aqi_epa/owm_category/
+# owm_dominant_pollutant are the EPA AQI headline + labels Node-RED computes
+# from the concentrations (the "Format OWM Pollution Fields & Tags" function)
+# -- read straight back rather than recomputed here, same as the Google and
+# PurpleAir feeds below.
 OWM_FIELDS = [
-    "owm_aqi_index", "owm_pm2_5_ugm3", "owm_pm10_ugm3", "owm_o3_ugm3",
-    "owm_no2_ugm3", "owm_so2_ugm3", "owm_co_ugm3", "owm_nh3_ugm3",
+    "owm_aqi_epa", "owm_aqi_index", "owm_pm2_5_ugm3", "owm_pm10_ugm3",
+    "owm_o3_ugm3", "owm_no2_ugm3", "owm_so2_ugm3", "owm_co_ugm3", "owm_nh3_ugm3",
 ]
-
-
-def _owm_field_filter():
-    return " or ".join(f'r._field == "{f}"' for f in OWM_FIELDS)
+OWM_STRING_FIELDS = ["owm_category", "owm_dominant_pollutant"]
 
 
 def query_owm_latest():
-    bucket = os.environ["INFLUX_BUCKET"]
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -6h)
-      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
-      |> filter(fn: (r) => {_owm_field_filter()})
-      |> last()
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-    '''
-    rows = _rows_from(get_client().query_api().query(flux))
+    rows = _query(OWM_FIELDS + OWM_STRING_FIELDS, "-6h", latest=True)
     return rows[-1] if rows else None
 
 
 def query_owm_history(hours):
-    bucket = os.environ["INFLUX_BUCKET"]
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -{hours}h)
-      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
-      |> filter(fn: (r) => {_owm_field_filter()})
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> sort(columns: ["_time"])
-    '''
-    return _rows_from(get_client().query_api().query(flux))
+    return _query(OWM_FIELDS + OWM_STRING_FIELDS, f"-{hours}h", sort=True)
 
 
 def query_outside_weather(hours):
-    bucket = os.environ["INFLUX_BUCKET"]
-    field_filter = " or ".join(f'r._field == "{f}"' for f in OUTSIDE_WEATHER_FIELDS)
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -{hours}h)
-      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
-      |> filter(fn: (r) => {field_filter})
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> sort(columns: ["_time"])
-    '''
-    return _rows_from(get_client().query_api().query(flux))
+    return _query(OUTSIDE_WEATHER_FIELDS, f"-{hours}h", sort=True)
 
 
 # Google and PurpleAir current-reading + history both come from here now --
@@ -165,8 +124,23 @@ def query_outside_weather(hours):
 # AirNow/OWM already use, instead of the dashboard calling either API
 # itself. Prefixed field names follow the same collision-avoidance
 # precedent as OWM_FIELDS above.
+#
+# The headline AQI, category, and dominant pollutant are read from the
+# *_aqi_epa / *_category / *_dominant_pollutant fields Node-RED computes from
+# the concentrations (its "Format ... Fields & Tags" functions) -- the app no
+# longer recomputes them, so the number the dashboard shows, the number
+# Grafana shows, and the number Node-RED derived are one and the same.
+#
+# Note the *_aqi_epa naming: an earlier google_aqi/purpleair_aqi field was
+# written with inconsistent numeric types (int on some points, float on
+# others), which makes InfluxDB v2's TSM engine panic ("interface conversion:
+# tsm1.Value is tsm1.FloatValue, not tsm1.IntegerValue") the instant a query
+# touches that series -- confirmed still fatal. Node-RED writes the AQI to the
+# separate, always-float *_aqi_epa field precisely to sidestep that poisoned
+# series; those legacy fields must never be queried.
 GOOGLE_FIELDS = [
-    "google_aqi", "google_pm2_5_ugm3", "google_pm10_ugm3",
+    "google_aqi_epa",
+    "google_pm2_5_ugm3", "google_pm10_ugm3",
     "google_o3_ppb", "google_no2_ppb", "google_so2_ppb", "google_co_ppb",
 ]
 GOOGLE_STRING_FIELDS = [
@@ -174,50 +148,42 @@ GOOGLE_STRING_FIELDS = [
     "google_health_general", "google_health_children",
 ]
 
-PURPLEAIR_FIELDS = ["purpleair_aqi", "purpleair_pm2_5_ugm3", "purpleair_pm10_ugm3"]
+PURPLEAIR_FIELDS = ["purpleair_aqi_epa", "purpleair_pm2_5_ugm3", "purpleair_pm10_ugm3"]
 PURPLEAIR_STRING_FIELDS = ["purpleair_category", "purpleair_dominant_pollutant"]
+
+# AirNow's own fields are the bare (unprefixed) ones in this measurement --
+# Google/PurpleAir/OWM all carry a provider prefix precisely so AirNow's
+# aqi/category/dominant_pollutant/reporting_area and its per-pollutant *_aqi
+# numbers stay separable here. Node-RED already computes the AQI (AirNow's
+# API hands it to us), so current conditions read straight from the DB like
+# every other provider, rather than the app calling AirNow live.
+AIRNOW_FIELDS = ["aqi", "pm2_5_aqi", "pm10_aqi", "o3_aqi", "no2_aqi", "co_aqi", "so2_aqi"]
+AIRNOW_STRING_FIELDS = ["category", "dominant_pollutant", "reporting_area"]
 
 
 def query_google_latest():
-    return _query_prefixed_latest(GOOGLE_FIELDS + GOOGLE_STRING_FIELDS)
+    return _latest(GOOGLE_FIELDS + GOOGLE_STRING_FIELDS)
 
 
 def query_purpleair_latest():
-    return _query_prefixed_latest(PURPLEAIR_FIELDS + PURPLEAIR_STRING_FIELDS)
+    return _latest(PURPLEAIR_FIELDS + PURPLEAIR_STRING_FIELDS)
 
 
-def _query_prefixed_latest(all_fields):
-    bucket = os.environ["INFLUX_BUCKET"]
-    field_filter = " or ".join(f'r._field == "{f}"' for f in all_fields)
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -6h)
-      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
-      |> filter(fn: (r) => {field_filter})
-      |> last()
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-    '''
-    rows = _rows_from(get_client().query_api().query(flux))
+def query_airnow_latest():
+    # AirNow updates hourly and can be sparse (its own reporting lags, and
+    # not every hour publishes) -- a wider window than the other providers so
+    # a gap doesn't blank the card when a recent-enough reading still exists.
+    return _latest(AIRNOW_FIELDS + AIRNOW_STRING_FIELDS, range_start="-24h")
+
+
+def _latest(fields, range_start="-6h"):
+    rows = _query(fields, range_start, latest=True)
     return rows[-1] if rows else None
 
 
 def query_google_history(hours):
-    return _query_prefixed_history(GOOGLE_FIELDS + GOOGLE_STRING_FIELDS, hours)
+    return _query(GOOGLE_FIELDS + GOOGLE_STRING_FIELDS, f"-{hours}h", sort=True)
 
 
 def query_purpleair_history(hours):
-    return _query_prefixed_history(PURPLEAIR_FIELDS + PURPLEAIR_STRING_FIELDS, hours)
-
-
-def _query_prefixed_history(all_fields, hours):
-    bucket = os.environ["INFLUX_BUCKET"]
-    field_filter = " or ".join(f'r._field == "{f}"' for f in all_fields)
-    flux = f'''
-    from(bucket: "{bucket}")
-      |> range(start: -{hours}h)
-      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
-      |> filter(fn: (r) => {field_filter})
-      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
-      |> sort(columns: ["_time"])
-    '''
-    return _rows_from(get_client().query_api().query(flux))
+    return _query(PURPLEAIR_FIELDS + PURPLEAIR_STRING_FIELDS, f"-{hours}h", sort=True)

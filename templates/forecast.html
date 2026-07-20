@@ -57,6 +57,7 @@
     <div class="settings-rail provider-toggle" role="tablist" aria-label="Air quality data source">
       <button type="button" data-provider="airnow" aria-pressed="true">AirNow</button>
       <button type="button" data-provider="google" aria-pressed="false">Google</button>
+      <button type="button" data-provider="openweathermap" aria-pressed="false">OWM</button>
     </div>
   </div>
   <div class="settings-row">
@@ -107,6 +108,7 @@
 
 <div class="toast-stack" id="toast-stack"></div>
 
+<script src="{{ url_for('static', filename='aqi.js') }}"></script>
 <script src="{{ url_for('static', filename='forecast.js') }}"></script>
 </body>
 </html>

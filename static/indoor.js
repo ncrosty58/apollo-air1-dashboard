@@ -55,13 +55,7 @@
     loadHistory(currentRange);
   });
 
-  function bandFromAqi(aqi) {
-    if (aqi === undefined || aqi === null || Number.isNaN(aqi)) return null;
-    if (aqi > 150) return "bad";
-    if (aqi > 100) return "poor";
-    if (aqi > 50) return "fair";
-    return "good";
-  }
+  // bandFromAqi comes from static/aqi.js (loaded first), shared across pages.
   function bandFromCo2(co2) {
     if (co2 === undefined || co2 === null || Number.isNaN(co2)) return null;
     if (co2 > 2000) return "bad";
