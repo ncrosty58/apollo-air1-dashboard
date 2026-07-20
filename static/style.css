@@ -489,7 +489,7 @@
   gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--hairline); margin-top: 2px;
 }
 .rack-foot .outside-discussion:empty { display: none; }
-.rack-foot-links { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+.rack-foot-links { display: flex; gap: 8px; flex-wrap: wrap; flex: none; margin-left: auto; }
 
 .pill-link {
   display: inline-block;

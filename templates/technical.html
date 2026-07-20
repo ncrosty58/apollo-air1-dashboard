@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Technical — Apollo AIR-1 — Cosmos Lab</title>
+  <title>Outdoor — Apollo AIR-1 — Cosmos Lab</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
@@ -37,7 +37,7 @@
       <span class="id-divider"></span>
       <span class="lamp pulse-once" id="lamp" data-state="mqtt" role="img" aria-label="Connection status"></span>
       <div class="device-name-block">
-        <span class="device-name">TECHNICAL</span>
+        <span class="device-name">OUTDOOR</span>
         <span class="device-sub" id="device-sub"><span id="conn-status">Connecting…</span></span>
       </div>
     </div>
@@ -75,75 +75,6 @@
 <div class="wrap">
   <section class="view view-fade">
 
-    <div class="zone-banner zone-banner--inside">
-      <span class="zone-dot"></span> Inside <span class="zone-sub">— bedroom sensor</span>
-    </div>
-
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">Live readout</span>
-        <span class="section-note">Last reading <strong id="since-reading">—</strong></span>
-      </div>
-      <div class="readout-grid" id="readout-grid"></div>
-    </div>
-
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">History</span>
-        <div class="range-toggle" id="range-toggle">
-          <button type="button" data-range="6" aria-pressed="false">6h</button>
-          <button type="button" data-range="24" aria-pressed="true">24h</button>
-          <button type="button" data-range="72" aria-pressed="false">3d</button>
-          <button type="button" data-range="168" aria-pressed="false">7d</button>
-        </div>
-      </div>
-
-      <div class="chart-card">
-        <h4>CO2 <span class="eyebrow" style="font-weight:500">ppm</span></h4>
-        <div class="chart-svg-wrap" id="chart-co2"></div>
-      </div>
-      <div class="chart-card">
-        <h4>Particulate matter <span class="eyebrow" style="font-weight:500">µg/m³</span></h4>
-        <div class="chart-svg-wrap" id="chart-pm"></div>
-      </div>
-      <div class="chart-card">
-        <h4>VOC / NOx index</h4>
-        <div class="chart-svg-wrap" id="chart-voc"></div>
-      </div>
-      <div class="two-col">
-        <div class="chart-card">
-          <h4>Temperature <span class="eyebrow" style="font-weight:500" id="chart-temp-unit">°F</span></h4>
-          <div class="chart-svg-wrap" id="chart-temp"></div>
-        </div>
-        <div class="chart-card">
-          <h4>Humidity <span class="eyebrow" style="font-weight:500">%</span></h4>
-          <div class="chart-svg-wrap" id="chart-hum"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="table-wrap">
-        <table>
-          <caption>Diagnostics</caption>
-          <tbody>
-            <tr><th>WiFi signal</th><td id="d-rssi">—</td></tr>
-            <tr><th>ESP temperature</th><td id="d-esptemp">—</td></tr>
-            <tr><th>Awake for</th><td id="d-uptime">—</td></tr>
-            <tr><th>Firmware</th><td id="d-firmware">—</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-head"><span class="section-title">Device activity</span></div>
-      <div class="activity-card">
-        <span class="act-title">No live log feed</span>
-        <p>Connect to the device's local IP to watch <code>ESP_LOG</code> output in real time — this dashboard only gets one snapshot per wake cycle.</p>
-      </div>
-    </div>
-
     <div class="zone-banner zone-banner--outside">
       <span class="zone-dot"></span> Outside <span class="zone-sub">— near <span id="outside-area-tech">—</span> · via <span id="outside-source-tech">—</span></span>
     </div>
@@ -151,7 +82,7 @@
     <div class="section">
       <div class="section-head">
         <span class="section-title">Current reading</span>
-        <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast">Forecast →</a></span>
+        <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast" id="forecast-link">Forecast →</a></span>
       </div>
       <div class="outside-tech-card" id="outside-tech-card" style="--edge-color: var(--hairline);">
         <div class="outside-tech-main">
@@ -226,90 +157,6 @@
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">Controls</span>
-      </div>
-      <div class="control-groups">
-
-        <div class="control-card">
-          <h3>Sleep</h3>
-          <div class="control-row">
-            <div class="control-label">
-              <span class="cl-name">Keep awake</span>
-              <span class="cl-help">Stops the deep-sleep cycle — for OTA updates or debugging</span>
-            </div>
-            <button class="rocker" id="rocker-sleep" aria-pressed="false" aria-label="Keep awake"></button>
-          </div>
-          <div class="control-row">
-            <div class="control-label">
-              <span class="cl-name">Sleep duration</span>
-            </div>
-            <div class="stepper">
-              <button type="button" data-step="sleep" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-sleep">—</span> <span class="stepper-unit">min</span></span>
-              <button type="button" data-step="sleep" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="control-card">
-          <h3>Calibration offsets</h3>
-          <div class="control-row">
-            <div class="control-label"><span class="cl-name">SEN55 temperature</span></div>
-            <div class="stepper">
-              <button type="button" data-step="toffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-toffset">—</span> <span class="stepper-unit" id="unit-toffset">°F</span></span>
-              <button type="button" data-step="toffset" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-          <div class="control-row">
-            <div class="control-label"><span class="cl-name">SEN55 humidity</span></div>
-            <div class="stepper">
-              <button type="button" data-step="hoffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-hoffset">—</span> <span class="stepper-unit">%</span></span>
-              <button type="button" data-step="hoffset" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-          <div class="control-row">
-            <div class="control-label"><span class="cl-name">DPS310 pressure</span></div>
-            <div class="stepper">
-              <button type="button" data-step="poffset" data-dir="-1" aria-label="Decrease">−</button>
-              <span class="stepper-value"><span id="val-poffset">—</span> <span class="stepper-unit">hPa</span></span>
-              <button type="button" data-step="poffset" data-dir="1" aria-label="Increase">+</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="control-card">
-          <h3>Maintenance</h3>
-          <button class="btn" type="button" id="btn-calibrate">
-            <span>Calibrate CO2 sensor to 420ppm</span>
-            <span class="btn-id">Run outdoors or after airing the room out</span>
-          </button>
-          <button class="btn" type="button" id="btn-clean">
-            <span>Clean particulate sensor</span>
-            <span class="btn-id">Runs the fan autoclean</span>
-          </button>
-        </div>
-
-        <div class="control-card danger-card">
-          <h3>Device</h3>
-          <button class="btn" type="button" id="btn-reboot">
-            <span>Restart device</span>
-          </button>
-          <button class="btn hold-btn" type="button" id="btn-factory-reset">
-            <span class="hold-fill" id="hold-fill"></span>
-            <span class="btn-label-inner">
-              <span>Hold to factory reset</span>
-              <span class="btn-id">Erases WiFi + MQTT settings</span>
-            </span>
-          </button>
-        </div>
-
-      </div>
-    </div>
-
   </section>
 
   <footer class="page-footer">
@@ -317,8 +164,6 @@
     <span id="footer-clock"></span>
   </footer>
 </div>
-
-<div class="toast-stack" id="toast-stack"></div>
 
 <script src="{{ url_for('static', filename='technical.js') }}"></script>
 </body>

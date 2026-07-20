@@ -56,6 +56,11 @@ def technical_page():
     return render_template("technical.html")
 
 
+@app.route("/indoor")
+def indoor_page():
+    return render_template("indoor.html")
+
+
 @app.route("/manifest.webmanifest")
 def manifest():
     return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")

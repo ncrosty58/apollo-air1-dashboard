@@ -136,9 +136,19 @@
 
   const PROVIDER_NAMES = { airnow: "AirNow", google: "Google", purpleair: "PurpleAir", openweathermap: "OWM" };
   const PROVIDER_ORDER = ["airnow", "google", "purpleair", "openweathermap"];
+  // PurpleAir has no forecast product at all (real-time + historical only).
+  // OpenWeatherMap's forecast isn't built in this app yet. Either way, the
+  // Forecast link would be showing data for a different provider than the
+  // one on screen, so it's hidden rather than silently misleading.
+  const PROVIDERS_WITHOUT_FORECAST = new Set(["purpleair", "openweathermap"]);
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
+  }
+
+  function renderForecastLinkVisibility() {
+    const link = document.getElementById("forecast-link");
+    if (link) link.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
   }
 
   // Each chip shows that provider's own live AQI (from /api/outside/all,
@@ -169,6 +179,7 @@
     currentProvider = btn.getAttribute("data-provider");
     localStorage.setItem("apollo-air1-provider", currentProvider);
     loadProviderChips();
+    renderForecastLinkVisibility();
     loadOutside();
     loadBasicSparks();
   });
@@ -486,6 +497,7 @@
 
   /* ---------- init ---------- */
   loadProviderChips();
+  renderForecastLinkVisibility();
   renderUnitToggle();
   renderThemeToggle();
   loadLatest();
