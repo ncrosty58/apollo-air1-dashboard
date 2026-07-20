@@ -49,6 +49,14 @@ def inject_links():
     return {"grafana_url": os.environ.get("GRAFANA_DASHBOARD_URL", "")}
 
 
+@app.route("/healthz")
+def healthz():
+    # Liveness only -- deliberately does NOT touch InfluxDB or MQTT, so an
+    # upstream outage doesn't make the container look dead and get killed. It
+    # reports the MQTT link state as a hint without gating health on it.
+    return jsonify({"status": "ok", "mqtt_connected": mqtt_bridge.available()})
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -190,17 +198,22 @@ _CURRENT_READERS = {
 _NEEDS_HOME_LABEL = {"google", "openweathermap"}
 
 
-def _fetch_outside_current(provider):
-    """Returns (data, error_message, http_status). data is None on error."""
+def _fetch_outside_current(provider, *, want_discussion=True, home_label=None):
+    """Returns (data, error_message, http_status). data is None on error.
+
+    want_discussion=False skips the live AirNow forecast-discussion fetch, for
+    callers (the /api/outside/all chip summary) that don't render it.
+    home_label lets a caller resolve the shared home label once and pass it in
+    rather than each provider re-querying it."""
     fetch, label, missing_msg = _CURRENT_READERS.get(provider, _CURRENT_READERS["airnow"])
     data, error, status = _read_from_db(fetch, label, missing_msg)
     if data is None:
         return data, error, status
 
     if provider in _NEEDS_HOME_LABEL:
-        data["reporting_area"] = _home_reporting_area()
+        data["reporting_area"] = home_label if home_label is not None else _home_reporting_area()
 
-    if provider == "airnow":
+    if want_discussion and provider == "airnow":
         # AirNow's forecaster discussion only exists on the forecast endpoint,
         # not current conditions, and the forecast isn't persisted -- reuse
         # get_forecast's own cache (already hit by the Forecast page, the one
@@ -231,8 +244,11 @@ def api_outside_all():
     same caches the full endpoint uses, so this costs no extra upstream
     calls beyond what browsing the providers individually would."""
     summary = {}
+    # Resolve the shared home label once rather than per-provider, and skip the
+    # AirNow discussion fetch entirely -- the chips only show aqi/band/category.
+    home_label = _home_reporting_area()
     for provider in ("airnow", "google", "purpleair", "openweathermap"):
-        data, error, _ = _fetch_outside_current(provider)
+        data, error, _ = _fetch_outside_current(provider, want_discussion=False, home_label=home_label)
         if data is None:
             summary[provider] = {"available": False, "reason": error}
         else:
@@ -262,6 +278,21 @@ def _with_outside_weather(points, hours):
         return points
 
 
+# provider -> (history reader, config env var or None, config label, log label).
+# All read pollutant history back from InfluxDB; the per-pollutant temp/
+# humidity/pressure always comes from the shared outside-weather feed merged in
+# by _with_outside_weather (PurpleAir/OWM/Google don't persist their own).
+# AirNow is the default and reads the bare (unprefixed) fields directly.
+_HISTORY_READERS = {
+    "google": (google_aq.get_history, "GOOGLE_AQ_API_KEY", "Google Air Quality",
+               "Failed to read Google history from InfluxDB"),
+    "purpleair": (purpleair.get_history, None, None,
+                  "Failed to read PurpleAir history from InfluxDB"),
+    "openweathermap": (owm.get_history, None, None,
+                       "Failed to read OpenWeatherMap history from InfluxDB"),
+}
+
+
 @app.route("/api/outside/history")
 def api_outside_history():
     try:
@@ -271,42 +302,33 @@ def api_outside_history():
     hours = max(1, min(hours, 168))
     provider = request.args.get("provider", "airnow")
 
-    if provider == "google":
-        if not os.environ.get("GOOGLE_AQ_API_KEY"):
-            return jsonify({"error": "Google Air Quality isn't configured"}), 400
-        try:
-            points = google_aq.get_history(hours)
-        except Exception:
-            logging.exception("Failed to read Google history from InfluxDB")
-            return jsonify({"error": "influxdb query failed"}), 502
-        return jsonify(_with_outside_weather(points, hours))
-
-    if provider == "purpleair":
-        try:
-            points = purpleair.get_history(hours)
-        except Exception:
-            logging.exception("Failed to read PurpleAir history from InfluxDB")
-            return jsonify({"error": "influxdb query failed"}), 502
-        # PurpleAir's own temp/humidity/pressure ride along with its current
-        # reading but aren't persisted to Influx (out of scope for the
-        # pollutant history this stores) -- the outside-weather merge fills
-        # temp/humidity/pressure in from the shared feed instead.
-        return jsonify(_with_outside_weather(points, hours))
-
-    if provider == "openweathermap":
-        try:
-            points = owm.get_history(hours)
-        except Exception:
-            logging.exception("Failed to read OpenWeatherMap history from InfluxDB")
-            return jsonify({"error": "influxdb query failed"}), 502
-        return jsonify(_with_outside_weather(points, hours))
+    reader = _HISTORY_READERS.get(provider)
+    if reader is not None:
+        fetch, env_key, cfg_label, log_label = reader
+        if env_key and not os.environ.get(env_key):
+            return jsonify({"error": f"{cfg_label} isn't configured"}), 400
+    else:
+        fetch, log_label = influx.query_outside_history, "Failed to query outdoor history from InfluxDB"
 
     try:
-        points = influx.query_outside_history(hours)
+        points = fetch(hours)
     except Exception:
-        logging.exception("Failed to query outdoor history from InfluxDB")
+        logging.exception(log_label)
         return jsonify({"error": "influxdb query failed"}), 502
     return jsonify(_with_outside_weather(points, hours))
+
+
+# provider -> (live forecast fetch(lat, lon, force), config env var, config
+# label, upstream-failure message). These are the two on-demand live forecast
+# providers -- both need coordinates (not a zip) and both stamp the resolved
+# home/location label onto the response. AirNow (the default) is handled
+# separately below: it forecasts by zip and carries its own reporting area.
+_LIVE_FORECAST_PROVIDERS = {
+    "google": (google_aq.get_forecast, "GOOGLE_AQ_API_KEY", "Google Air Quality",
+               "google air quality request failed"),
+    "openweathermap": (owm.get_forecast, "OWM_API_KEY", "OpenWeatherMap",
+                       "openweathermap request failed"),
+}
 
 
 @app.route("/api/forecast")
@@ -317,38 +339,23 @@ def api_forecast():
     provider = request.args.get("provider", "airnow")
     force = request.args.get("refresh") in ("1", "true")
 
-    if provider == "google":
-        if not os.environ.get("GOOGLE_AQ_API_KEY"):
-            return jsonify({"error": "Google Air Quality isn't configured"}), 400
+    live = _LIVE_FORECAST_PROVIDERS.get(provider)
+    if live is not None:
+        fetch, env_key, cfg_label, fail_msg = live
+        if not os.environ.get(env_key):
+            return jsonify({"error": f"{cfg_label} isn't configured"}), 400
         lat, lon, label = _resolve_latlon_for_zip(zip_code)
         if lat is None:
             return jsonify({"error": "couldn't resolve coordinates for that zip"}), 502
         try:
-            data = google_aq.get_forecast(lat, lon, force=force)
+            data = fetch(lat, lon, force=force)
         except Exception:
-            logging.exception("Failed to fetch forecast from Google")
-            return jsonify({"error": "google air quality request failed"}), 502
+            logging.exception("Failed to fetch forecast from %s", cfg_label)
+            return jsonify({"error": fail_msg}), 502
         if data is None:
             return jsonify({"error": "no forecast for this location"}), 404
         data["reporting_area"] = label
-        data["provider"] = "google"
-        return jsonify(data)
-
-    if provider == "openweathermap":
-        if not os.environ.get("OWM_API_KEY"):
-            return jsonify({"error": "OpenWeatherMap isn't configured"}), 400
-        lat, lon, label = _resolve_latlon_for_zip(zip_code)
-        if lat is None:
-            return jsonify({"error": "couldn't resolve coordinates for that zip"}), 502
-        try:
-            data = owm.get_forecast(lat, lon, force=force)
-        except Exception:
-            logging.exception("Failed to fetch forecast from OpenWeatherMap")
-            return jsonify({"error": "openweathermap request failed"}), 502
-        if data is None:
-            return jsonify({"error": "no forecast for this location"}), 404
-        data["reporting_area"] = label
-        data["provider"] = "openweathermap"
+        data["provider"] = provider
         return jsonify(data)
 
     try:
@@ -407,8 +414,20 @@ def api_controls():
     return jsonify(mqtt_bridge.get_state())
 
 
+def _mqtt_unavailable_response():
+    """Shared 503 for the mutating control routes when the MQTT client never
+    came up (broker down at boot). Keeps them from dereferencing a None client
+    and 500ing with an AttributeError."""
+    if mqtt_bridge.available():
+        return None
+    return jsonify({"error": "device control is unavailable — MQTT broker not connected"}), 503
+
+
 @app.route("/api/control/switch/<object_id>", methods=["POST"])
 def api_control_switch(object_id):
+    unavailable = _mqtt_unavailable_response()
+    if unavailable:
+        return unavailable
     if object_id != mqtt_bridge.PREVENT_SLEEP:
         return jsonify({"error": "unknown switch"}), 404
     body = request.get_json(silent=True) or {}
@@ -420,6 +439,9 @@ def api_control_switch(object_id):
 
 @app.route("/api/control/number/<object_id>", methods=["POST"])
 def api_control_number(object_id):
+    unavailable = _mqtt_unavailable_response()
+    if unavailable:
+        return unavailable
     bounds = NUMBER_BOUNDS.get(object_id)
     if bounds is None:
         return jsonify({"error": "unknown number"}), 404
@@ -436,6 +458,9 @@ def api_control_number(object_id):
 
 @app.route("/api/control/button/<object_id>", methods=["POST"])
 def api_control_button(object_id):
+    unavailable = _mqtt_unavailable_response()
+    if unavailable:
+        return unavailable
     if object_id not in BUTTON_IDS:
         return jsonify({"error": "unknown button"}), 404
     mqtt_bridge.publish_button(object_id)

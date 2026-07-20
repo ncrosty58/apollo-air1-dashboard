@@ -1,23 +1,10 @@
 (function () {
   "use strict";
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
-
-  function bandVar(band) {
-    return band ? `var(--${band})` : "var(--ink-dim)";
-  }
-
-  // Same mechanical enum-to-words formatting dashboard.js uses for Google's
-  // concentration units, abbreviated for the tight per-day grid.
-  function formatConcentrationUnits(units) {
-    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
-    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
-  }
-
-  // bandFromAqi / aqiFromConcentration / bandForConcentration come from
-  // static/aqi.js (loaded first), shared with the other pages.
+  // escapeHtml / bandVar / formatConcentrationUnits come from common.js;
+  // bandFromAqi / aqiFromConcentration / bandForConcentration from aqi.js (both
+  // loaded first). Theme toggle, settings panel, and clock self-init in
+  // common.js.
 
   // AirNow's category names collapse onto the same 4-band scale as its AQI
   // numbers -- useful for the rows where AQI is -1 (not computed) and
@@ -306,74 +293,8 @@
     document.getElementById("add-location-form").hidden = true;
   });
 
-  /* ---------- theme toggle ---------- */
-  function currentTheme() {
-    return document.documentElement.getAttribute("data-theme") ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  }
-  function renderThemeToggle() {
-    const theme = currentTheme();
-    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
-      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
-    });
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".theme-toggle button");
-    if (!btn) return;
-    const next = btn.getAttribute("data-theme-choice");
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("apollo-air1-theme", next);
-    renderThemeToggle();
-  });
-
-  /* ---------- settings panel ---------- */
-  const settingsToggle = document.getElementById("settings-toggle");
-  const settingsPanel = document.getElementById("settings-panel");
-  const settingsBackdrop = document.getElementById("settings-backdrop");
-
-  function positionSettingsPanel() {
-    // Below 560px the panel is a fixed bottom sheet (CSS handles left/
-    // right/bottom) -- clear any inline position so that isn't fought.
-    if (window.innerWidth <= 560) {
-      settingsPanel.style.top = "";
-      settingsPanel.style.right = "";
-      return;
-    }
-    const rect = settingsToggle.getBoundingClientRect();
-    const margin = 20;
-    settingsPanel.style.top = `${rect.bottom + 8}px`;
-    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
-  }
-  function openSettings() {
-    positionSettingsPanel();
-    settingsPanel.hidden = false;
-    settingsBackdrop.hidden = false;
-    settingsToggle.setAttribute("aria-expanded", "true");
-    window.addEventListener("resize", positionSettingsPanel);
-  }
-  function closeSettings() {
-    settingsPanel.hidden = true;
-    settingsBackdrop.hidden = true;
-    settingsToggle.setAttribute("aria-expanded", "false");
-    window.removeEventListener("resize", positionSettingsPanel);
-  }
-  settingsToggle.addEventListener("click", () => {
-    if (settingsPanel.hidden) openSettings(); else closeSettings();
-  });
-  settingsBackdrop.addEventListener("click", closeSettings);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
-  });
-
-  function tickClock() {
-    document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-
   renderProviderToggles();
-  renderThemeToggle();
   loadLocations();
   loadForecast();
-  setInterval(loadForecast, 15 * 60000);
+  pollInterval(loadForecast, 15 * 60000);
 })();

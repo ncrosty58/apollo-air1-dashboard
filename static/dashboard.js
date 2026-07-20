@@ -1,22 +1,11 @@
 (function () {
   "use strict";
 
-  /* ---------- formatting / bands ---------- */
-  function fmt(value, decimals) {
-    if (value === undefined || value === null || Number.isNaN(value)) return "—";
-    return Number(value).toFixed(decimals);
-  }
-
-  function timeAgo(isoOrEpochSeconds) {
-    if (!isoOrEpochSeconds) return "—";
-    const ms = typeof isoOrEpochSeconds === "number" ? isoOrEpochSeconds * 1000 : new Date(isoOrEpochSeconds).getTime();
-    if (Number.isNaN(ms)) return "—";
-    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-    if (s < 60) return "just now";
-    if (s < 3600) return `${Math.round(s / 60)}m ago`;
-    if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-    return `${Math.round(s / 86400)}d ago`;
-  }
+  // fmt / timeAgo / escapeHtml / bandVar / formatConcentrationUnits /
+  // bandFromCo2 / bandForVocIndex / seriesFor and the provider constants come
+  // from common.js; bandFromAqi / bandForConcentration from aqi.js (both loaded
+  // first). Theme toggle, settings panel, clock, and SW registration self-init
+  // in common.js.
 
   /* ---------- temperature unit (F/C) ---------- */
   let currentUnit = localStorage.getItem("apollo-air1-unit") || "f";
@@ -47,27 +36,10 @@
 
   const BAND_ORDER = ["good", "fair", "poor", "bad"];
 
-  // bandFromAqi / aqiFromConcentration / bandForConcentration come from
-  // static/aqi.js (loaded first), shared with the other pages.
-  function bandFromCo2(co2) {
-    if (co2 === undefined || co2 === null || Number.isNaN(co2)) return null;
-    if (co2 > 2000) return "bad";
-    if (co2 > 1500) return "poor";
-    if (co2 > 1000) return "fair";
-    return "good";
-  }
-  function bandForVocIndex(v) {
-    if (typeof v !== "number") return null;
-    return v > 250 ? "bad" : v > 150 ? "poor" : null;
-  }
-
   function worseBand(a, b) {
     if (!a) return b;
     if (!b) return a;
     return BAND_ORDER.indexOf(a) >= BAND_ORDER.indexOf(b) ? a : b;
-  }
-  function bandVar(band) {
-    return band ? `var(--${band})` : "var(--ink-dim)";
   }
 
   function insideSentence(band) {
@@ -116,31 +88,12 @@
     </svg>`;
   }
 
-  function seriesFor(points, key, color, area) {
-    return {
-      color,
-      area: !!area,
-      points: points
-        .filter((p) => typeof p[key] === "number")
-        .map((p) => ({ t: new Date(p.time).getTime(), v: p[key] })),
-    };
-  }
-
   /* ---------- provider switch (AirNow / Google / PurpleAir / OpenWeatherMap) ----------
    * The only screen with a switcher -- Technical and Forecast just display
-   * whichever provider is currently selected (shared via localStorage). */
+   * whichever provider is currently selected (shared via localStorage).
+   * PROVIDER_NAMES / PROVIDER_ORDER / PROVIDERS_WITHOUT_FORECAST live in
+   * common.js so this page and the server's api_forecast set can't drift. */
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-
-  const PROVIDER_NAMES = { airnow: "AirNow", google: "Google", purpleair: "PurpleAir", openweathermap: "OWM" };
-  const PROVIDER_ORDER = ["airnow", "google", "purpleair", "openweathermap"];
-  // PurpleAir is the only provider with no forecast: it's one real-time
-  // sensor (current + historical only), with no forward-looking model to
-  // surface. AirNow, Google and OpenWeatherMap all have a forecast the
-  // /forecast page serves (see app.py api_forecast). Showing a Forecast link
-  // for PurpleAir would hand back a *different* provider's forecast (AirNow's),
-  // which is misleading, so the link is hidden for it. Kept in sync with the
-  // server: any provider not handled by api_forecast belongs in this set.
-  const PROVIDERS_WITHOUT_FORECAST = new Set(["purpleair"]);
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
@@ -184,14 +137,6 @@
     loadBasicSparks();
   });
 
-  // Google's own enum value, abbreviated to the unit symbol everyone reads
-  // at a glance.
-  function formatConcentrationUnits(units) {
-    const short = { PARTS_PER_BILLION: "ppb", MICROGRAMS_PER_CUBIC_METER: "µg/m³" };
-    return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
-  }
-
-  // EPA's own AQI breakpoint tables (current/2024 revision for PM2.5), each
   // One row per metric instead of a badge grid -- the rack-rows list.
   // --rr-color is a CSS custom prop the .rr-value rule already reads, so an
   // unset (null) band just falls back to the row's default ink color rather
@@ -242,10 +187,6 @@
       }
       return rackRow(p.parameter, valueHtml, band);
     }).join("");
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   // Google's per-population-group guidance -- its equivalent of AirNow's
@@ -394,87 +335,15 @@
     }
   }
 
-  /* ---------- theme toggle ---------- */
-  function currentTheme() {
-    return document.documentElement.getAttribute("data-theme") ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  }
-  function renderThemeToggle() {
-    const theme = currentTheme();
-    document.querySelectorAll(".theme-toggle button").forEach((btn) => {
-      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-theme-choice") === theme));
-    });
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".theme-toggle button");
-    if (!btn) return;
-    const next = btn.getAttribute("data-theme-choice");
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("apollo-air1-theme", next);
-    renderThemeToggle();
-  });
-
-  /* ---------- settings panel ---------- */
-  const settingsToggle = document.getElementById("settings-toggle");
-  const settingsPanel = document.getElementById("settings-panel");
-  const settingsBackdrop = document.getElementById("settings-backdrop");
-
-  function positionSettingsPanel() {
-    if (window.innerWidth <= 560) {
-      settingsPanel.style.top = "";
-      settingsPanel.style.right = "";
-      return;
-    }
-    const rect = settingsToggle.getBoundingClientRect();
-    const margin = 20;
-    settingsPanel.style.top = `${rect.bottom + 8}px`;
-    settingsPanel.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
-  }
-  function openSettings() {
-    positionSettingsPanel();
-    settingsPanel.hidden = false;
-    settingsBackdrop.hidden = false;
-    settingsToggle.setAttribute("aria-expanded", "true");
-    window.addEventListener("resize", positionSettingsPanel);
-  }
-  function closeSettings() {
-    settingsPanel.hidden = true;
-    settingsBackdrop.hidden = true;
-    settingsToggle.setAttribute("aria-expanded", "false");
-    window.removeEventListener("resize", positionSettingsPanel);
-  }
-  settingsToggle.addEventListener("click", () => {
-    if (settingsPanel.hidden) openSettings(); else closeSettings();
-  });
-  settingsBackdrop.addEventListener("click", closeSettings);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
-  });
-
-  /* ---------- clock ---------- */
-  function tickClock() {
-    document.getElementById("footer-clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  }
-  tickClock();
-  setInterval(tickClock, 1000);
-
-  /* ---------- service worker ---------- */
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Installability is a nice-to-have; the app works fine without it.
-    });
-  }
-
   /* ---------- init ---------- */
   loadProviderChips();
   renderForecastLinkVisibility();
   renderUnitToggle();
-  renderThemeToggle();
   loadLatest();
   loadOutside();
   loadBasicSparks();
   loadControls();
-  setInterval(loadLatest, 60000);
-  setInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
-  setInterval(loadControls, 30000);
+  pollInterval(loadLatest, 60000);
+  pollInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
+  pollInterval(loadControls, 30000);
 })();

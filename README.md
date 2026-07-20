@@ -79,7 +79,23 @@ python app.py
 - `POST /api/control/switch/<id>`, `/api/control/number/<id>`,
   `/api/control/button/<id>` — publish a command. The AIR-1 deep-sleeps
   between reads, so commands are **best-effort**: they're sent immediately
-  but only take effect once the device is next awake and connected.
+  but only take effect once the device is next awake and connected. Return
+  `503` if the MQTT broker isn't currently reachable.
+- `GET /healthz` — liveness probe (used by the container healthcheck). Always
+  `200` while the process is up; deliberately does **not** depend on InfluxDB
+  or MQTT, so an upstream outage doesn't make the container look dead. Reports
+  `mqtt_connected` as a hint.
+
+## Security boundary
+
+There is **no authentication** on this app, including the mutating
+`/api/control/*` routes (reboot, factory-reset, calibration). That's
+deliberate for a LAN-only deployment: the app and the AIR-1 live on the same
+trusted home network, and access is expected to be gated at the network edge
+(LAN-only / Cloudflare Access), not in-app. If this is ever exposed more
+broadly, add a shared-secret/token check on the `/api/control/*` routes (the
+three handlers already share a single guard helper, so it's a one-place
+change) rather than relying on the network boundary alone.
 
 ## Related repos
 

@@ -1,10 +1,17 @@
-const CACHE_NAME = "apollo-air1-shell-v2";
+const CACHE_NAME = "apollo-air1-shell-v3";
 const SHELL_FILES = [
   "/",
   "/forecast",
+  "/technical",
+  "/indoor",
   "/static/style.css",
+  "/static/aqi.js",
+  "/static/common.js",
+  "/static/chart.js",
   "/static/dashboard.js",
   "/static/forecast.js",
+  "/static/technical.js",
+  "/static/indoor.js",
   "/static/manifest.webmanifest",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",

@@ -11,5 +11,9 @@ services:
       - PORT=5858
     volumes:
       - ./data:/app/data
-    command: gunicorn -w 1 -b 0.0.0.0:5858 app:app
+    # One worker (the MQTT bridge keeps in-process state and a single broker
+    # connection, so a second worker would double-subscribe and split control
+    # state), but multiple threads so one slow upstream forecast fetch can't
+    # block every other request behind it.
+    command: gunicorn -w 1 --threads 8 --timeout 60 -b 0.0.0.0:5858 app:app
     restart: unless-stopped
