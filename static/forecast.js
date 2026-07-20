@@ -100,27 +100,13 @@
 
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
+  // The active provider is chosen on the dashboard (the AQI chips) and shared
+  // via localStorage; the Forecast page just follows it and shows which agency
+  // served the data (forecast-source), rather than carrying its own switcher.
   const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow" };
   function providerLabel(provider) {
     return PROVIDER_LABELS[provider || currentProvider] || "AirNow";
   }
-
-  function renderProviderToggles() {
-    document.querySelectorAll(".provider-toggle").forEach((wrap) => {
-      wrap.querySelectorAll("button").forEach((btn) => {
-        btn.setAttribute("aria-pressed", String(btn.getAttribute("data-provider") === currentProvider));
-      });
-    });
-    document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".provider-toggle button");
-    if (!btn) return;
-    currentProvider = btn.getAttribute("data-provider");
-    localStorage.setItem("apollo-air1-provider", currentProvider);
-    renderProviderToggles();
-    loadForecast();
-  });
 
   let savedLocations = [];
   let selectedZip = null; // null = home (AIRNOW_ZIP)
@@ -328,7 +314,7 @@
     document.getElementById("add-location-form").hidden = true;
   });
 
-  renderProviderToggles();
+  document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
   loadLocations();
   loadForecast();
   pollInterval(loadForecast, 15 * 60000);
