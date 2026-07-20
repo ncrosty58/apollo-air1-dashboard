@@ -43,10 +43,11 @@ python app.py
 
 ## Credentials
 
-- `INFLUX_TOKEN` — **read+write** token scoped to the `air_quality` bucket,
-  not the admin token used by the `iot` stack. Read+write because this app
-  both reads sensor history and persists Google/PurpleAir live readings for
-  their own History charts. Rotate in the InfluxDB UI
+- `INFLUX_TOKEN` — **read-only** token scoped to the `air_quality` bucket,
+  not the admin token used by the `iot` stack. This app only ever reads from
+  Influx — every provider's current reading and history (AirNow, Google,
+  PurpleAir, OpenWeatherMap) is written by Node-RED (see the Apollo AIR-1
+  flow), not by this app. Rotate in the InfluxDB UI
   (`http://192.168.4.113:8086`, org `cosmoslab`) under *Load Data → API
   Tokens* if it ever leaks.
 - `MQTT_USERNAME` / `MQTT_PASSWORD` — mosquitto credentials for this app's

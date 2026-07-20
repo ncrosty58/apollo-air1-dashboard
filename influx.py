@@ -1,8 +1,6 @@
 import os
-from datetime import datetime, timezone
 
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client import InfluxDBClient
 
 MEASUREMENT = "air_quality"
 
@@ -162,60 +160,45 @@ def query_outside_weather(hours):
     return _rows_from(get_client().query_api().query(flux))
 
 
-# Google and PurpleAir are read live from their own APIs (google_aq.py /
-# purpleair.py), unlike AirNow/OWM which Node-RED polls on a timer straight
-# into Influx -- so their *history* has to come from somewhere. Rather than
-# calling each vendor's own history endpoint (extra API spend, and a
-# different retention/grain per vendor), every live reading the dashboard
-# actually fetches gets written here too, so History for all four providers
-# ends up sourced the same way: this bucket. Prefixed field names follow the
-# same collision-avoidance precedent as OWM_FIELDS above.
+# Google and PurpleAir current-reading + history both come from here now --
+# Node-RED polls both on a timer straight into Influx, the same pattern
+# AirNow/OWM already use, instead of the dashboard calling either API
+# itself. Prefixed field names follow the same collision-avoidance
+# precedent as OWM_FIELDS above.
 GOOGLE_FIELDS = [
     "google_aqi", "google_pm2_5_ugm3", "google_pm10_ugm3",
     "google_o3_ppb", "google_no2_ppb", "google_so2_ppb", "google_co_ppb",
 ]
-GOOGLE_STRING_FIELDS = ["google_category", "google_dominant_pollutant"]
+GOOGLE_STRING_FIELDS = [
+    "google_category", "google_dominant_pollutant",
+    "google_health_general", "google_health_children",
+]
 
 PURPLEAIR_FIELDS = ["purpleair_aqi", "purpleair_pm2_5_ugm3", "purpleair_pm10_ugm3"]
 PURPLEAIR_STRING_FIELDS = ["purpleair_category", "purpleair_dominant_pollutant"]
 
-_write_api = None
+
+def query_google_latest():
+    return _query_prefixed_latest(GOOGLE_FIELDS + GOOGLE_STRING_FIELDS)
 
 
-def get_write_api():
-    global _write_api
-    if _write_api is None:
-        _write_api = get_client().write_api(write_options=SYNCHRONOUS)
-    return _write_api
+def query_purpleair_latest():
+    return _query_prefixed_latest(PURPLEAIR_FIELDS + PURPLEAIR_STRING_FIELDS)
 
 
-def write_outside_reading(fields, at=None):
-    """fields: flat dict of already-prefixed field names -> value (numeric
-    or string), e.g. {"google_aqi": 42, "google_category": "Moderate", ...}.
-    None values are dropped rather than written as an explicit null. at
-    (optional): a datetime for a historical point (e.g. backfill); omitted
-    means "now", same as every live-reading call site.
-
-    InfluxDB locks a field's type on its first write, and a source that
-    sometimes reports a whole number (24) and sometimes a decimal (24.11)
-    for the same field alternates between int/float and gets every
-    conflicting point dropped with a "field type conflict" error. Every
-    numeric field Node-RED already writes to this measurement -- aqi,
-    o3_aqi, pm2_5_aqi, owm_aqi_index, all of them, AQI numbers included --
-    is stored as float, so every field written here is too, for the same
-    reason and to stay consistent with that established schema. Node-RED
-    also writes at second precision (not the client's nanosecond default),
-    so this matches that explicitly rather than leaving it to chance.
-    """
-    point = Point(OUTSIDE_MEASUREMENT).tag("zip", os.environ.get("AIRNOW_ZIP", ""))
-    for key, value in fields.items():
-        if value is None:
-            continue
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            value = float(value)
-        point = point.field(key, value)
-    point = point.time(at or datetime.now(timezone.utc), write_precision=WritePrecision.S)
-    get_write_api().write(bucket=os.environ["INFLUX_BUCKET"], record=point)
+def _query_prefixed_latest(all_fields):
+    bucket = os.environ["INFLUX_BUCKET"]
+    field_filter = " or ".join(f'r._field == "{f}"' for f in all_fields)
+    flux = f'''
+    from(bucket: "{bucket}")
+      |> range(start: -6h)
+      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
+      |> filter(fn: (r) => {field_filter})
+      |> last()
+      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+    '''
+    rows = _rows_from(get_client().query_api().query(flux))
+    return rows[-1] if rows else None
 
 
 def query_google_history(hours):

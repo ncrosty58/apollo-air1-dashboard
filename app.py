@@ -135,34 +135,25 @@ def _resolve_latlon_for_zip(zip_code):
 def _fetch_outside_current(provider):
     """Returns (data, error_message, http_status). data is None on error."""
     if provider == "google":
-        if not os.environ.get("GOOGLE_AQ_API_KEY"):
-            return None, "Google Air Quality isn't configured", 400
-        lat, lon, label = _resolve_home_latlon()
-        if lat is None:
-            return None, "couldn't resolve coordinates for the home location", 502
         try:
-            data = google_aq.get_current_observation(lat, lon)
+            data = google_aq.get_current_observation()
         except Exception:
-            logging.exception("Failed to fetch outdoor reading from Google")
-            return None, "google air quality request failed", 502
+            logging.exception("Failed to read Google air quality from InfluxDB")
+            return None, "influxdb query failed", 502
         if data is None:
-            return None, "no data for this location", 404
-        data["reporting_area"] = label
+            return None, "no Google air quality data yet — is GOOGLE_AQ_API_KEY set on the nodered container?", 404
+        _, _, label = _resolve_home_latlon()
+        data["reporting_area"] = label or "Home"
         return data, None, 200
 
     if provider == "purpleair":
-        if not purpleair.is_configured():
-            return None, "PurpleAir isn't configured", 400
-        lat, lon, _ = _resolve_home_latlon()
-        if lat is None:
-            return None, "couldn't resolve coordinates for the home location", 502
         try:
-            data = purpleair.get_current_observation(lat, lon)
+            data = purpleair.get_current_observation()
         except Exception:
-            logging.exception("Failed to fetch outdoor reading from PurpleAir")
-            return None, "purpleair request failed", 502
+            logging.exception("Failed to read PurpleAir from InfluxDB")
+            return None, "influxdb query failed", 502
         if data is None:
-            return None, "no PurpleAir sensor found near the home location", 404
+            return None, "no PurpleAir data yet — is PURPLEAIR_API_KEY set on the nodered container?", 404
         return data, None, 200
 
     if provider == "openweathermap":
@@ -265,8 +256,6 @@ def api_outside_history():
         return jsonify(_with_outside_weather(points, hours))
 
     if provider == "purpleair":
-        if not purpleair.is_configured():
-            return jsonify({"error": "PurpleAir isn't configured"}), 400
         try:
             points = purpleair.get_history(hours)
         except Exception:

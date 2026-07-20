@@ -1,4 +1,3 @@
-import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -9,10 +8,8 @@ import airnow
 import epa_aqi
 import influx
 
-CURRENT_URL = "https://airquality.googleapis.com/v1/currentConditions:lookup"
 FORECAST_URL = "https://airquality.googleapis.com/v1/forecast:lookup"
 
-CACHE_TTL_S = 55 * 60  # matches airnow.py's cadence
 FORECAST_CACHE_TTL_S = 3 * 60 * 60
 # Google's forecast supports up to 96h out, but rejects a period request
 # starting at the exact current instant ("next hour onwards" only) and one
@@ -30,7 +27,6 @@ POLLUTANT_CODE_LABELS = {
     "co": "CO",
 }
 
-_cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
 _forecast_cache = {}  # (lat, lon) -> {"fetched_at": ..., "data": ...}
 
 
@@ -55,6 +51,9 @@ def _pollutant_label(code):
 # OpenWeatherMap/PurpleAir) guarantees the headline number, category, and
 # per-pollutant breakdown are always self-consistent, instead of trusting a
 # number that can silently disagree with the data sitting right next to it.
+# Node-RED's "Format Google Fields & Tags" function applies this exact same
+# math for the current-conditions poll (see the Apollo AIR-1 flow) -- this
+# copy is now used only for the still-live Forecast feature below.
 def _recomputed_aqi(raw_pollutants):
     best = None
     for p in raw_pollutants:
@@ -90,60 +89,63 @@ def _pollutants_from(raw_pollutants):
     ]
 
 
-def _fetch_current(lat, lon):
-    resp = requests.post(
-        CURRENT_URL,
-        params={"key": os.environ["GOOGLE_AQ_API_KEY"]},
-        json={
-            "location": {"latitude": lat, "longitude": lon},
-            "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION", "HEALTH_RECOMMENDATIONS"],
-            "languageCode": "en",
-        },
-        timeout=10,
-    )
-    resp.raise_for_status()
-    body = resp.json()
-    raw_pollutants = body.get("pollutants") or []
-    aqi, category, dominant_pollutant = _recomputed_aqi(raw_pollutants)
+# Google's Air Quality concentration fields, by EPA parameter name.
+_CONCENTRATION_FIELDS = [
+    ("google_pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER"),
+    ("google_pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER"),
+    ("google_o3_ppb", "O3", "PARTS_PER_BILLION"),
+    ("google_no2_ppb", "NO2", "PARTS_PER_BILLION"),
+    ("google_so2_ppb", "SO2", "PARTS_PER_BILLION"),
+    ("google_co_ppb", "CO", "PARTS_PER_BILLION"),
+]
+
+
+def get_current_observation():
+    """Reads back what Node-RED has been polling hourly and writing to
+    InfluxDB (see the "Format Google Fields & Tags" function in the Apollo
+    AIR-1 flow) instead of calling Google's API directly here -- same
+    pattern as owm.py, and the dashboard no longer makes this call itself
+    for any provider's current reading. Google's Forecast API is a
+    different, on-demand feature and still calls Google live -- see
+    get_forecast below."""
+    row = influx.query_google_latest()
+    if row is None:
+        return None
+    aqi = row.get("google_aqi")
     if aqi is None:
         return None
 
-    # Google has its own 30-day history API, but every provider's *live*
-    # reading gets persisted here too so History reads the same way for all
-    # four providers (see influx.write_outside_reading) -- best-effort, a
-    # write hiccup shouldn't break serving the reading that's already in hand.
-    try:
-        fields = {"google_aqi": aqi, "google_category": category, "google_dominant_pollutant": dominant_pollutant}
-        fields.update({f"google_{k}": v for k, v in _flat_concentrations(raw_pollutants).items()})
-        influx.write_outside_reading(fields)
-    except Exception:
-        logging.exception("Failed to persist Google reading to Influx")
+    pollutants = []
+    for field, parameter, units in _CONCENTRATION_FIELDS:
+        value = row.get(field)
+        if value is not None:
+            pollutants.append({
+                "parameter": parameter,
+                "concentration_value": round(value, 2),
+                "concentration_units": units,
+            })
+
+    health_recommendations = None
+    if row.get("google_health_general"):
+        # Only the general-population + children lines are persisted (see
+        # the Node-RED flow) -- the per-sensitive-group breakdown isn't
+        # stored, so it's simply absent here rather than fabricated.
+        health_recommendations = {
+            "generalPopulation": row.get("google_health_general"),
+            "children": row.get("google_health_children"),
+        }
 
     return {
-        "aqi": aqi,
+        "aqi": int(aqi),
         "band": airnow.band_for_aqi(aqi),
-        "category": category,
-        "dominant_pollutant": dominant_pollutant,
-        "reporting_area": None,  # coordinate-based, no named station -- caller fills in a location label
+        "category": row.get("google_category"),
+        "dominant_pollutant": row.get("google_dominant_pollutant"),
+        "reporting_area": None,  # caller fills in the home label
         "observed_hour": None,
-        "time": body.get("dateTime"),
-        "pollutants": _pollutants_from(raw_pollutants),
-        # Google's equivalent of AirNow's forecaster discussion -- no
-        # narrative text, but tailored per-population-group guidance.
-        "health_recommendations": body.get("healthRecommendations"),
+        "time": row.get("time"),
+        "pollutants": pollutants,
+        "health_recommendations": health_recommendations,
     }
-
-
-def get_current_observation(lat, lon):
-    key = _cache_key(lat, lon)
-    now = time.time()
-    cached = _cache.get(key)
-    if cached is not None and (now - cached["fetched_at"]) < CACHE_TTL_S:
-        return cached["data"]
-
-    data = _fetch_current(lat, lon)
-    _cache[key] = {"fetched_at": now, "data": data}
-    return data
 
 
 def _fetch_forecast(lat, lon):
@@ -226,38 +228,13 @@ def get_forecast(lat, lon, force=False):
     return data
 
 
-# Flat, unit-suffixed keys for the history charts -- named after the unit
-# Google actually reports for that pollutant (ppb for every gas including CO,
-# µg/m³ for particulates; see the CONCENTRATION_THRESHOLDS comment in
-# dashboard.js) so the two per-pollutant history charts can group series by
-# unit without re-deriving it per point.
-POLLUTANT_CODE_FIELD = {
-    "pm25": "pm2_5_ugm3",
-    "pm10": "pm10_ugm3",
-    "o3": "o3_ppb",
-    "no2": "no2_ppb",
-    "so2": "so2_ppb",
-    "co": "co_ppb",
-}
-
-
-def _flat_concentrations(raw_pollutants):
-    out = {}
-    for p in raw_pollutants:
-        field = POLLUTANT_CODE_FIELD.get((p.get("code") or "").lower())
-        value = (p.get("concentration") or {}).get("value")
-        if field and value is not None:
-            out[field] = value
-    return out
-
-
 def get_history(hours):
-    """Reads back what get_current_observation() has been persisting to
-    InfluxDB (see influx.write_outside_reading) instead of calling Google's
-    own history API -- keeps every provider's History sourced the same way.
-    Field names are stripped back to the shared flat shape (aqi/pm2_5_ugm3/
-    o3_ppb/...) the frontend's overlay charts already expect, same
-    convention as owm.py's get_history."""
+    """Reads back what Node-RED has been persisting to InfluxDB (see
+    get_current_observation above) instead of calling Google's own history
+    API -- keeps every provider's History sourced the same way. Field names
+    are stripped back to the shared flat shape (aqi/pm2_5_ugm3/o3_ppb/...)
+    the frontend's overlay charts already expect, same convention as
+    owm.py's get_history."""
     points = []
     for row in influx.query_google_history(hours):
         point = {
