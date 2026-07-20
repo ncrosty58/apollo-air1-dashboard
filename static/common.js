@@ -105,6 +105,31 @@ document.addEventListener("click", (e) => {
   renderThemeToggle();
 });
 
+/* ---------- readout mode: AQI numbers vs engineering units ----------
+ * Only the Dashboard and Forecast carry this toggle and honor it -- they're
+ * the family-facing views, and defaulting to "aqi" keeps every pollutant on
+ * the one comparable 0-500 scale (and drops anything with no AQI, e.g. NH3).
+ * "units" shows the underlying concentrations for a more technical read. The
+ * Technical page is always engineering units, and Indoor has no outside
+ * pollutants, so neither shows the toggle. Lives here (not per-page like the
+ * temperature toggle) because both pages read/render it identically; each page
+ * just re-renders its own pollutant views on the readoutchange event below. */
+function readoutMode() {
+  return localStorage.getItem("apollo-air1-readout") || "aqi";
+}
+function renderReadoutToggle() {
+  document.querySelectorAll(".readout-toggle button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.getAttribute("data-readout") === readoutMode()));
+  });
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".readout-toggle button");
+  if (!btn) return;
+  localStorage.setItem("apollo-air1-readout", btn.getAttribute("data-readout"));
+  renderReadoutToggle();
+  document.dispatchEvent(new CustomEvent("readoutchange"));
+});
+
 /* ---------- settings panel (self-initializing on every page) ---------- */
 (function initSettingsPanel() {
   const settingsToggle = document.getElementById("settings-toggle");
@@ -176,3 +201,5 @@ if ("serviceWorker" in navigator) {
 // Every page calls this in its own init too, but do it here so the toggle
 // reflects the saved theme even before the page script runs.
 renderThemeToggle();
+// Reflect the saved readout choice on the pages that show the toggle.
+renderReadoutToggle();
