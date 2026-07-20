@@ -35,19 +35,27 @@ def get_current_observation():
         return None
     aqi, category, dominant = hd
 
+    # (concentration field, EPA parameter, per-pollutant AQI field). The AQI is
+    # the one Node-RED derived from the corrected concentration; the app reads
+    # it for the dashboard while the Technical page keeps the concentration.
+    pollutant_fields = [
+        ("purpleair_pm2_5_ugm3", "PM2.5", "purpleair_pm2_5_aqi_epa"),
+        ("purpleair_pm10_ugm3", "PM10", "purpleair_pm10_aqi_epa"),
+    ]
     pollutants = []
-    if row.get("purpleair_pm2_5_ugm3") is not None:
-        pollutants.append({
-            "parameter": "PM2.5",
-            "concentration_value": row["purpleair_pm2_5_ugm3"],
+    for field, parameter, aqi_field in pollutant_fields:
+        value = row.get(field)
+        if value is None:
+            continue
+        row_out = {
+            "parameter": parameter,
+            "concentration_value": value,
             "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
-        })
-    if row.get("purpleair_pm10_ugm3") is not None:
-        pollutants.append({
-            "parameter": "PM10",
-            "concentration_value": row["purpleair_pm10_ugm3"],
-            "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
-        })
+        }
+        aqi_value = row.get(aqi_field)
+        if aqi_value is not None:
+            row_out["aqi"] = int(round(aqi_value))
+        pollutants.append(row_out)
 
     return {
         "aqi": aqi,

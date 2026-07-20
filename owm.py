@@ -17,15 +17,17 @@ import aq_shared
 import epa_aqi
 import influx
 
-# OWM component -> (EPA parameter, display label). NH3 has no EPA AQI
-# breakpoints, so it's shown as a concentration only.
+# OWM component -> (concentration field, EPA parameter, per-pollutant AQI
+# field). The AQI is the one Node-RED derived from the concentration and stored
+# alongside it -- the app just reads it. NH3 has no EPA AQI breakpoint, so it's
+# shown as a concentration only (and is dropped from the AQI-only dashboard).
 COMPONENTS = [
-    ("owm_pm2_5_ugm3", "PM2.5"),
-    ("owm_pm10_ugm3", "PM10"),
-    ("owm_o3_ugm3", "O3"),
-    ("owm_no2_ugm3", "NO2"),
-    ("owm_so2_ugm3", "SO2"),
-    ("owm_co_ugm3", "CO"),
+    ("owm_pm2_5_ugm3", "PM2.5", "owm_pm2_5_aqi_epa"),
+    ("owm_pm10_ugm3", "PM10", "owm_pm10_aqi_epa"),
+    ("owm_o3_ugm3", "O3", "owm_o3_aqi_epa"),
+    ("owm_no2_ugm3", "NO2", "owm_no2_aqi_epa"),
+    ("owm_so2_ugm3", "SO2", "owm_so2_aqi_epa"),
+    ("owm_co_ugm3", "CO", "owm_co_aqi_epa"),
 ]
 
 # OWM's air_pollution forecast endpoint returns components under these raw
@@ -84,15 +86,21 @@ def get_current_observation():
     aqi, category, dominant = hd
 
     per_pollutant = []
-    for field, parameter in COMPONENTS:
+    for field, parameter, aqi_field in COMPONENTS:
         value = row.get(field)
         if value is None:
             continue
-        per_pollutant.append({
+        row_out = {
             "parameter": parameter,
             "concentration_value": round(value, 2),
             "concentration_units": "MICROGRAMS_PER_CUBIC_METER",
-        })
+        }
+        # AQI is present for every criteria pollutant; the dashboard renders it,
+        # the Technical page keeps showing the concentration.
+        aqi_value = row.get(aqi_field)
+        if aqi_value is not None:
+            row_out["aqi"] = int(round(aqi_value))
+        per_pollutant.append(row_out)
     if row.get("owm_nh3_ugm3") is not None:
         per_pollutant.append({
             "parameter": "NH3",

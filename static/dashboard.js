@@ -171,22 +171,16 @@
     }).join("");
   }
 
-  // Same pollutant envelope every provider returns (parameter/aqi or
-  // parameter/concentration_value).
+  // The dashboard puts every provider on one comparable scale: each pollutant's
+  // AQI. Rows that don't convert to an AQI (e.g. OWM's NH3, which has no EPA
+  // breakpoint) are dropped here -- their raw concentrations still live on the
+  // Technical page. The AQI itself is derived upstream (Node-RED) and read from
+  // the DB per pollutant; the app does no AQI math.
   function outsideRowsHtml(pollutants) {
-    return (pollutants || []).map((p) => {
-      let valueHtml, band = null;
-      if (typeof p.aqi === "number") {
-        valueHtml = String(p.aqi);
-        band = bandFromAqi(p.aqi);
-      } else if (typeof p.concentration_value === "number") {
-        valueHtml = `${p.concentration_value}<span class="rr-unit">${formatConcentrationUnits(p.concentration_units)}</span>`;
-        band = bandForConcentration(p.parameter, p.concentration_value, p.concentration_units);
-      } else {
-        valueHtml = "—";
-      }
-      return rackRow(p.parameter, valueHtml, band);
-    }).join("");
+    return (pollutants || [])
+      .filter((p) => typeof p.aqi === "number")
+      .map((p) => rackRow(p.parameter, String(p.aqi), bandFromAqi(p.aqi)))
+      .join("");
   }
 
   // Google's per-population-group guidance -- its equivalent of AirNow's
