@@ -1,6 +1,7 @@
 import os
+from datetime import datetime, timezone
 
-from influxdb_client import InfluxDBClient, Point
+from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 MEASUREMENT = "air_quality"
@@ -188,26 +189,32 @@ def get_write_api():
     return _write_api
 
 
-def write_outside_reading(fields):
+def write_outside_reading(fields, at=None):
     """fields: flat dict of already-prefixed field names -> value (numeric
     or string), e.g. {"google_aqi": 42, "google_category": "Moderate", ...}.
-    None values are dropped rather than written as an explicit null.
+    None values are dropped rather than written as an explicit null. at
+    (optional): a datetime for a historical point (e.g. backfill); omitted
+    means "now", same as every live-reading call site.
 
     InfluxDB locks a field's type on its first write, and a source that
     sometimes reports a whole number (24) and sometimes a decimal (24.11)
     for the same field alternates between int/float and gets every
-    conflicting point dropped with a "field type conflict" error. AQI
-    numbers are always whole (EPA never publishes a fractional AQI), so
-    those are written as int; concentrations genuinely carry decimals, so
-    those are written as float -- matching how each field type already got
-    locked in practice."""
+    conflicting point dropped with a "field type conflict" error. Every
+    numeric field Node-RED already writes to this measurement -- aqi,
+    o3_aqi, pm2_5_aqi, owm_aqi_index, all of them, AQI numbers included --
+    is stored as float, so every field written here is too, for the same
+    reason and to stay consistent with that established schema. Node-RED
+    also writes at second precision (not the client's nanosecond default),
+    so this matches that explicitly rather than leaving it to chance.
+    """
     point = Point(OUTSIDE_MEASUREMENT).tag("zip", os.environ.get("AIRNOW_ZIP", ""))
     for key, value in fields.items():
         if value is None:
             continue
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            value = int(round(value)) if key.endswith("_aqi") else float(value)
+            value = float(value)
         point = point.field(key, value)
+    point = point.time(at or datetime.now(timezone.utc), write_precision=WritePrecision.S)
     get_write_api().write(bucket=os.environ["INFLUX_BUCKET"], record=point)
 
 
