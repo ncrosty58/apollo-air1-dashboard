@@ -14,23 +14,31 @@ concurrency:
 jobs:
   lint-and-test:
     name: Lint & test
-    # Runs on the self-hosted runner (registered via ci-runner/). The Docker
-    # build job stays on ubuntu-latest because this runner has no docker
-    # socket. If the runner is offline this job queues until it comes back.
-    runs-on: [self-hosted, bodhi]
+    # Runs on the host-native self-hosted runner on bodhi (systemd --user
+    # service github-runner-apollo-air1-dashboard, one per repo like the other
+    # apps on the box). The Docker build job below stays on ubuntu-latest as a
+    # clean-room PR check. If the runner is offline this job queues until it's
+    # back.
+    runs-on: self-hosted
+    env:
+      # bodhi runs Debian 13, which actions/setup-python has no prebuilt Python
+      # for ("version 3.11 ... not found for Debian 13"), so use the host's
+      # pyenv interpreter -- the same approach the other apps on this box take.
+      # pyenv's global is 3.12; the app only pins 3.11 for its Docker runtime,
+      # and lint/tests run fine on 3.12.
+      PATH: /home/nathan/.pyenv/shims:/home/nathan/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
+      - name: Create venv and install dependencies
+        # An isolated venv per run keeps ruff/pytest/deps out of the shared
+        # pyenv site-packages. Adding it to $GITHUB_PATH puts python/ruff/pytest
+        # on PATH for the later steps.
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff pytest
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt ruff pytest
 
       - name: Ruff lint
         run: ruff check .
@@ -50,3 +58,35 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build image
         run: docker build -t apollo-air1-dashboard:ci .
+
+  # Deploy the freshly-tested commit onto bodhi, the same host the runner lives
+  # on -- git-pull-in-place + `docker compose up --build`, the pattern the other
+  # apps on this box use. Only on a push to main (never PRs), and only after
+  # both the tests and the clean-room image build pass. The env file and the
+  # ./data bind live in the host checkout, so deploying from there (not the
+  # runner's ephemeral _work checkout) keeps secrets and volume paths intact.
+  deploy:
+    name: Deploy
+    needs: [lint-and-test, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    steps:
+      - name: Sync host checkout to this commit
+        # -B pins the host dir onto main at exactly the tested SHA (on-branch,
+        # not detached), discarding anything stale in the working tree.
+        run: |
+          git -C /home/nathan/projects/apollo-air1-dashboard fetch --prune origin
+          git -C /home/nathan/projects/apollo-air1-dashboard checkout -B main ${{ github.sha }}
+      - name: Rebuild and restart
+        run: docker compose -f /home/nathan/projects/apollo-air1-dashboard/docker-compose.yml up -d --build
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS -m 4 http://127.0.0.1:5960/healthz >/dev/null; then echo "healthy"; exit 0; fi
+            sleep 3
+          done
+          echo "did not become healthy in time"; exit 1
+      - name: Prune build cache
+        run: |
+          docker builder prune -f
+          docker image prune -f
