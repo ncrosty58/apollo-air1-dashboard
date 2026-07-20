@@ -14,7 +14,10 @@ concurrency:
 jobs:
   lint-and-test:
     name: Lint & test
-    runs-on: ubuntu-latest
+    # Runs on the self-hosted runner (registered via ci-runner/). The Docker
+    # build job stays on ubuntu-latest because this runner has no docker
+    # socket. If the runner is offline this job queues until it comes back.
+    runs-on: [self-hosted, bodhi]
     steps:
       - uses: actions/checkout@v4
 
