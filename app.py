@@ -161,6 +161,22 @@ def api_outside():
     return jsonify(data)
 
 
+def _with_outside_weather(points, hours):
+    """Outside temperature/humidity/pressure comes from neither AirNow nor
+    Google (neither API provides weather) -- it's a separate feed the user
+    writes into the same InfluxDB measurement. Merged in as extra points
+    (not matched to existing timestamps) since the frontend's per-field
+    lookup only cares that a point has the field, not which point. Best-
+    effort: a user who hasn't wired that feed up yet, or a query hiccup,
+    should still get pollutant history back.
+    """
+    try:
+        return points + influx.query_outside_weather(hours)
+    except Exception:
+        logging.exception("Failed to fetch outside weather from InfluxDB")
+        return points
+
+
 @app.route("/api/outside/history")
 def api_outside_history():
     try:
@@ -181,14 +197,14 @@ def api_outside_history():
         except Exception:
             logging.exception("Failed to fetch outside history from Google")
             return jsonify({"error": "google air quality request failed"}), 502
-        return jsonify(points)
+        return jsonify(_with_outside_weather(points, hours))
 
     try:
         points = influx.query_outside_history(hours)
     except Exception:
         logging.exception("Failed to query outdoor history from InfluxDB")
         return jsonify({"error": "influxdb query failed"}), 502
-    return jsonify(points)
+    return jsonify(_with_outside_weather(points, hours))
 
 
 @app.route("/api/forecast")

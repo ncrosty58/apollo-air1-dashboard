@@ -33,6 +33,18 @@ def _field_filter():
     return " or ".join(f'r._field == "{f}"' for f in all_fields)
 
 
+def _rows_from(tables):
+    points = []
+    for table in tables:
+        for record in table.records:
+            row = dict(record.values)
+            row["time"] = record.get_time().isoformat()
+            for key in ("result", "table", "_start", "_stop", "_measurement", "_time"):
+                row.pop(key, None)
+            points.append(row)
+    return points
+
+
 def query_latest():
     bucket = os.environ["INFLUX_BUCKET"]
     flux = f'''
@@ -64,16 +76,7 @@ def query_history(hours):
       |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
       |> sort(columns: ["_time"])
     '''
-    tables = get_client().query_api().query(flux)
-    points = []
-    for table in tables:
-        for record in table.records:
-            row = dict(record.values)
-            row["time"] = record.get_time().isoformat()
-            for key in ("result", "table", "_start", "_stop", "_measurement", "_time"):
-                row.pop(key, None)
-            points.append(row)
-    return points
+    return _rows_from(get_client().query_api().query(flux))
 
 
 OUTSIDE_MEASUREMENT = "outside_air_quality"
@@ -93,13 +96,26 @@ def query_outside_history(hours):
       |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
       |> sort(columns: ["_time"])
     '''
-    tables = get_client().query_api().query(flux)
-    points = []
-    for table in tables:
-        for record in table.records:
-            row = dict(record.values)
-            row["time"] = record.get_time().isoformat()
-            for key in ("result", "table", "_start", "_stop", "_measurement", "_time"):
-                row.pop(key, None)
-            points.append(row)
-    return points
+    return _rows_from(get_client().query_api().query(flux))
+
+
+# Outside temperature/humidity/pressure -- not from AirNow or Google (neither
+# gives weather), but from a separate feed written into this same
+# measurement. Queried on its own, rather than folded into OUTSIDE_FIELDS,
+# so pulling it in doesn't also drag in whichever AQI provider's pollutant
+# fields happen to share the measurement.
+OUTSIDE_WEATHER_FIELDS = ["temperature_c", "humidity_pct", "pressure_hpa"]
+
+
+def query_outside_weather(hours):
+    bucket = os.environ["INFLUX_BUCKET"]
+    field_filter = " or ".join(f'r._field == "{f}"' for f in OUTSIDE_WEATHER_FIELDS)
+    flux = f'''
+    from(bucket: "{bucket}")
+      |> range(start: -{hours}h)
+      |> filter(fn: (r) => r._measurement == "{OUTSIDE_MEASUREMENT}")
+      |> filter(fn: (r) => {field_filter})
+      |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+      |> sort(columns: ["_time"])
+    '''
+    return _rows_from(get_client().query_api().query(flux))

@@ -126,6 +126,14 @@
   }
 
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 80px; }
+  /* Every extra px of side padding on a narrow phone is a px the chart
+     itself doesn't get -- both the faceplate and .wrap eat into the same
+     budget, so both come down together below this width. */
+  @media (max-width: 420px) {
+    .wrap { padding: 0 14px 80px; }
+    .faceplate-inner { padding: 14px; }
+    .chart-card { padding: 14px 14px 10px; }
+  }
 
   /* ---------- faceplate header ---------- */
   .faceplate {
@@ -145,7 +153,21 @@
     text-transform: uppercase; color: var(--ink-dim); font-weight: 600; white-space: nowrap;
   }
   .id-divider { width: 1px; height: 22px; background: var(--hairline); flex: none; }
-  @media (max-width: 480px) { .brand-word { display: none; } }
+  /* Below this width device-id and header-controls don't fit on one line.
+     Hiding the wordmark also orphans the divider next to a bare icon, so
+     that goes too. flex-wrap alone would leave header-controls pinned to
+     the left on its own row (a lone wrapped flex item collapses to
+     flex-start) with dead space to its right -- instead the mode switch
+     fills the row (same full-width-button idea as .settings-row's rail)
+     and the gear sits fixed at the end, so the whole row is used instead of
+     a small pill floating awkwardly against one edge. */
+  @media (max-width: 480px) {
+    .brand-word { display: none; }
+    .id-divider { display: none; }
+    .header-controls { width: 100%; }
+    .header-controls .mode-switch { flex: 1 1 auto; }
+    .header-controls .mode-switch button { flex: 1 1 0; }
+  }
   .lamp {
     width: 13px; height: 13px; border-radius: 50%; flex: none;
     box-shadow: var(--shadow-inset), 0 0 0 3px var(--panel-sunken);
@@ -178,7 +200,7 @@
   }
   .mode-switch button, .settings-rail button {
     border: none; background: transparent; color: var(--ink-dim); cursor: pointer;
-    padding: 10px 14px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
+    padding: 12px 14px; min-height: 40px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
     font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
@@ -188,12 +210,12 @@
 
   .settings-gear {
     display: flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; flex: none; padding: 0;
+    width: 40px; height: 40px; flex: none; padding: 0;
     border-radius: 50%; border: 1px solid var(--hairline); background: var(--panel-sunken);
     color: var(--ink-dim); cursor: pointer; box-shadow: var(--shadow-inset);
     transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
-  .settings-gear svg { width: 17px; height: 17px; }
+  .settings-gear svg { width: 18px; height: 18px; }
   .settings-gear[aria-expanded="true"] {
     background: var(--accent); color: var(--accent-ink); box-shadow: none; border-color: var(--accent);
   }
@@ -262,18 +284,6 @@
   .hero-dominant:empty { margin: 0; }
   .hero-updated { font-size: 0.8125rem; color: var(--ink-dim); font-family: var(--font-mono); margin-top: 6px; }
 
-  .simple-grid {
-    margin-top: 20px;
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px;
-  }
-  .simple-tile {
-    background: var(--panel-raised); border-radius: var(--radius-simple);
-    box-shadow: var(--shadow-raised); padding: 20px 18px; text-align: center;
-  }
-  .simple-tile .s-label { font-size: 0.8125rem; color: var(--ink-dim); margin-bottom: 6px; }
-  .simple-tile .s-value { font-family: var(--font-body); font-weight: 700; font-size: 2rem; font-variant-numeric: tabular-nums; }
-  .simple-tile .s-unit { font-size: 0.9375rem; color: var(--ink-dim); font-weight: 500; margin-left: 3px; }
-
   .simple-footnote {
     margin-top: 22px; text-align: center; font-size: 0.875rem; color: var(--ink-dim);
   }
@@ -321,7 +331,6 @@
   .control-label { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
   .control-label .cl-name { font-size: 0.9375rem; font-weight: 600; }
   .control-label .cl-help { font-size: 0.75rem; color: var(--ink-dim); overflow-wrap: anywhere; }
-  .control-label .cl-id { font-family: var(--font-mono); font-size: 0.6875rem; color: var(--ink-dim); opacity: 0.75; overflow-wrap: anywhere; }
 
   .rocker {
     position: relative; width: 52px; height: 30px; border-radius: 6px;
@@ -369,7 +378,7 @@
   .hold-btn .btn-label-inner { position: relative; z-index: 1; }
 
   /* history charts */
-  .range-toggle { display: flex; gap: 6px; }
+  .range-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
   .range-toggle button {
     font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em;
     border: 1px solid var(--hairline); background: var(--panel-raised); color: var(--ink-dim);
@@ -382,12 +391,10 @@
     padding: 16px 18px 10px; margin-bottom: 12px;
   }
   .chart-card h4 { margin: 0 0 10px; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-  .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.75rem; color: var(--ink-dim); margin-bottom: 8px; }
   .chart-svg-wrap { width: 100%; overflow-x: auto; }
   .chart-svg-wrap svg { display: block; width: 100%; height: auto; }
   .chart-grid-line { stroke: var(--hairline); stroke-width: 1; }
-  .chart-axis-label { font-family: var(--font-mono); font-size: 9px; fill: var(--ink-dim); }
+  .chart-axis-label { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-dim); }
   .chart-endpoint { filter: drop-shadow(0 0 0 transparent); }
 
   /* tables */
@@ -443,13 +450,16 @@
 .simple-hero { border-top: 3px solid var(--accent); }
 .simple-hero--outside { border-top-color: var(--zone-outside); }
 
-.simple-hero--outside { padding: 24px 24px; gap: 2px; }
-.simple-hero--outside .hero-sentence { margin: 0; }
-.simple-hero--outside .hero-updated { margin: 8px 0 0; }
-.simple-hero--outside .outside-factors { margin-top: 10px; }
-.simple-hero--outside .outside-discussion { margin-top: 4px; align-self: stretch; }
-.simple-hero--outside .hero-forecast-link { margin-top: 12px; }
-.simple-hero--outside .outside-discussion:empty { margin-top: 0; }
+/* Shared by both hero boxes now that Inside carries the same kind of
+   structured content (label, badge, sentence, updated, factor row) as
+   Outside -- not really an "outside" thing, just what a denser hero needs. */
+.simple-hero--dense { padding: 24px 24px; gap: 2px; }
+.simple-hero--dense .hero-sentence { margin: 0; }
+.simple-hero--dense .hero-updated { margin: 8px 0 0; }
+.simple-hero--dense .outside-factors { margin-top: 10px; }
+.simple-hero--dense .outside-discussion { margin-top: 4px; align-self: stretch; }
+.simple-hero--dense .hero-forecast-link { margin-top: 12px; }
+.simple-hero--dense .outside-discussion:empty { margin-top: 0; }
 
 .outside-factors { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 
@@ -470,13 +480,22 @@
   padding: 18px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
   border-top: 3px solid var(--edge-color, var(--hairline));
 }
-.outside-tech-main { display: flex; align-items: baseline; gap: 12px; flex: none; }
+/* flex:none plus no min-width:0 anywhere in this chain means a long
+   category string (e.g. "Unhealthy for Sensitive Groups") refuses to wrap
+   or shrink and pushes past the card's edge on narrow screens -- min-width:
+   0 lets the text actually wrap inside the space it's given instead. */
+/* align-items:baseline anchors the big number and the two-line category+
+   dominant text stack by text baseline -- mismatched heights make the text
+   column sit visibly low next to the number. Centering the two vertically
+   instead is predictable regardless of how many lines the category text
+   wraps to. */
+.outside-tech-main { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
 .outside-tech-aqi {
   font-family: var(--font-mono); font-weight: 700; font-size: 2.25rem;
   color: var(--band-color, var(--ink)); font-variant-numeric: tabular-nums;
 }
-.outside-tech-category-col { display: flex; flex-direction: column; gap: 2px; }
-.outside-tech-category { font-size: 0.9375rem; color: var(--ink-dim); font-weight: 600; }
+.outside-tech-category-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.outside-tech-category { font-size: 0.9375rem; color: var(--ink-dim); font-weight: 600; overflow-wrap: break-word; }
 .outside-tech-dominant { font-size: 0.75rem; color: var(--ink-dim); font-weight: 400; }
 .outside-tech-pollutants { display: flex; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .outside-pollutant {

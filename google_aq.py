@@ -200,13 +200,38 @@ def get_forecast(lat, lon):
     return data
 
 
+# Flat, unit-suffixed keys for the history charts -- named after the unit
+# Google actually reports for that pollutant (ppb for every gas including CO,
+# µg/m³ for particulates; see the CONCENTRATION_THRESHOLDS comment in
+# dashboard.js) so the two per-pollutant history charts can group series by
+# unit without re-deriving it per point.
+POLLUTANT_CODE_FIELD = {
+    "pm25": "pm2_5_ugm3",
+    "pm10": "pm10_ugm3",
+    "o3": "o3_ppb",
+    "no2": "no2_ppb",
+    "so2": "so2_ppb",
+    "co": "co_ppb",
+}
+
+
+def _flat_concentrations(raw_pollutants):
+    out = {}
+    for p in raw_pollutants:
+        field = POLLUTANT_CODE_FIELD.get((p.get("code") or "").lower())
+        value = (p.get("concentration") or {}).get("value")
+        if field and value is not None:
+            out[field] = value
+    return out
+
+
 def _fetch_history(lat, lon, hours):
     hours = max(1, min(hours, 720))  # Google's own cap is 30 days
     payload = {
         "location": {"latitude": lat, "longitude": lon},
         "hours": hours,
         "pageSize": 100,
-        "extraComputations": ["LOCAL_AQI"],
+        "extraComputations": ["LOCAL_AQI", "POLLUTANT_CONCENTRATION"],
         "languageCode": "en",
     }
 
@@ -217,8 +242,9 @@ def _fetch_history(lat, lon, hours):
         body = resp.json()
         for h in body.get("hoursInfo") or []:
             idx = _best_index(h.get("indexes") or [])
-            if idx is not None:
-                points.append({"time": h["dateTime"], "aqi": idx.get("aqi")})
+            point = {"time": h["dateTime"], "aqi": idx.get("aqi") if idx else None}
+            point.update(_flat_concentrations(h.get("pollutants") or []))
+            points.append(point)
         page_token = body.get("nextPageToken")
         if not page_token:
             break

@@ -248,7 +248,7 @@
           ${pollutantsBlock}
           ${healthRecommendationsHtml(day.health_recommendations)}
         </div>`;
-      }).join("") : '<div class="empty-state">No forecast published for this location right now.</div>');
+      }).join("") : '<div class="empty-state">No forecast for this location.</div>');
 
       if (d.discussion) {
         discussionWrap.hidden = false;

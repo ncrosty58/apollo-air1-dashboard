@@ -90,34 +90,18 @@
     <div class="zone-banner zone-banner--inside">
       <span class="zone-dot"></span> Inside <span class="zone-sub">— bedroom sensor</span>
     </div>
-    <div class="simple-hero" id="hero-inside">
+    <div class="simple-hero simple-hero--dense" id="hero-inside">
+      <div class="hero-badge-label">AQI</div>
       <div class="hero-badge" id="hero-badge" style="--band-color: var(--ink-dim);">—</div>
       <p class="hero-sentence" id="hero-sentence">Waiting for a reading…</p>
-      <p class="hero-updated">Last reading <span id="hero-updated-rel">—</span></p>
-    </div>
-    <div class="simple-grid">
-      <div class="simple-tile">
-        <div class="s-label">CO2</div>
-        <div class="s-value"><span id="s-co2">—</span><span class="s-unit">ppm</span></div>
-      </div>
-      <div class="simple-tile">
-        <div class="s-label">Fine dust (PM2.5)</div>
-        <div class="s-value"><span id="s-pm25">—</span><span class="s-unit">µg/m³</span></div>
-      </div>
-      <div class="simple-tile">
-        <div class="s-label">Temperature</div>
-        <div class="s-value"><span id="s-temp">—</span><span class="s-unit" id="s-temp-unit">°F</span></div>
-      </div>
-      <div class="simple-tile">
-        <div class="s-label">Humidity</div>
-        <div class="s-value"><span id="s-hum">—</span><span class="s-unit">%</span></div>
-      </div>
+      <p class="hero-updated"><span id="hero-updated-rel">—</span></p>
+      <div class="outside-factors" id="inside-factors"></div>
     </div>
 
     <div class="zone-banner zone-banner--outside">
-      <span class="zone-dot"></span> Outside <span class="zone-sub">— <span id="outside-area">—</span></span>
+      <span class="zone-dot"></span> Outside <span class="zone-sub">— <span id="outside-area">—</span> · via <span id="outside-source">—</span></span>
     </div>
-    <div class="simple-hero simple-hero--outside" id="hero-outside">
+    <div class="simple-hero simple-hero--outside simple-hero--dense" id="hero-outside">
       <div class="hero-badge-label">AQI</div>
       <div class="hero-badge" id="outside-badge" style="--band-color: var(--ink-dim);">—</div>
       <p class="hero-sentence" id="outside-sentence">Loading…</p>
@@ -125,11 +109,11 @@
       <p class="hero-updated"><span id="outside-updated-rel">—</span></p>
       <div class="outside-factors" id="outside-factors-basic"></div>
       <div class="outside-discussion" id="outside-discussion"></div>
-      <a class="pill-link hero-forecast-link" href="/forecast">See the forecast →</a>
+      <a class="pill-link hero-forecast-link" href="/forecast">Forecast →</a>
     </div>
 
     <p class="simple-footnote">
-      Want offsets, calibration, and history? <button type="button" id="to-technical">Open the technical view →</button>
+      <button type="button" id="to-technical">Technical view →</button>
     </p>
   </section>
 
@@ -137,13 +121,13 @@
   <section class="view" id="view-technical" hidden>
 
     <div class="zone-banner zone-banner--inside">
-      <span class="zone-dot"></span> Inside <span class="zone-sub">— readout &amp; history for the device itself</span>
+      <span class="zone-dot"></span> Inside <span class="zone-sub">— bedroom sensor</span>
     </div>
 
     <div class="section">
       <div class="section-head">
         <span class="section-title">Live readout</span>
-        <span class="section-note">Refreshed once per wake cycle — last reading <strong id="since-reading">—</strong></span>
+        <span class="section-note">Last reading <strong id="since-reading">—</strong></span>
       </div>
       <div class="readout-grid" id="readout-grid"></div>
     </div>
@@ -165,12 +149,10 @@
       </div>
       <div class="chart-card">
         <h4>Particulate matter <span class="eyebrow" style="font-weight:500">µg/m³</span></h4>
-        <div class="legend" id="legend-pm"></div>
         <div class="chart-svg-wrap" id="chart-pm"></div>
       </div>
       <div class="chart-card">
         <h4>VOC / NOx index</h4>
-        <div class="legend" id="legend-voc"></div>
         <div class="chart-svg-wrap" id="chart-voc"></div>
       </div>
       <div class="two-col">
@@ -185,20 +167,7 @@
       </div>
     </div>
 
-    <div class="section two-col">
-      <div class="table-wrap">
-        <table>
-          <caption>Gas sensors — MICS-4514</caption>
-          <tbody>
-            <tr><th>Nitrogen dioxide</th><td id="g-no2">—</td></tr>
-            <tr><th>Carbon monoxide</th><td id="g-co">—</td></tr>
-            <tr><th>Hydrogen</th><td id="g-h2">—</td></tr>
-            <tr><th>Ethanol</th><td id="g-ethanol">—</td></tr>
-            <tr><th>Methane</th><td id="g-methane">—</td></tr>
-            <tr><th>Ammonia</th><td id="g-ammonia">—</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="section">
       <div class="table-wrap">
         <table>
           <caption>Diagnostics</caption>
@@ -215,20 +184,19 @@
     <div class="section">
       <div class="section-head"><span class="section-title">Device activity</span></div>
       <div class="activity-card">
-        <span class="act-title">No live log feed here yet</span>
-        <p>The device's own web UI streams <code>ESP_LOG</code> output directly over a local connection while it's awake. This dashboard only ever sees the one JSON snapshot MQTT publishes per wake cycle, so it can't show a live feed without a small relay process subscribing to a diagnostic topic.</p>
-        <p>For now, connect to the device's local IP during setup or troubleshooting to watch logs in real time.</p>
+        <span class="act-title">No live log feed</span>
+        <p>Connect to the device's local IP to watch <code>ESP_LOG</code> output in real time — this dashboard only gets one snapshot per wake cycle.</p>
       </div>
     </div>
 
     <div class="zone-banner zone-banner--outside">
-      <span class="zone-dot"></span> Outside <span class="zone-sub">— near <span id="outside-area-tech">—</span></span>
+      <span class="zone-dot"></span> Outside <span class="zone-sub">— near <span id="outside-area-tech">—</span> · via <span id="outside-source-tech">—</span></span>
     </div>
 
     <div class="section">
       <div class="section-head">
         <span class="section-title">Current reading</span>
-        <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast">See the forecast →</a></span>
+        <span class="section-note">Updated <span id="outside-updated-tech">—</span> · <a href="/forecast">Forecast →</a></span>
       </div>
       <div class="outside-tech-card" id="outside-tech-card" style="--edge-color: var(--hairline);">
         <div class="outside-tech-main">
@@ -242,9 +210,21 @@
       </div>
     </div>
 
+    <!-- AQI is the one signal both providers give on a shared 0-500 scale,
+         so it's the universal inside/outside overlay. Google also gives raw
+         concentrations, so PM2.5/PM10 (already µg/m³ on both sides) overlay
+         in real units too. AirNow never gives a raw concentration, only its
+         own computed AQI -- so for AirNow, AIR-1's raw PM2.5/PM10 convert to
+         an actual EPA AQI number (aqiFromConcentration) and overlay against
+         AirNow's own pm2_5_aqi/pm10_aqi on that scale instead. CO/NO2 would
+         need the optional MICS-4514, which this unit doesn't have, so they
+         stay outside-only (see the Outside only section below) rather than
+         overlay. Inside and Outside share one row per metric (not separate
+         rows) since they're the same scale -- dashed vs solid tells them
+         apart since color here is already spoken for by severity. -->
     <div class="section">
       <div class="section-head">
-        <span class="section-title">History</span>
+        <span class="section-title">Inside vs Outside</span>
         <div class="range-toggle" id="range-toggle-outside">
           <button type="button" data-range="6" aria-pressed="false">6h</button>
           <button type="button" data-range="24" aria-pressed="true">24h</button>
@@ -253,21 +233,46 @@
         </div>
       </div>
       <div class="chart-card">
-        <h4>AQI <span class="eyebrow" style="font-weight:500">inside vs outside</span></h4>
-        <div class="legend" id="legend-aqi-compare"></div>
+        <h4>AQI <span class="eyebrow" style="font-weight:500">dashed = inside, solid = outside</span></h4>
         <div class="chart-svg-wrap" id="chart-aqi-compare"></div>
       </div>
       <div class="chart-card">
+        <h4>Pollutants</h4>
+        <div class="chart-svg-wrap" id="chart-inside-outside-pollutants"></div>
+      </div>
+      <div class="chart-card">
+        <h4>Temperature, humidity, pressure <span class="eyebrow" style="font-weight:500">your sensor only</span></h4>
+        <div class="chart-svg-wrap" id="chart-inside-outside-weather"></div>
+      </div>
+    </div>
+
+    <!-- Rows are colored by severity, not pollutant identity -- each row
+         is already labeled by name. Only pollutants with no indoor overlay
+         are here: O3/SO2 have no indoor sensor at all, and CO/NO2 would
+         need the optional MICS-4514 this unit doesn't have. PM2.5/PM10 do
+         overlay (both providers), so those live in the Inside vs Outside
+         section above instead and aren't plotted twice here. Placed last
+         since it's the least central of the outside charts -- everything
+         more directly useful (the current reading, the inside/outside
+         comparison) comes before it. -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">Outside only</span>
+        <span class="section-note">Same range as above</span>
+      </div>
+      <div class="chart-card" id="card-outside-pollutants-aqi">
         <h4>Outside pollutants <span class="eyebrow" style="font-weight:500">AQI per pollutant</span></h4>
-        <div class="legend" id="legend-outside-pollutants"></div>
         <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
+      </div>
+      <div class="chart-card" id="card-outside-pollutants-gases" hidden>
+        <h4>Outside gases <span class="eyebrow" style="font-weight:500">ppb</span></h4>
+        <div class="chart-svg-wrap" id="chart-outside-gases"></div>
       </div>
     </div>
 
     <div class="section">
       <div class="section-head">
         <span class="section-title">Controls</span>
-        <span class="section-note">Mirrors the switches, numbers, and buttons on the Inside device itself</span>
       </div>
       <div class="control-groups">
 
@@ -277,14 +282,12 @@
             <div class="control-label">
               <span class="cl-name">Keep awake</span>
               <span class="cl-help">Stops the deep-sleep cycle — for OTA updates or debugging</span>
-              <span class="cl-id">switch.prevent_sleep</span>
             </div>
             <button class="rocker" id="rocker-sleep" aria-pressed="false" aria-label="Keep awake"></button>
           </div>
           <div class="control-row">
             <div class="control-label">
               <span class="cl-name">Sleep duration</span>
-              <span class="cl-id">number.deep_sleep_sleep_duration</span>
             </div>
             <div class="stepper">
               <button type="button" data-step="sleep" data-dir="-1" aria-label="Decrease">−</button>
@@ -297,7 +300,7 @@
         <div class="control-card">
           <h3>Calibration offsets</h3>
           <div class="control-row">
-            <div class="control-label"><span class="cl-name">SEN55 temperature</span><span class="cl-id">number.sen55_temperature_offset</span></div>
+            <div class="control-label"><span class="cl-name">SEN55 temperature</span></div>
             <div class="stepper">
               <button type="button" data-step="toffset" data-dir="-1" aria-label="Decrease">−</button>
               <span class="stepper-value"><span id="val-toffset">—</span> <span class="stepper-unit" id="unit-toffset">°F</span></span>
@@ -305,7 +308,7 @@
             </div>
           </div>
           <div class="control-row">
-            <div class="control-label"><span class="cl-name">SEN55 humidity</span><span class="cl-id">number.sen55_humidity_offset</span></div>
+            <div class="control-label"><span class="cl-name">SEN55 humidity</span></div>
             <div class="stepper">
               <button type="button" data-step="hoffset" data-dir="-1" aria-label="Decrease">−</button>
               <span class="stepper-value"><span id="val-hoffset">—</span> <span class="stepper-unit">%</span></span>
@@ -313,7 +316,7 @@
             </div>
           </div>
           <div class="control-row">
-            <div class="control-label"><span class="cl-name">DPS310 pressure</span><span class="cl-id">number.dps310_pressure_offset</span></div>
+            <div class="control-label"><span class="cl-name">DPS310 pressure</span></div>
             <div class="stepper">
               <button type="button" data-step="poffset" data-dir="-1" aria-label="Decrease">−</button>
               <span class="stepper-value"><span id="val-poffset">—</span> <span class="stepper-unit">hPa</span></span>
@@ -326,11 +329,11 @@
           <h3>Maintenance</h3>
           <button class="btn" type="button" id="btn-calibrate">
             <span>Calibrate CO2 sensor to 420ppm</span>
-            <span class="btn-id">button.set_scd40_calibrate — run outdoors or after airing the room out</span>
+            <span class="btn-id">Run outdoors or after airing the room out</span>
           </button>
           <button class="btn" type="button" id="btn-clean">
             <span>Clean particulate sensor</span>
-            <span class="btn-id">button.clean_sen55 — runs the SEN55's fan autoclean</span>
+            <span class="btn-id">Runs the fan autoclean</span>
           </button>
         </div>
 
@@ -338,13 +341,12 @@
           <h3>Device</h3>
           <button class="btn" type="button" id="btn-reboot">
             <span>Restart device</span>
-            <span class="btn-id">button.esp_reboot</span>
           </button>
           <button class="btn hold-btn" type="button" id="btn-factory-reset">
             <span class="hold-fill" id="hold-fill"></span>
             <span class="btn-label-inner">
               <span>Hold to factory reset</span>
-              <span class="btn-id">Same 3s hold as the physical button — erases WiFi + MQTT settings</span>
+              <span class="btn-id">Erases WiFi + MQTT settings</span>
             </span>
           </button>
         </div>

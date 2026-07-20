@@ -18,6 +18,38 @@ FORECAST_CACHE_TTL_S = 3 * 60 * 60  # forecasts are issued at most a couple time
 # already resolve at a shorter distance (it's always the *nearest* one).
 SEARCH_DISTANCE_MI = 200
 
+US_STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia",
+    "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
+    "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri",
+    "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+    "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio",
+    "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont",
+    "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+    "DC": "District of Columbia",
+}
+# AirNow sometimes reports a compass-direction region instead of a city (e.g.
+# "Southeast" for the southeast Michigan reporting area) -- "Southeast, MI"
+# reads like a made-up town name, so those get the state's full name folded
+# in ("Southeast Michigan") instead of the usual "City, ST" abbreviation.
+_REGIONAL_REPORTING_AREA_WORDS = {
+    "north", "south", "east", "west",
+    "northeast", "northwest", "southeast", "southwest",
+    "central", "metro",
+}
+
+
+def _format_reporting_area(area, state_code):
+    if not area:
+        return state_code or ""
+    if area.strip().lower() in _REGIONAL_REPORTING_AREA_WORDS:
+        return f"{area} {US_STATE_NAMES.get(state_code, state_code)}".strip()
+    return f"{area}, {state_code}"
+
+
 _cache = {}  # zip -> {"fetched_at": ..., "data": ...}
 _forecast_cache = {}  # zip -> {"fetched_at": ..., "data": ...}
 
@@ -73,7 +105,7 @@ def _fetch(zip_code):
         "category": dominant["Category"]["Name"],
         "band": band_for_aqi(dominant["AQI"]),
         "dominant_pollutant": dominant["ParameterName"],
-        "reporting_area": f'{dominant["ReportingArea"]}, {dominant["StateCode"]}',
+        "reporting_area": _format_reporting_area(dominant["ReportingArea"], dominant["StateCode"]),
         "lat": dominant.get("Latitude"),
         "lon": dominant.get("Longitude"),
         "observed_hour": dominant["HourObserved"],
@@ -151,7 +183,7 @@ def _fetch_forecast(zip_code):
         })
 
     return {
-        "reporting_area": f'{rows[0]["ReportingArea"]}, {rows[0]["StateCode"]}',
+        "reporting_area": _format_reporting_area(rows[0]["ReportingArea"], rows[0]["StateCode"]),
         "lat": rows[0].get("Latitude"),
         "lon": rows[0].get("Longitude"),
         "discussion": discussion,

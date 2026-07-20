@@ -47,7 +47,7 @@
         btn.setAttribute("aria-pressed", String(btn.getAttribute("data-unit") === currentUnit));
       });
     });
-    document.querySelectorAll("#s-temp-unit, #chart-temp-unit, #unit-toffset").forEach((el) => {
+    document.querySelectorAll("#chart-temp-unit, #unit-toffset").forEach((el) => {
       el.textContent = tempUnitLabel();
     });
   }
@@ -63,7 +63,6 @@
   });
 
   const BAND_ORDER = ["good", "fair", "poor", "bad"];
-  const BAND_WORD = { good: "Good", fair: "Fair", poor: "Poor", bad: "Very poor" };
 
   function bandFromAqi(aqi) {
     if (aqi === undefined || aqi === null || Number.isNaN(aqi)) return null;
@@ -79,6 +78,16 @@
     if (co2 > 1000) return "fair";
     return "good";
   }
+  // No official health thresholds exist for Sensirion's VOC index the way
+  // the EPA publishes them for AQI/CO2 -- these two cutoffs are the same
+  // ones already used for the Technical readout tile's edge color, just
+  // pulled out so the new VOC history row can share them instead of
+  // duplicating the numbers.
+  function bandForVocIndex(v) {
+    if (typeof v !== "number") return null;
+    return v > 250 ? "bad" : v > 150 ? "poor" : null;
+  }
+
   function worseBand(a, b) {
     if (!a) return b;
     if (!b) return a;
@@ -100,8 +109,23 @@
   /* ---------- chart rendering (SVG, hand-drawn) ----------
    * Series are plotted by real timestamp (not array index) so that sources
    * sampled at different rates — e.g. indoor readings every ~5-10min vs.
-   * AirNow's hourly outdoor readings — overlay correctly on one chart. */
-  const W = 760, H = 160, PAD = { l: 34, r: 4, t: 10, b: 18 };
+   * AirNow's hourly outdoor readings — overlay correctly on one chart.
+   *
+   * The viewBox width is the wrap element's own measured pixel width, not a
+   * fixed constant -- with CSS sizing the svg to width:100%/height:auto,
+   * a fixed viewBox (e.g. 760) gets scaled to fit whatever the container
+   * actually is, and that scale applies to EVERYTHING inside, including
+   * fixed-px text and row heights. On a ~300px mobile card that's a ~0.4x
+   * squeeze -- an 11px label renders at under 5px. Measuring the real width
+   * and using it 1:1 as the viewBox width means 1 unit = 1 real CSS pixel,
+   * so text/stroke/row-height stay true size on every screen; only the
+   * horizontal data density changes with available width, same as any
+   * other responsive chart. */
+  const H = 170, PAD = { l: 38, r: 4, t: 10, b: 20 };
+
+  function measureWidth(el) {
+    return Math.max(el.clientWidth, 240);
+  }
 
   function formatTick(v) {
     const abs = Math.abs(v);
@@ -110,7 +134,7 @@
     return String(Math.round(v * 100) / 100);
   }
 
-  function pathFor(points, tMin, tMax, vMin, vMax) {
+  function pathFor(points, tMin, tMax, vMin, vMax, W) {
     const xw = W - PAD.l - PAD.r;
     const yh = H - PAD.t - PAD.b;
     return points.map((p, i) => {
@@ -120,7 +144,7 @@
     }).join(" ");
   }
 
-  function pointAt(p, tMin, tMax, vMin, vMax) {
+  function pointAt(p, tMin, tMax, vMin, vMax, W) {
     const xw = W - PAD.l - PAD.r;
     const yh = H - PAD.t - PAD.b;
     const x = PAD.l + ((p.t - tMin) / (tMax - tMin || 1)) * xw;
@@ -135,6 +159,7 @@
       el.innerHTML = '<div class="empty-state">No data in this range yet.</div>';
       return;
     }
+    const W = measureWidth(el);
     const allTimes = nonEmpty.flatMap((s) => s.points.map((p) => p.t));
     const allVals = nonEmpty.flatMap((s) => s.points.map((p) => p.v));
     const tMin = Math.min(...allTimes), tMax = Math.max(...allTimes);
@@ -151,7 +176,7 @@
       svg += `<text class="chart-axis-label chart-y-label" x="${(PAD.l - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end">${formatTick(tickVal)}</text>`;
     }
     nonEmpty.forEach((s) => {
-      const d = pathFor(s.points, tMin, tMax, lo, hi);
+      const d = pathFor(s.points, tMin, tMax, lo, hi, W);
       if (s.area) {
         const yh = H - PAD.t - PAD.b;
         const areaD = `${d} L${(W - PAD.r).toFixed(1)},${(PAD.t + yh).toFixed(1)} L${PAD.l},${(PAD.t + yh).toFixed(1)} Z`;
@@ -159,7 +184,7 @@
       }
       svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
       const last = s.points[s.points.length - 1];
-      const [ex, ey] = pointAt(last, tMin, tMax, lo, hi);
+      const [ex, ey] = pointAt(last, tMin, tMax, lo, hi, W);
       svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
     });
     svg += `<text class="chart-axis-label" x="${PAD.l}" y="${H - 4}">${opts.leftLabel || ""}</text>`;
@@ -167,8 +192,6 @@
     svg += "</svg>";
     el.innerHTML = svg;
   }
-
-  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   function seriesFor(points, key, color, area) {
     return {
@@ -180,21 +203,30 @@
     };
   }
 
+  // Styled like the outside pollutant charts: rows colored by severity
+  // instead of identity, sharing a time axis but each scaled to its own
+  // range. PM1.0/PM4.0 have no EPA-recognized health thresholds (only
+  // PM2.5/PM10 do), so those two rows stay neutral rather than borrowing
+  // numbers that don't apply to them. PM2.5/PM10 reuse the same
+  // bandForConcentration thresholds as the outside particulate chart, so
+  // "orange" means the same thing on both sides of the wall.
   function renderInsideCharts(points, rangeLabel) {
-    renderChart(document.getElementById("chart-co2"), [
-      seriesFor(points, "co2_ppm", cssVar("--accent"), true),
+    renderRowChart(document.getElementById("chart-co2"), [
+      { label: "CO2", unit: " ppm", decimals: 0, bandFor: bandFromCo2, points: seriesFor(points, "co2_ppm", null).points },
     ], { leftLabel: rangeLabel, label: "CO2 history" });
 
-    renderChart(document.getElementById("chart-pm"), [
-      seriesFor(points, "pm1_0_ugm3", "#6f9be0"),
-      seriesFor(points, "pm2_5_ugm3", "#e0935a"),
-      seriesFor(points, "pm4_0_ugm3", "#b23a3a"),
-      seriesFor(points, "pm10_0_ugm3", "#6a5acd"),
+    // PM2.5 and PM10 are covered by the Inside vs Outside pollutants chart
+    // (which shows this same indoor line, overlaid against the outdoor
+    // reading) -- listing them again here would just be the same data twice.
+    // PM1.0 and PM4.0 have no outdoor equivalent, so they stay here.
+    renderRowChart(document.getElementById("chart-pm"), [
+      { label: "PM1.0", unit: " µg/m³", decimals: 1, bandFor: () => null, points: seriesFor(points, "pm1_0_ugm3", null).points },
+      { label: "PM4.0", unit: " µg/m³", decimals: 1, bandFor: () => null, points: seriesFor(points, "pm4_0_ugm3", null).points },
     ], { leftLabel: rangeLabel, label: "Particulate matter history" });
 
-    renderChart(document.getElementById("chart-voc"), [
-      seriesFor(points, "voc_index", cssVar("--accent")),
-      seriesFor(points, "nox_index", "#e0935a"),
+    renderRowChart(document.getElementById("chart-voc"), [
+      { label: "VOC index", unit: "", decimals: 0, bandFor: bandForVocIndex, points: seriesFor(points, "voc_index", null).points },
+      { label: "NOx index", unit: "", decimals: 0, bandFor: () => null, points: seriesFor(points, "nox_index", null).points },
     ], { leftLabel: rangeLabel, label: "VOC and NOx index history" });
 
     const tempSeries = seriesFor(points, "temperature_c", "#e0935a", true);
@@ -206,51 +238,265 @@
     renderChart(document.getElementById("chart-hum"), [
       seriesFor(points, "humidity_pct", "#6f9be0", true),
     ], { leftLabel: rangeLabel, label: "Humidity history" });
-
-    document.getElementById("legend-pm").innerHTML = [
-      ["#6f9be0", "PM1.0"], ["#e0935a", "PM2.5"], ["#b23a3a", "PM4.0"], ["#6a5acd", "PM10"],
-    ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
-    document.getElementById("legend-voc").innerHTML = [
-      [cssVar("--accent"), "VOC index"], ["#e0935a", "NOx index"],
-    ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
   }
 
-  // insidePoints here is a second, independent fetch of /api/history -- the
-  // inside-vs-outside comparison chart needs both series on the same time
-  // axis, so it can't just borrow whatever range the Inside section above
-  // happens to be showing once Outside gets its own range control.
-  function renderOutsideCharts(insidePoints, outsidePoints, rangeLabel) {
-    const providerLabel = currentProvider === "google" ? "Google" : "AirNow";
-    renderChart(document.getElementById("chart-aqi-compare"), [
-      seriesFor(insidePoints, "aqi", cssVar("--accent")),
-      seriesFor(outsidePoints, "aqi", cssVar("--zone-outside")),
+  // One SVG, N horizontal lanes -- all rows share the same time axis (drawn
+  // once, at the bottom) but each gets its own y-scale sized to its own
+  // min/max, so a small-magnitude series (CO ~0.1ppb) is never squashed flat
+  // by a big one (O3 ~45ppb) sharing its axis. Identity isn't color-coded
+  // here (each row is already labeled by name) -- color instead tracks
+  // severity, per point, via the row's own bandFor(value): the line changes
+  // color exactly where a reading crosses into fair/poor/bad, same as the
+  // band colors used everywhere else in the app (bandFromAqi, bandVar).
+  const ROW_H = 58, ROW_PAD_TOP = 17, ROW_PAD_BOTTOM = 8;
+  // Row charts have no left-side axis (that's what PAD.l's 38px is for --
+  // renderChart's numeric y-axis ticks). Each row labels itself above its
+  // own line instead, so a big left gutter here is just unexplained empty
+  // space -- rows get a small margin matching the right side instead.
+  const ROW_PAD = { l: 2, r: 4 };
+
+  // rows: [{ label, unit, decimals, points: [{t, v}], bandFor(v) => band|null }]
+  // Rows with no points in range (e.g. a pollutant this station never
+  // reports at all, like NO2 for some AirNow stations) are dropped
+  // entirely rather than shown as a permanent "no data" placeholder.
+  function renderRowChart(el, rows, opts) {
+    const nonEmpty = rows.filter((r) => r.points.length > 0);
+    if (nonEmpty.length === 0) {
+      el.innerHTML = '<div class="empty-state">No data in this range yet.</div>';
+      return;
+    }
+    const W = measureWidth(el);
+    const allTimes = nonEmpty.flatMap((r) => r.points.map((p) => p.t));
+    const tMin = Math.min(...allTimes), tMax = Math.max(...allTimes);
+    const totalH = nonEmpty.length * ROW_H + 14;
+
+    let svg = `<svg viewBox="0 0 ${W} ${totalH}" preserveAspectRatio="none" role="img" aria-label="${opts.label || "chart"}">`;
+    nonEmpty.forEach((r, i) => {
+      const top = i * ROW_H;
+      if (i > 0) {
+        svg += `<line class="chart-grid-line" x1="${ROW_PAD.l}" y1="${top.toFixed(1)}" x2="${W - ROW_PAD.r}" y2="${top.toFixed(1)}" />`;
+      }
+      const dotY = top + ROW_PAD_TOP - 8;
+      const labelY = top + ROW_PAD_TOP - 5;
+      const vals = r.points.map((p) => p.v);
+      const vMin = Math.min(...vals), vMax = Math.max(...vals);
+      const pad = (vMax - vMin) * 0.12 || 1;
+      const lo = vMin - pad, hi = vMax + pad;
+      const xw = W - ROW_PAD.l - ROW_PAD.r;
+      const yh = ROW_H - ROW_PAD_TOP - ROW_PAD_BOTTOM;
+      const xAt = (t) => ROW_PAD.l + ((t - tMin) / (tMax - tMin || 1)) * xw;
+      const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
+
+      // Drawn as one short segment per point-to-point step (instead of one
+      // path for the whole line) so each step can carry its own stroke
+      // color -- the segment ending at a reading is colored by that
+      // reading's band.
+      for (let j = 1; j < r.points.length; j++) {
+        const p0 = r.points[j - 1], p1 = r.points[j];
+        const segColor = bandVar(r.bandFor(p1.v));
+        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round" />`;
+      }
+
+      const last = r.points[r.points.length - 1];
+      const lastColor = bandVar(r.bandFor(last.v));
+      const ex = xAt(last.t), ey = yAt(last.v);
+      svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${lastColor}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+      svg += `<circle cx="${(ROW_PAD.l + 3).toFixed(1)}" cy="${dotY.toFixed(1)}" r="3" fill="${lastColor}" />`;
+      svg += `<text class="chart-axis-label" x="${(ROW_PAD.l + 10).toFixed(1)}" y="${labelY.toFixed(1)}">${escapeHtml(r.label)} <tspan style="fill:${lastColor}">${fmt(last.v, r.decimals)}${r.unit}</tspan></text>`;
+    });
+    const bottomY = nonEmpty.length * ROW_H + 10;
+    svg += `<text class="chart-axis-label" x="${ROW_PAD.l}" y="${bottomY}">${opts.leftLabel || ""}</text>`;
+    svg += `<text class="chart-axis-label" x="${W - ROW_PAD.r}" y="${bottomY}" text-anchor="end">now</text>`;
+    svg += "</svg>";
+    el.innerHTML = svg;
+  }
+
+  // Same idea as renderRowChart, but each row overlays two series (Inside
+  // and Outside) sharing one y-scale within that row, since the whole point
+  // is comparing their magnitudes directly. Color still tracks severity per
+  // point on each line; Inside/Outside identity comes from line style
+  // (Inside dashed, Outside solid) and the "In"/"Out" label prefix instead,
+  // since color is already spoken for.
+  // rows: [{ label, unit, decimals, inside: {points, bandFor}, outside: {points, bandFor} }]
+  function renderOverlayRowChart(el, rows, opts) {
+    const nonEmpty = rows.filter((r) => r.inside.points.length > 0 || r.outside.points.length > 0);
+    if (nonEmpty.length === 0) {
+      el.innerHTML = '<div class="empty-state">No data in this range yet.</div>';
+      return;
+    }
+    const W = measureWidth(el);
+    const allTimes = nonEmpty.flatMap((r) => [...r.inside.points, ...r.outside.points].map((p) => p.t));
+    const tMin = Math.min(...allTimes), tMax = Math.max(...allTimes);
+    const totalH = nonEmpty.length * ROW_H + 14;
+
+    let svg = `<svg viewBox="0 0 ${W} ${totalH}" preserveAspectRatio="none" role="img" aria-label="${opts.label || "chart"}">`;
+    nonEmpty.forEach((r, i) => {
+      const top = i * ROW_H;
+      if (i > 0) {
+        svg += `<line class="chart-grid-line" x1="${ROW_PAD.l}" y1="${top.toFixed(1)}" x2="${W - ROW_PAD.r}" y2="${top.toFixed(1)}" />`;
+      }
+      const combined = [...r.inside.points, ...r.outside.points];
+      const vals = combined.map((p) => p.v);
+      const vMin = Math.min(...vals), vMax = Math.max(...vals);
+      const pad = (vMax - vMin) * 0.12 || 1;
+      const lo = vMin - pad, hi = vMax + pad;
+      const xw = W - ROW_PAD.l - ROW_PAD.r;
+      const yh = ROW_H - ROW_PAD_TOP - ROW_PAD_BOTTOM;
+      const xAt = (t) => ROW_PAD.l + ((t - tMin) / (tMax - tMin || 1)) * xw;
+      const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
+
+      const drawSeries = (series, dashed) => {
+        for (let j = 1; j < series.points.length; j++) {
+          const p0 = series.points[j - 1], p1 = series.points[j];
+          const segColor = bandVar(series.bandFor(p1.v));
+          const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
+          svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
+        }
+        if (series.points.length === 0) return null;
+        const last = series.points[series.points.length - 1];
+        const color = bandVar(series.bandFor(last.v));
+        const ex = xAt(last.t), ey = yAt(last.v);
+        if (dashed) {
+          svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="var(--panel-raised)" stroke="${color}" stroke-width="2" />`;
+        } else {
+          svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+        }
+        return last;
+      };
+
+      const lastIn = drawSeries(r.inside, true);
+      const lastOut = drawSeries(r.outside, false);
+      const inColor = lastIn ? bandVar(r.inside.bandFor(lastIn.v)) : "var(--ink-dim)";
+      const outColor = lastOut ? bandVar(r.outside.bandFor(lastOut.v)) : "var(--ink-dim)";
+      const inText = lastIn ? `In ${fmt(lastIn.v, r.decimals)}${r.unit}` : "In —";
+      const outText = lastOut ? `Out ${fmt(lastOut.v, r.decimals)}${r.unit}` : "Out —";
+      const labelY = top + ROW_PAD_TOP - 5;
+      svg += `<text class="chart-axis-label" x="${ROW_PAD.l.toFixed(1)}" y="${labelY.toFixed(1)}">${escapeHtml(r.label)} <tspan style="fill:${inColor}">${inText}</tspan> · <tspan style="fill:${outColor}">${outText}</tspan></text>`;
+    });
+    const bottomY = nonEmpty.length * ROW_H + 10;
+    svg += `<text class="chart-axis-label" x="${ROW_PAD.l}" y="${bottomY}">${opts.leftLabel || ""}</text>`;
+    svg += `<text class="chart-axis-label" x="${W - ROW_PAD.r}" y="${bottomY}" text-anchor="end">now</text>`;
+    svg += "</svg>";
+    el.innerHTML = svg;
+  }
+
+  // defs: [key, label, unit, decimals, bandFor(v)][]
+  function renderPollutantRows(chartElId, points, defs, rangeLabel, chartLabel) {
+    const rows = defs.map(([key, label, unit, decimals, bandFor]) => ({
+      label, unit, decimals, bandFor,
+      points: seriesFor(points, key, null).points,
+    }));
+    renderRowChart(document.getElementById(chartElId), rows, { leftLabel: rangeLabel, label: chartLabel });
+  }
+
+  function toAqiSeries(points, parameter, units) {
+    return points
+      .map((p) => ({ t: p.t, v: aqiFromConcentration(parameter, p.v, units) }))
+      .filter((p) => typeof p.v === "number");
+  }
+
+  // insidePoints/outsidePoints are both needed on the same time axis --
+  // called from the same place that already fetches both (see
+  // loadOutsideHistorySection) rather than each chart fetching its own copy.
+  //
+  // AQI is the one number both providers give on a shared 0-500 scale, so it
+  // always overlays. Everything else only overlays where AIR-1 and the
+  // selected provider measure the *same* thing in real units: Google gives
+  // raw concentrations, so PM2.5/PM10 (already µg/m³ on both sides) overlay
+  // against it. AirNow never gives a raw concentration for anything -- only
+  // computed AQI numbers -- so AIR-1's own raw PM2.5/PM10 convert to an
+  // actual EPA AQI number (toAqiSeries/aqiFromConcentration) and overlay
+  // against AirNow's pm2_5_aqi/pm10_aqi on that shared scale instead. CO/NO2
+  // needed the optional MICS-4514, which this unit doesn't have, so those
+  // never overlay. O3 and SO2 have no indoor equivalent either (no ozone or
+  // SO2 sensor at all), so they stay outside-only in the charts above.
+  function renderInsideOutsideCharts(insidePoints, outsidePoints, rangeLabel) {
+    renderOverlayRowChart(document.getElementById("chart-aqi-compare"), [
+      {
+        label: "AQI", unit: "", decimals: 0,
+        inside: { points: seriesFor(insidePoints, "aqi", null).points, bandFor: bandFromAqi },
+        outside: { points: seriesFor(outsidePoints, "aqi", null).points, bandFor: bandFromAqi },
+      },
     ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
 
-    document.getElementById("legend-aqi-compare").innerHTML = [
-      [cssVar("--accent"), "Inside (NowCast)"], [cssVar("--zone-outside"), `Outside (${providerLabel})`],
-    ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
-
-    // AirNow's per-pollutant AQI values (O3/PM2.5/PM10/NO2) share the same
-    // 0-500 scale, so they can share one chart. Google only gives raw
-    // concentrations per pollutant, each in its own unit (ppb for gases,
-    // µg/m³ for particulates) -- plotting those together on one axis would
-    // be misleading, so there's no combined chart for it; the current
-    // breakdown above still shows each in its own real unit.
-    const pollutantChartEl = document.getElementById("chart-outside-pollutants");
-    const pollutantLegendEl = document.getElementById("legend-outside-pollutants");
     if (currentProvider === "google") {
-      pollutantChartEl.innerHTML = '<div class="empty-state">Google reports each pollutant in its own unit (ppb for gases, µg/m³ for particulates) rather than a shared AQI scale, so they can\'t be plotted on one chart. See the current breakdown above.</div>';
-      pollutantLegendEl.innerHTML = "";
+      renderOverlayRowChart(document.getElementById("chart-inside-outside-pollutants"), [
+        {
+          label: "PM2.5", unit: " µg/m³", decimals: 1,
+          inside: { points: seriesFor(insidePoints, "pm2_5_ugm3", null).points, bandFor: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER") },
+          outside: { points: seriesFor(outsidePoints, "pm2_5_ugm3", null).points, bandFor: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER") },
+        },
+        {
+          label: "PM10", unit: " µg/m³", decimals: 1,
+          inside: { points: seriesFor(insidePoints, "pm10_0_ugm3", null).points, bandFor: (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER") },
+          outside: { points: seriesFor(outsidePoints, "pm10_ugm3", null).points, bandFor: (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER") },
+        },
+      ], { leftLabel: rangeLabel, label: "Inside vs outside pollutant concentration history" });
     } else {
-      renderChart(pollutantChartEl, [
-        seriesFor(outsidePoints, "o3_aqi", "#6f9be0"),
-        seriesFor(outsidePoints, "pm2_5_aqi", "#e0935a"),
-        seriesFor(outsidePoints, "pm10_aqi", "#6a5acd"),
-        seriesFor(outsidePoints, "no2_aqi", "#b23a3a"),
-      ], { leftLabel: rangeLabel, label: "Outside pollutant AQI history" });
-      pollutantLegendEl.innerHTML = [
-        ["#6f9be0", "O3"], ["#e0935a", "PM2.5"], ["#6a5acd", "PM10"], ["#b23a3a", "NO2"],
-      ].map(([c, l]) => `<span><span class="legend-dot" style="background:${c}"></span>${l}</span>`).join("");
+      renderOverlayRowChart(document.getElementById("chart-inside-outside-pollutants"), [
+        {
+          label: "PM2.5 AQI", unit: "", decimals: 0,
+          inside: { points: toAqiSeries(seriesFor(insidePoints, "pm2_5_ugm3", null).points, "PM2.5", "MICROGRAMS_PER_CUBIC_METER"), bandFor: bandFromAqi },
+          outside: { points: seriesFor(outsidePoints, "pm2_5_aqi", null).points, bandFor: bandFromAqi },
+        },
+        {
+          label: "PM10 AQI", unit: "", decimals: 0,
+          inside: { points: toAqiSeries(seriesFor(insidePoints, "pm10_0_ugm3", null).points, "PM10", "MICROGRAMS_PER_CUBIC_METER"), bandFor: bandFromAqi },
+          outside: { points: seriesFor(outsidePoints, "pm10_aqi", null).points, bandFor: bandFromAqi },
+        },
+      ], { leftLabel: rangeLabel, label: "Inside vs outside pollutant AQI history" });
+    }
+
+    // Weather isn't provider-dependent -- neither AirNow nor Google gives
+    // it, it comes from a separate feed regardless of which one is
+    // selected for pollutants -- so this renders the same way either way.
+    // No severity bands exist anywhere in this app for temp/humidity/
+    // pressure, same as the indoor-only Temperature/Humidity charts.
+    const insideTemp = seriesFor(insidePoints, "temperature_c", null).points.map((p) => ({ t: p.t, v: displayTemp(p.v) }));
+    const outsideTemp = seriesFor(outsidePoints, "temperature_c", null).points.map((p) => ({ t: p.t, v: displayTemp(p.v) }));
+    renderOverlayRowChart(document.getElementById("chart-inside-outside-weather"), [
+      {
+        label: "Temp", unit: tempUnitLabel(), decimals: 1,
+        inside: { points: insideTemp, bandFor: () => null },
+        outside: { points: outsideTemp, bandFor: () => null },
+      },
+      {
+        label: "Humidity", unit: "%", decimals: 1,
+        inside: { points: seriesFor(insidePoints, "humidity_pct", null).points, bandFor: () => null },
+        outside: { points: seriesFor(outsidePoints, "humidity_pct", null).points, bandFor: () => null },
+      },
+      {
+        label: "Pressure", unit: " hPa", decimals: 1,
+        inside: { points: seriesFor(insidePoints, "pressure_hpa", null).points, bandFor: () => null },
+        outside: { points: seriesFor(outsidePoints, "pressure_hpa", null).points, bandFor: () => null },
+      },
+    ], { leftLabel: rangeLabel, label: "Inside vs outside temperature, humidity, pressure history" });
+  }
+
+  // Only pollutants with no indoor equivalent live here -- anything AIR-1
+  // also measures (PM2.5, PM10, and for Google CO/NO2 too) is covered by
+  // the Inside vs Outside overlay chart instead, so it isn't plotted twice.
+  // AIR-1 has no ozone or SO2 sensor, so O3 (both providers) and SO2
+  // (Google) never have an inside counterpart to overlay against.
+  function renderOutsideCharts(outsidePoints, rangeLabel) {
+    document.getElementById("card-outside-pollutants-aqi").hidden = currentProvider === "google";
+    document.getElementById("card-outside-pollutants-gases").hidden = currentProvider !== "google";
+
+    if (currentProvider === "google") {
+      // CO/NO2 used to overlay against AIR-1's MICS-4514 readings, but this
+      // unit doesn't have that sensor -- they're outside-only now, same as
+      // O3/SO2 (which never had an indoor equivalent to begin with).
+      renderPollutantRows("chart-outside-gases", outsidePoints, [
+        ["o3_ppb", "O3", " ppb", 1, (v) => bandForConcentration("O3", v, "PARTS_PER_BILLION")],
+        ["no2_ppb", "NO2", " ppb", 2, (v) => bandForConcentration("NO2", v, "PARTS_PER_BILLION")],
+        ["so2_ppb", "SO2", " ppb", 2, (v) => bandForConcentration("SO2", v, "PARTS_PER_BILLION")],
+        ["co_ppb", "CO", " ppb", 2, (v) => bandForConcentration("CO", v, "PARTS_PER_BILLION")],
+      ], rangeLabel, "Outside gas concentration history");
+    } else {
+      renderPollutantRows("chart-outside-pollutants", outsidePoints, [
+        ["o3_aqi", "O3", "", 0, bandFromAqi],
+        ["no2_aqi", "NO2", "", 0, bandFromAqi],
+      ], rangeLabel, "Outside pollutant AQI history");
     }
   }
 
@@ -267,9 +513,9 @@
   /* ---------- live readout tiles (Technical view) ---------- */
   const READOUT_DEFS = [
     { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
-    { id: "aqi", label: "AQI (NowCast)", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
+    { id: "aqi", label: "AQI", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
     { id: "pm25", label: "PM2.5", unit: "µg/m³", key: "pm2_5_ugm3", decimals: 1, band: (v) => v > 35 ? "bad" : v > 12 ? "poor" : null },
-    { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: (v) => v > 250 ? "bad" : v > 150 ? "poor" : null },
+    { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: bandForVocIndex },
     { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
     { id: "temp", label: "Temperature", unit: () => tempUnitLabel(), key: "temperature_c", decimals: 1, band: () => null, convert: displayTemp },
     { id: "hum", label: "Humidity", unit: "%", key: "humidity_pct", decimals: 1, band: () => null },
@@ -303,7 +549,7 @@
     try {
       const res = await fetch("/api/latest");
       if (res.status === 404) {
-        setIndoorUnavailable("No sensor data yet — waiting for the AIR-1 to report in.");
+        setIndoorUnavailable("Waiting for the AIR-1 to report in.");
         return;
       }
       if (!res.ok) throw new Error("request failed");
@@ -312,17 +558,7 @@
       renderReadouts(d);
       previousLatest = d;
 
-      document.getElementById("s-co2").textContent = fmt(d.co2_ppm, 0);
-      document.getElementById("s-pm25").textContent = fmt(d.pm2_5_ugm3, 1);
-      document.getElementById("s-temp").textContent = fmt(displayTemp(d.temperature_c), 1);
-      document.getElementById("s-hum").textContent = fmt(d.humidity_pct, 1);
-
-      document.getElementById("g-no2").textContent = fmt(d.nitrogen_dioxide_ppm, 3) + " ppm";
-      document.getElementById("g-co").textContent = fmt(d.carbon_monoxide_ppm, 3) + " ppm";
-      document.getElementById("g-h2").textContent = fmt(d.hydrogen_ppm, 3) + " ppm";
-      document.getElementById("g-ethanol").textContent = fmt(d.ethanol_ppm, 3) + " ppm";
-      document.getElementById("g-methane").textContent = fmt(d.methane_ppm, 3) + " ppm";
-      document.getElementById("g-ammonia").textContent = fmt(d.ammonia_ppm, 3) + " ppm";
+      document.getElementById("inside-factors").innerHTML = insideFactorsHtml(d);
 
       document.getElementById("d-rssi").textContent = fmt(d.wifi_rssi_db, 0) + " dB";
       document.getElementById("d-esptemp").textContent = fmt(displayTemp(d.esp_temperature_c), 1) + " " + tempUnitLabel();
@@ -332,21 +568,17 @@
 
       const band = worseBand(bandFromAqi(d.aqi), bandFromCo2(d.co2_ppm));
       const heroBadge = document.getElementById("hero-badge");
-      heroBadge.textContent = BAND_WORD[band] || "—";
+      heroBadge.textContent = typeof d.aqi === "number" ? String(Math.round(d.aqi)) : "—";
       heroBadge.style.setProperty("--band-color", bandVar(band));
       document.getElementById("hero-sentence").textContent = insideSentence(band);
       document.getElementById("hero-updated-rel").textContent = timeAgo(d.time);
       document.getElementById("since-reading").textContent = timeAgo(d.time);
     } catch (e) {
-      setIndoorUnavailable("Unable to reach the dashboard's InfluxDB reader.");
+      setIndoorUnavailable("Couldn't reach the sensor feed.");
     }
   }
 
-  const INDOOR_FIELD_IDS = [
-    "s-co2", "s-pm25", "s-temp", "s-hum",
-    "g-no2", "g-co", "g-h2", "g-ethanol", "g-methane", "g-ammonia",
-    "d-rssi", "d-esptemp", "d-uptime", "d-firmware",
-  ];
+  const INDOOR_FIELD_IDS = ["d-rssi", "d-esptemp", "d-uptime", "d-firmware"];
 
   function setIndoorUnavailable(msg) {
     document.getElementById("hero-sentence").textContent = msg;
@@ -355,6 +587,7 @@
     const heroBadge = document.getElementById("hero-badge");
     heroBadge.textContent = "—";
     heroBadge.style.setProperty("--band-color", "var(--ink-dim)");
+    document.getElementById("inside-factors").innerHTML = insideFactorsHtml({});
     INDOOR_FIELD_IDS.forEach((id) => { document.getElementById(id).textContent = "—"; });
     document.getElementById("readout-grid").innerHTML = "";
     previousLatest = null;
@@ -365,10 +598,20 @@
     return { 6: "6h ago", 24: "24h ago", 72: "3d ago", 168: "7d ago" }[hours] || `${hours}h ago`;
   }
 
+  // Charts measure their container's real width at render time (see
+  // measureWidth), so a viewport change -- rotating a phone, resizing a
+  // window -- needs a re-render at the new width or it stays sized for the
+  // old one. Caching the last-fetched points lets that re-render happen
+  // instantly on resize without a network round-trip.
+  let lastInsidePoints = null, lastInsideRangeLabel = "";
+  let lastOutsideSectionInsidePoints = null, lastOutsidePoints = null, lastOutsideRangeLabel = "";
+
   async function loadHistory(hours) {
     const res = await fetch(`/api/history?hours=${hours}`);
     const points = res.ok ? await res.json() : [];
-    renderInsideCharts(points, rangeLabelFor(hours));
+    lastInsidePoints = points;
+    lastInsideRangeLabel = rangeLabelFor(hours);
+    renderInsideCharts(points, lastInsideRangeLabel);
   }
 
   // Outside gets its own range control (separate from Inside's, above) --
@@ -382,17 +625,46 @@
     ]);
     const insidePoints = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
     const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
-    renderOutsideCharts(insidePoints, outsidePoints, rangeLabelFor(hours));
+    lastOutsideSectionInsidePoints = insidePoints;
+    lastOutsidePoints = outsidePoints;
+    lastOutsideRangeLabel = rangeLabelFor(hours);
+    renderOutsideCharts(outsidePoints, lastOutsideRangeLabel);
+    renderInsideOutsideCharts(insidePoints, outsidePoints, lastOutsideRangeLabel);
   }
+
+  function rerenderVisibleCharts() {
+    if (viewTechnical.hidden) return;
+    if (lastInsidePoints) renderInsideCharts(lastInsidePoints, lastInsideRangeLabel);
+    if (lastOutsidePoints) {
+      renderOutsideCharts(lastOutsidePoints, lastOutsideRangeLabel);
+      renderInsideOutsideCharts(lastOutsideSectionInsidePoints, lastOutsidePoints, lastOutsideRangeLabel);
+    }
+  }
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(rerenderVisibleCharts, 200);
+  });
 
   /* ---------- provider switch (AirNow / Google) ---------- */
   let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
+
+  function providerLabel() {
+    return currentProvider === "google" ? "Google" : "AirNow";
+  }
 
   function renderProviderToggles() {
     document.querySelectorAll(".provider-toggle").forEach((wrap) => {
       wrap.querySelectorAll("button").forEach((btn) => {
         btn.setAttribute("aria-pressed", String(btn.getAttribute("data-provider") === currentProvider));
       });
+    });
+    // Strategic, always-visible source attribution -- both zone banners
+    // (Basic and Technical) rather than buried only in the settings toggle,
+    // so it's clear at a glance which agency/model the outside numbers on
+    // screen came from.
+    document.querySelectorAll("#outside-source, #outside-source-tech").forEach((el) => {
+      el.textContent = providerLabel();
     });
   }
   document.addEventListener("click", (e) => {
@@ -413,30 +685,78 @@
     return short[units] || (units || "").replace(/_/g, " ").toLowerCase();
   }
 
-  // Google gives a raw concentration, not an AQI, so there's no aqi field
-  // to hand to bandFromAqi() the way AirNow's pollutants have. These are
-  // EPA's own AQI breakpoints (current/2024 revision for PM2.5) -- just the
-  // three thresholds this app's 4-band system needs (good/fair/poor/bad),
-  // collapsed the same way bandFromAqi() already collapses AirNow's 6 EPA
-  // categories. Units must match what Google reports: ppb for gases except
-  // CO (EPA's CO breakpoints are in ppm), µg/m³ for particulates.
-  const CONCENTRATION_THRESHOLDS = {
-    "PM2.5": [9.1, 35.5, 55.5],
-    "PM10": [55, 155, 255],
-    "O3": [55, 71, 86],
-    "NO2": [54, 101, 361],
-    "SO2": [36, 76, 186],
-    "CO": [4.5, 9.5, 12.5],
+  // EPA's own AQI breakpoint tables (current/2024 revision for PM2.5), each
+  // row [concLo, concHi, aqiLo, aqiHi] -- lets a raw concentration convert
+  // to the actual EPA AQI number via the same piecewise-linear interpolation
+  // EPA uses, not just a good/fair/poor/bad bucket. That's what makes a
+  // sensor-only pollutant (AIR-1's raw PM2.5/PM10 µg/m³) directly overlayable
+  // against AirNow's own pm2_5_aqi/pm10_aqi, which is never a raw
+  // concentration. Units must match what the source reports: ppb for gases
+  // except CO (EPA's own CO breakpoints are in ppm), µg/m³ for particulates.
+  const AQI_BREAKPOINTS = {
+    "PM2.5": [[0.0, 9.0, 0, 50], [9.1, 35.4, 51, 100], [35.5, 55.4, 101, 150], [55.5, 125.4, 151, 200], [125.5, 225.4, 201, 300], [225.5, 325.4, 301, 500]],
+    "PM10": [[0, 54, 0, 50], [55, 154, 51, 100], [155, 254, 101, 150], [255, 354, 151, 200], [355, 424, 201, 300], [425, 604, 301, 500]],
+    "O3": [[0, 54, 0, 50], [55, 70, 51, 100], [71, 85, 101, 150], [86, 105, 151, 200], [106, 200, 201, 300]],
+    "NO2": [[0, 53, 0, 50], [54, 100, 51, 100], [101, 360, 101, 150], [361, 649, 151, 200], [650, 1249, 201, 300], [1250, 2049, 301, 500]],
+    "SO2": [[0, 35, 0, 50], [36, 75, 51, 100], [76, 185, 101, 150], [186, 304, 151, 200]],
+    "CO": [[0.0, 4.4, 0, 50], [4.5, 9.4, 51, 100], [9.5, 12.4, 101, 150], [12.5, 15.4, 151, 200]],
   };
-  function bandForConcentration(parameter, value, units) {
-    const thresholds = CONCENTRATION_THRESHOLDS[parameter];
-    if (typeof value !== "number" || !thresholds) return null;
+  function aqiFromConcentration(parameter, value, units) {
+    const table = AQI_BREAKPOINTS[parameter];
+    if (typeof value !== "number" || !table) return null;
     const v = parameter === "CO" && units === "PARTS_PER_BILLION" ? value / 1000 : value;
-    const [fairMin, poorMin, badMin] = thresholds;
-    if (v >= badMin) return "bad";
-    if (v >= poorMin) return "poor";
-    if (v >= fairMin) return "fair";
-    return "good";
+    if (v <= 0) return 0;
+    // EPA's tables round concentrations to 0.1 (PM2.5/CO) or a whole unit
+    // before choosing a bucket, which leaves a hairline gap between one
+    // bucket's high and the next's low (PM2.5: ...9.0 | 9.1...) that a raw
+    // unrounded sensor reading can land inside. Picking the last bucket
+    // whose low bound the value has reached (rather than requiring it fall
+    // inside [low, high]) keeps the value in a bucket -- extrapolating a
+    // hair past that bucket's own high end -- instead of falling through to
+    // nothing and reporting a wrong 0.
+    let row = table[0];
+    for (const candidate of table) {
+      if (v >= candidate[0]) row = candidate;
+      else break;
+    }
+    const [concLo, concHi, aqiLo, aqiHi] = row;
+    const aqi = ((aqiHi - aqiLo) / (concHi - concLo)) * (v - concLo) + aqiLo;
+    return Math.round(Math.max(0, Math.min(500, aqi)));
+  }
+  function bandForConcentration(parameter, value, units) {
+    return bandFromAqi(aqiFromConcentration(parameter, value, units));
+  }
+
+  // Same badge markup/classes as the Outside hero's pollutant breakdown
+  // (outside-pollutant/op-value/op-unit) so the two hero boxes read as the
+  // same kind of thing at a glance, instead of Inside's old large standalone
+  // tile grid below the hero vs. Outside's compact row inside it. VOC index
+  // is included here even though it has no outside equivalent -- it was
+  // previously only visible in the Technical view, and it's as central an
+  // indoor air quality signal as CO2/PM2.5. Temp/Humidity have no severity
+  // bands anywhere in this app (no established thresholds), so those two
+  // stay neutral-colored like NOx does elsewhere.
+  function insideFactorsHtml(d) {
+    // The full set AIR-1's base hardware always reports (SCD40 + SEN55 +
+    // DPS310) -- as opposed to the MICS-4514 gas readings (NO2/CO/H2/
+    // ethanol/methane/ammonia), which are an optional add-on this unit
+    // doesn't have and stay Technical-only in the Gas sensors table.
+    const items = [
+      { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
+      { label: "PM2.5", value: d.pm2_5_ugm3, decimals: 1, unit: "µg/m³", band: bandForConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER") },
+      { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
+      { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
+      { label: "Temp", value: displayTemp(d.temperature_c), decimals: 1, unit: tempUnitLabel(), band: null },
+      { label: "Humidity", value: d.humidity_pct, decimals: 1, unit: "%", band: null },
+      { label: "Pressure", value: d.pressure_hpa, decimals: 1, unit: "hPa", band: null },
+    ];
+    return items.map((it) => {
+      const valueHtml = typeof it.value === "number"
+        ? `${fmt(it.value, it.decimals)}${it.unit ? `<span class="op-unit">${it.unit}</span>` : ""}`
+        : "—";
+      const colorStyle = it.band ? ` style="color: ${bandVar(it.band)}"` : "";
+      return `<span class="outside-pollutant">${it.label}<span class="op-value"${colorStyle}>${valueHtml}</span></span>`;
+    }).join("");
   }
 
   function pollutantFactorsHtml(pollutants) {
