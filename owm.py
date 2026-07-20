@@ -23,12 +23,6 @@ COMPONENTS = [
 ]
 
 
-def is_configured():
-    # Configured means Node-RED has actually written OWM points -- there is
-    # no API key on the dashboard side to check.
-    return True
-
-
 def _epa_value(parameter, ugm3):
     """Convert an OWM µg/m³ reading into the unit EPA's breakpoint table
     for that parameter expects."""

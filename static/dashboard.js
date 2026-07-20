@@ -18,13 +18,6 @@
     return `${Math.round(s / 86400)}d ago`;
   }
 
-  function formatObservedHour(hour) {
-    if (typeof hour !== "number") return "—";
-    const d = new Date();
-    d.setHours(hour, 0, 0, 0);
-    return d.toLocaleTimeString([], { hour: "numeric" });
-  }
-
   /* ---------- temperature unit (F/C) ---------- */
   let currentUnit = localStorage.getItem("apollo-air1-unit") || "f";
 
@@ -101,8 +94,17 @@
    * noise. Just enough to show "trending up/down/flat" at a glance. */
   function renderMiniSpark(el, points, band) {
     if (!el) return;
-    if (!points || points.length < 2) { el.innerHTML = ""; return; }
+    if (!points || points.length === 0) { el.innerHTML = ""; return; }
     const w = el.clientWidth || 84, h = el.clientHeight || 34;
+    // A single sample (common for the sparse AirNow feed in a short window)
+    // can't draw a trend line -- show a centered dot so the tile reads as
+    // "one reading so far", not "broken/blank".
+    if (points.length === 1) {
+      const c = bandVar(band);
+      el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-hidden="true">
+        <circle cx="${(w / 2).toFixed(1)}" cy="${(h / 2).toFixed(1)}" r="3" fill="${c}" /></svg>`;
+      return;
+    }
     const vals = points.map((p) => p.v);
     const vMin = Math.min(...vals), vMax = Math.max(...vals);
     const pad = (vMax - vMin) * 0.15 || 1;
