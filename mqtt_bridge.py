@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -155,3 +156,16 @@ def publish_number(object_id, value):
 
 def publish_button(object_id):
     _client.publish(f"{_topic_prefix()}/button/{object_id}/command", "PRESS")
+
+
+def publish_config(topic, payload, retain=True):
+    """Publish a JSON config document to `topic`, retained by default so a
+    subscriber (Node-RED's home-config mqtt-in) picks up the current value the
+    moment it connects, even after a restart. Best-effort like the control
+    publishes: returns False when the broker link isn't up rather than raising,
+    so setting the home location degrades to "saved but not yet pushed" instead
+    of 500ing."""
+    if not available():
+        return False
+    _client.publish(topic, json.dumps(payload), qos=1, retain=retain)
+    return True

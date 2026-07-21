@@ -638,3 +638,10 @@
   display: inline-block; padding: 9px 6px; margin: -9px -6px;
 }
 .forecast-discussion p { white-space: pre-line; font-size: 0.8125rem; color: var(--ink-dim); margin: 10px 0 0; }
+
+/* ---------- Away page ---------- */
+.away-stats { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 6px; }
+.away-stats strong { font-weight: 700; }
+.away-hint { margin: 12px 0 0; color: var(--ink-dim); line-height: 1.4; }
+#away-chart, #away-note { margin-top: 6px; }
+#home-preview:not([hidden]) { margin-top: 10px; }

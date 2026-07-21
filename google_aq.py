@@ -8,6 +8,7 @@ import epa_aqi
 import influx
 
 FORECAST_URL = "https://airquality.googleapis.com/v1/forecast:lookup"
+HISTORY_URL = "https://airquality.googleapis.com/v1/history:lookup"
 
 FORECAST_CACHE_TTL_S = 3 * 60 * 60
 # Google's forecast supports up to 96h out, but rejects a period request
@@ -229,3 +230,54 @@ def get_history(hours):
     the frontend's overlay charts already expect, same convention as
     owm.py's get_history."""
     return aq_shared.history_points(influx.query_google_history(hours), "google_aqi_epa", _HISTORY_FIELD_MAP)
+
+
+# Google history pollutant code -> shared flat history key (gases already ppb,
+# particulates µg/m³ -- same convention as _HISTORY_FIELD_MAP above but keyed by
+# Google's own pollutant codes, which is what history:lookup returns live).
+_AWAY_CODE_FIELD = {
+    "pm25": "pm2_5_ugm3", "pm10": "pm10_ugm3", "o3": "o3_ppb",
+    "no2": "no2_ppb", "so2": "so2_ppb", "co": "co_ppb",
+}
+
+
+def get_away_history(lat, lon, days):
+    """LIVE call to Google's History API for an away location (Home reads the
+    DB instead -- see get_history). AQI is recomputed from concentrations with
+    the same EPA math as everywhere else. Points come back in the shared flat
+    history shape so the away charts reuse the home overlay renderer unchanged.
+    Paginated; capped at Google's 720-hour (30-day) limit."""
+    hours = min(days * 24, 720)
+    payload = {
+        "hours": hours,
+        "location": {"latitude": lat, "longitude": lon},
+        "extraComputations": ["POLLUTANT_CONCENTRATION"],
+        "languageCode": "en",
+        "pageSize": 168,
+    }
+    points = []
+    for _ in range(8):  # safety cap against an unbounded pagination loop
+        resp = requests.post(HISTORY_URL, params={"key": os.environ["GOOGLE_AQ_API_KEY"]},
+                             json=payload, timeout=20)
+        resp.raise_for_status()
+        body = resp.json()
+        for hour in body.get("hoursInfo") or []:
+            dt = hour.get("dateTime")
+            if not dt:
+                continue
+            pollutants = hour.get("pollutants") or []
+            aqi = _recomputed_aqi(pollutants)[0]
+            point = {"time": dt, "aqi": aqi}
+            for p in pollutants:
+                key = _AWAY_CODE_FIELD.get((p.get("code") or "").lower())
+                value = (p.get("concentration") or {}).get("value")
+                if key and isinstance(value, (int, float)):
+                    point[key] = round(value, 2)
+            points.append(point)
+        token = body.get("nextPageToken")
+        if not token:
+            break
+        payload["pageToken"] = token
+
+    points.sort(key=lambda p: p["time"])
+    return points

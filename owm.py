@@ -47,6 +47,7 @@ FORECAST_COMPONENTS = [
 # the forecast is fetched live and on demand -- exactly the pattern Google's
 # forecast uses. It's the one place this app calls OpenWeatherMap directly.
 FORECAST_URL = "https://api.openweathermap.org/data/2.5/air_pollution/forecast"
+HISTORY_URL = "https://api.openweathermap.org/data/2.5/air_pollution/history"
 FORECAST_CACHE_TTL_S = 3 * 60 * 60  # OWM refreshes the pollution model hourly
 
 _forecast_cache = aq_shared.TTLCache(FORECAST_CACHE_TTL_S)  # keyed by (lat, lon)
@@ -206,3 +207,53 @@ def _fetch_forecast(lat, lon):
 
 def get_forecast(lat, lon, force=False):
     return _forecast_cache.get(_cache_key(lat, lon), lambda: _fetch_forecast(lat, lon), force=force)
+
+
+# OWM history component key -> shared flat history key + the µg/m³->display
+# transform. Gases convert to ppb for the chart's units (a display conversion,
+# not AQI math -- the AQI is the worst-of computed below), same as the home
+# history map in owm.get_history / _HISTORY_FIELD_MAP.
+_AWAY_HISTORY_FIELDS = {
+    "pm2_5": ("pm2_5_ugm3", lambda v: v),
+    "pm10": ("pm10_ugm3", lambda v: v),
+    "o3": ("o3_ppb", lambda v: epa_aqi.ugm3_to_ppb("O3", v)),
+    "no2": ("no2_ppb", lambda v: epa_aqi.ugm3_to_ppb("NO2", v)),
+    "so2": ("so2_ppb", lambda v: epa_aqi.ugm3_to_ppb("SO2", v)),
+    "co": ("co_ppb", lambda v: epa_aqi.ugm3_to_ppb("CO", v)),
+}
+
+
+def get_away_history(lat, lon, days):
+    """LIVE call to OWM's air_pollution/history for an away location (Home reads
+    the DB instead -- see get_history). One request covers the whole window.
+    AQI is the worst-of-all-components EPA AQI, same as the stored current
+    reading; points come back in the shared flat history shape."""
+    end = int(datetime.now(UTC).timestamp())
+    start = end - days * 86400
+    resp = requests.get(
+        HISTORY_URL,
+        params={"lat": lat, "lon": lon, "start": start, "end": end, "appid": os.environ["OWM_API_KEY"]},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    points = []
+    for item in resp.json().get("list") or []:
+        dt = item.get("dt")
+        if dt is None:
+            continue
+        components = item.get("components") or {}
+        result = _forecast_aqi_dominant(components)
+        point = {
+            "time": datetime.fromtimestamp(dt, UTC).isoformat(),
+            "aqi": result[0] if result else None,
+        }
+        for key, (out_key, transform) in _AWAY_HISTORY_FIELDS.items():
+            value = components.get(key)
+            if isinstance(value, (int, float)):
+                converted = transform(value)
+                if converted is not None:
+                    point[out_key] = round(converted, 2)
+        points.append(point)
+
+    points.sort(key=lambda p: p["time"])
+    return points

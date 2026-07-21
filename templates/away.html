@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Away — Apollo AIR-1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#5fc9c1">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AIR-1">
+  <script>
+    (function () {
+      var t = localStorage.getItem("apollo-air1-theme");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+</head>
+<body>
+
+<div class="faceplate">
+  <div class="faceplate-inner">
+    <div class="device-id">
+      <span class="device-name">AWAY</span>
+    </div>
+    <div class="header-controls">
+      <a class="pill-link" href="/">← Dashboard</a>
+      <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M12 3v2.4M12 18.6V21M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M3 12h2.4M18.6 12H21M5.4 18.6l1.7-1.7M16.9 7.1l1.7-1.7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="settings-backdrop" hidden></div>
+<div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
+  <div class="settings-panel-head">Settings</div>
+  <div class="settings-row">
+    <span class="cl-name">Theme</span>
+    <div class="settings-rail theme-toggle" role="tablist" aria-label="Color theme">
+      <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <section class="view view-fade">
+    <div class="zone-banner zone-banner--outside">
+      <span class="zone-dot"></span> Away — live 7-day history (not logged)
+    </div>
+
+    <!-- ============ AWAY LOCATION ============ -->
+    <div class="chart-card">
+      <div class="forecast-card-head">
+        <div class="forecast-area eyebrow" id="away-area">No away location set</div>
+        <div class="forecast-meta">
+          <button type="button" class="refresh-btn" id="away-set-toggle">Change</button>
+          <button type="button" class="refresh-btn" id="away-refresh">Refresh</button>
+        </div>
+      </div>
+
+      <form class="add-location-form" id="away-form" hidden>
+        <input type="text" id="away-zip" placeholder="ZIP — a place to peek at" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+        <button type="submit">Set away</button>
+        <button type="button" id="away-cancel">Cancel</button>
+      </form>
+
+      <div class="location-switch" id="away-providers"></div>
+      <div class="away-stats eyebrow" id="away-stats"></div>
+      <div class="chart-svg-wrap" id="away-chart"></div>
+      <div class="fd-dominant" id="away-note"></div>
+    </div>
+
+    <!-- ============ HOME LOCATION EDITOR ============ -->
+    <div class="chart-card">
+      <div class="forecast-card-head">
+        <div class="forecast-area eyebrow">Home location</div>
+        <button type="button" class="refresh-btn" id="home-edit-toggle">Change</button>
+      </div>
+      <div class="fd-dominant" id="home-current">Loading…</div>
+
+      <form class="add-location-form" id="home-form" hidden>
+        <input type="text" id="home-label" placeholder="Name (optional)" maxlength="40" autocomplete="off">
+        <input type="text" id="home-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+        <button type="button" id="home-find">Find sensor</button>
+        <button type="submit">Save home</button>
+        <button type="button" id="home-cancel">Cancel</button>
+      </form>
+      <div class="fd-dominant" id="home-preview" hidden></div>
+      <p class="away-hint eyebrow">Changing home re-points what's polled and logged. Old history stays under the old location; charts spanning the change show a step.</p>
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <span>apollo-air1-dashboard</span>
+    <span id="footer-clock"></span>
+  </footer>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script src="{{ url_for('static', filename='aqi.js') }}"></script>
+<script src="{{ url_for('static', filename='common.js') }}"></script>
+<script src="{{ url_for('static', filename='chart.js') }}"></script>
+<script src="{{ url_for('static', filename='away.js') }}"></script>
+</body>
+</html>
