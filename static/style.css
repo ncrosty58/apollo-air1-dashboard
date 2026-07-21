@@ -432,19 +432,16 @@
 /* Each chip carries its own provider's live AQI, not just a selected state --
    closer to the outside-tech pollutant badges than to a plain tab control,
    since tapping one is also how you learn what the other three are reading.
-   Four chips don't fit one line on a phone -- flex-wrap there produces a
-   ragged, uneven-looking second row, so below the breakpoint this becomes a
-   single horizontally-scrolling row instead (a native, familiar mobile
-   pattern) rather than wrapping. Bleeds to the rack's own edges so a partial
-   next chip peeks in as a scroll affordance. */
+   Four chips of uneven natural width (label length + a 1-3 digit AQI) don't
+   fit one flex row on a phone -- wrapping left them floating unevenly, and a
+   horizontal scroll still let each chip claim only as much width as its own
+   text needed, so neighboring chips never lined up. A fixed 2-column grid
+   below the breakpoint gives every chip the same cell width instead, so the
+   row reads as one evenly spaced control regardless of label length. */
 .provider-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 @media (max-width: 560px) {
-  .provider-chips {
-    flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity;
-    margin: 0 -18px 12px; padding: 0 18px 4px; scrollbar-width: none;
-  }
-  .provider-chips::-webkit-scrollbar { display: none; }
-  .provider-chip { flex: none; scroll-snap-align: start; }
+  .provider-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .provider-chip { justify-content: center; }
 }
 .provider-chip {
   display: flex; align-items: center; gap: 6px; border: none;
