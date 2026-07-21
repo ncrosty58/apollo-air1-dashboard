@@ -266,20 +266,19 @@
     link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
   }
 
-  // Indoor air is physically tied to Home -- hide the Inside vs Outside
-  // overlay charts, and the Temperature/humidity/pressure section at the
+  // Indoor air is physically tied to Home -- hide the whole Inside vs
+  // Outside section, and the Temperature/humidity/pressure section at the
   // bottom of the page, entirely in Away mode (comparing either to a remote
-  // location would be misleading), leaving just the current reading +
-  // outside-only history. The shared range toggle stays visible either way
-  // (it also drives the Outside-only section in between).
+  // location would be misleading), leaving just the current reading + the
+  // shared range toggle + outside-only history. The range toggle lives in
+  // its own row above both sections (see technical.html), so it isn't tied
+  // to either one's visibility.
   function applyModeVisibility() {
     const away = currentMode() === "away";
-    const chartsEl = document.getElementById("inside-outside-charts");
-    if (chartsEl) chartsEl.hidden = away;
+    const sectionEl = document.getElementById("section-inside-outside");
+    if (sectionEl) sectionEl.hidden = away;
     const weatherEl = document.getElementById("section-inside-outside-weather");
     if (weatherEl) weatherEl.hidden = away;
-    const titleEl = document.getElementById("inside-outside-title");
-    if (titleEl) titleEl.textContent = away ? "Outside history" : "Inside vs Outside";
   }
 
   // Readout=AQI (the default) is a non-technical read: every pollutant

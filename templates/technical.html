@@ -111,6 +111,25 @@
       </div>
     </div>
 
+    <!-- One range control for the whole page (drives Inside vs Outside,
+         Outside only, and the weather section below), living in its own row
+         rather than inside either section's title -- Inside vs Outside is
+         hidden outright in Away mode (see applyModeVisibility), and a title
+         that has to keep switching between "Inside vs Outside" and "Outside
+         history" just to hold onto the toggle ended up sitting right on top
+         of "Outside only" with nothing in between. -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">History range</span>
+        <div class="range-toggle" id="range-toggle-outside">
+          <button type="button" data-range="6" aria-pressed="false">6h</button>
+          <button type="button" data-range="24" aria-pressed="true">24h</button>
+          <button type="button" data-range="72" aria-pressed="false">3d</button>
+          <button type="button" data-range="168" aria-pressed="false">7d</button>
+        </div>
+      </div>
+    </div>
+
     <!-- AQI is the one signal every provider gives on a shared 0-500 scale,
          so it's the universal inside/outside overlay. Providers that give
          raw concentrations (Google, PurpleAir, OpenWeatherMap) overlay
@@ -124,21 +143,13 @@
          overlay. Inside and Outside share one row per metric (not separate
          rows) since they're the same scale -- dashed vs solid tells them
          apart since color here is already spoken for by severity. -->
-    <div class="section">
+    <!-- Indoor air is physically tied to Home -- comparing it against a
+         remote Away location is misleading, so this whole section is hidden
+         in Away mode (see technical.js's applyModeVisibility). -->
+    <div class="section" id="section-inside-outside">
       <div class="section-head">
-        <span class="section-title" id="inside-outside-title">Inside vs Outside</span>
-        <!-- Shared by the Outside-only section below too -- one range control
-             for the whole page, so it lives here regardless of mode. -->
-        <div class="range-toggle" id="range-toggle-outside">
-          <button type="button" data-range="6" aria-pressed="false">6h</button>
-          <button type="button" data-range="24" aria-pressed="true">24h</button>
-          <button type="button" data-range="72" aria-pressed="false">3d</button>
-          <button type="button" data-range="168" aria-pressed="false">7d</button>
-        </div>
+        <span class="section-title">Inside vs Outside</span>
       </div>
-      <!-- Indoor air is physically tied to Home -- comparing it against a
-           remote Away location is misleading, so this is hidden entirely in
-           Away mode (see technical.js's modechange handler). -->
       <div id="inside-outside-charts">
         <div class="chart-card">
           <h4>AQI <span class="eyebrow" style="font-weight:500">dashed = inside, solid = outside</span></h4>

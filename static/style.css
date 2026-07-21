@@ -141,14 +141,22 @@
     background: var(--panel);
     border-bottom: 1px solid var(--hairline);
   }
+  /* Never wraps, on any page, at any width: device-id (branding + status) is
+     the one flexible/sacrificial side (flex: 1 1 auto, shrinks and clips via
+     overflow: hidden well before it would wrap); header-controls (the actual
+     buttons -- back, mode toggle, gear) holds its natural size (flex: none)
+     so touch targets never get squeezed. A 2-line header reads as broken in
+     a way a tightened one-line header doesn't. */
   .faceplate-inner {
     max-width: 1080px; margin: 0 auto; padding: 16px 20px;
-    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: nowrap;
   }
   /* min-width: 0 lets this shrink below its text's natural width instead of
      forcing .faceplate-inner wider -- needed for .device-sub's ellipsis
-     (below) to actually engage instead of just sitting unused. */
-  .device-id { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+     (below) to actually engage instead of just sitting unused. overflow:
+     hidden is the last-resort clip guard if even the ellipsized subtitle
+     plus the full device name can't both fit. */
+  .device-id { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; min-width: 0; flex: 1 1 auto; overflow: hidden; }
   .lamp {
     width: 13px; height: 13px; border-radius: 50%; flex: none;
     box-shadow: var(--shadow-inset), 0 0 0 3px var(--panel-sunken);
@@ -172,7 +180,7 @@
      dot already carries the same state at a glance. */
   .device-sub { font-size: 0.75rem; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
 
-  .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; flex: none; }
 
   /* Back-to-dashboard on Technical/Indoor/Forecast -- an icon-only circle
      (same footprint as the settings gear) instead of a text pill, so the
@@ -214,6 +222,25 @@
   .settings-gear svg { width: 18px; height: 18px; }
   .settings-gear[aria-expanded="true"] {
     background: var(--accent); color: var(--accent-ink); box-shadow: none; border-color: var(--accent);
+  }
+
+  /* Belt-and-suspenders for the never-wraps rule above: header-controls holds
+     its natural size on purpose, so on a narrow phone it's the one that has
+     to give a little too, or device-id (already shrinking) would have to
+     clip more than necessary. Only the header's own mode rail is targeted
+     (not .settings-rail generally -- the readout/unit/theme toggles inside
+     the settings popover have their own room and stay full-size). */
+  @media (max-width: 480px) {
+    .faceplate-inner { gap: 10px; }
+    .header-controls { gap: 6px; }
+    .device-id { gap: 8px; }
+    .mode-rail button { padding: 12px 10px; }
+  }
+  /* Below this, drop the connection-status subtitle entirely rather than
+     lean harder on the ellipsis -- the lamp dot alone still carries the
+     same state, and the device name reads better whole than clipped. */
+  @media (max-width: 380px) {
+    .device-sub { display: none; }
   }
 
   .settings-backdrop {
