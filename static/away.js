@@ -6,6 +6,7 @@
   // toggle, settings panel, and clock self-init in common.js.
 
   const AWAY_PROVIDERS = [
+    { id: "airnow", label: "AirNow" },
     { id: "google", label: "Google" },
     { id: "openweathermap", label: "OWM" },
     { id: "purpleair", label: "PurpleAir" },

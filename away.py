@@ -9,6 +9,7 @@ providers with a historical-by-coordinate API are supported -- Google, OWM
 pollution, and PurpleAir (via its nearest-sensor resolver). See the reconcile
 note in home_config.py."""
 
+import airnow
 import aq_shared
 import google_aq
 import owm
@@ -20,23 +21,26 @@ CACHE_TTL_S = 60 * 60
 
 _cache = aq_shared.TTLCache(CACHE_TTL_S)
 
-# provider -> fetcher(lat, lon, days) -> {"points": [...], "sensor"?: {...}}.
-# Google/OWM return a bare point list; PurpleAir also reports which sensor it
-# resolved, so it returns the richer dict. Normalized to always carry "points".
+# provider -> fetcher(loc, days) -> {"points": [...], "sensor"?: {...}}, where
+# loc carries {zip, lat, lon}. AirNow keys off the zip directly (no geocoding);
+# Google/OWM/PurpleAir off coords. Google/OWM/AirNow return a bare point list;
+# PurpleAir also reports which sensor it resolved. Normalized to carry "points".
 _FETCHERS = {
-    "google": lambda lat, lon, days: {"points": google_aq.get_away_history(lat, lon, days)},
-    "openweathermap": lambda lat, lon, days: {"points": owm.get_away_history(lat, lon, days)},
-    "purpleair": lambda lat, lon, days: purpleair.get_away_history(lat, lon, days),
+    "airnow": lambda loc, days: {"points": airnow.get_away_history(loc["zip"], days)},
+    "google": lambda loc, days: {"points": google_aq.get_away_history(loc["lat"], loc["lon"], days)},
+    "openweathermap": lambda loc, days: {"points": owm.get_away_history(loc["lat"], loc["lon"], days)},
+    "purpleair": lambda loc, days: purpleair.get_away_history(loc["lat"], loc["lon"], days),
 }
 
 PROVIDERS = tuple(_FETCHERS)
 
 
-def history(provider, lat, lon, days, force=False):
-    """Cached away history for one provider. Returns the provider's result dict
-    ({points, sensor?}), or None for an unknown provider (caller -> 400)."""
+def history(provider, loc, days, force=False):
+    """Cached away history for one provider. `loc` is the stored away record
+    ({zip, lat, lon}). Returns the provider's result dict ({points, sensor?}),
+    or None for an unknown provider (caller -> 400)."""
     fetch = _FETCHERS.get(provider)
     if fetch is None:
         return None
-    key = (provider, round(lat, 3), round(lon, 3), days)
-    return _cache.get(key, lambda: fetch(lat, lon, days), force=force)
+    key = (provider, loc.get("zip"), round(loc["lat"], 3), round(loc["lon"], 3), days)
+    return _cache.get(key, lambda: fetch(loc, days), force=force)

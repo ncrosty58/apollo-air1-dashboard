@@ -1,6 +1,7 @@
 """Unit tests for the Away path: the PurpleAir nearest-sensor resolver + its
 Barkjohn correction, and the Google/OWM/PurpleAir away-history reshapers plus
 the away.py cache. All upstream HTTP is monkeypatched -- no network, no DB."""
+import airnow
 import away
 import google_aq
 import owm
@@ -110,8 +111,28 @@ def test_owm_away_history_reshapes_and_sorts(monkeypatch):
 
 # ---------- away.py orchestration + cache ----------
 
+def test_airnow_away_history_dedups_dominant_and_sorts(monkeypatch):
+    monkeypatch.setenv("AIRNOW_API_KEY", "k")
+
+    # One "call per day" returns that day's readings; two pollutants share a
+    # timestamp -> keep the dominant (max) AQI; -1 (not computed) is dropped.
+    def fake_get(url, params=None, **k):
+        date = params["date"][:10]
+        return FakeResp([
+            {"DateObserved": date + " ", "HourObserved": 9, "ParameterName": "O3", "AQI": 40},
+            {"DateObserved": date + " ", "HourObserved": 9, "ParameterName": "PM2.5", "AQI": 55},
+            {"DateObserved": date + " ", "HourObserved": 10, "ParameterName": "PM2.5", "AQI": -1},
+        ])
+
+    monkeypatch.setattr(airnow.requests, "get", fake_get)
+    pts = airnow.get_away_history("54554", 3)
+    assert len(pts) == 3  # 3 days, one usable hour each (the -1 hour dropped)
+    assert pts[0]["time"] < pts[-1]["time"]  # sorted ascending
+    assert all(p["aqi"] == 55 for p in pts)  # dominant PM2.5 wins over O3
+
+
 def test_away_history_unknown_provider():
-    assert away.history("nope", 1, 2, 7) is None
+    assert away.history("nope", {"zip": "x", "lat": 1, "lon": 2}, 7) is None
 
 
 def test_away_history_caches(monkeypatch):
@@ -119,7 +140,8 @@ def test_away_history_caches(monkeypatch):
     monkeypatch.setattr(away.google_aq, "get_away_history",
                         lambda lat, lon, days: calls.append(1) or [{"time": "t", "aqi": 1}])
     away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)  # fresh cache
-    r1 = away.history("google", 42.0, -83.0, 7)
-    r2 = away.history("google", 42.0, -83.0, 7)
+    loc = {"zip": "z", "lat": 42.0, "lon": -83.0}
+    r1 = away.history("google", loc, 7)
+    r2 = away.history("google", loc, 7)
     assert r1 == r2 == {"points": [{"time": "t", "aqi": 1}]}
     assert len(calls) == 1  # second call served from cache, no upstream hit
