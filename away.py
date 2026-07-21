@@ -92,12 +92,29 @@ def history(provider, loc, days, force=False):
 
 
 def current(provider, loc):
-    """Away's analogue of the DB-backed providers' get_current_observation():
-    the latest point of the same cached 7-day history the chart already fetches
-    (so a single upstream call/cache entry serves both), reduced through
-    aq_shared.away_observation into the identical current-conditions shape.
-    Returns None for an unknown provider, or when the history came back empty
-    (e.g. PurpleAir with no healthy sensor nearby)."""
+    """Away's analogue of the DB-backed providers' get_current_observation().
+    For Google/OWM/PurpleAir this is the latest point of the same cached
+    7-day history the chart already fetches (so a single upstream call/cache
+    entry serves both), reduced through aq_shared.away_observation into the
+    identical current-conditions shape.
+
+    AirNow is the exception: its *historical* endpoint (get_away_history,
+    used for the chart) deliberately collapses each hour to one dominant AQI
+    number, dropping the per-pollutant breakdown -- reducing from it here
+    would show a headline AQI with no pollutant rows underneath, unlike every
+    other provider. Its *current*-conditions endpoint has that breakdown (the
+    same one Home's AirNow reading already shows), so this calls that
+    directly instead -- a second live call, but zip-keyed with its own 20min
+    cache in airnow.py, not the 7-day historical fetch.
+
+    Returns None for an unknown provider, or when there's no data (e.g.
+    PurpleAir with no healthy sensor nearby)."""
+    if provider == "airnow":
+        obs = airnow.get_current_observation(loc["zip"])
+        if obs is None:
+            return None
+        return {**obs, "time": obs.get("time")}  # every other provider's shape always carries a time key
+
     field_defs = _FIELD_DEFS.get(provider)
     if field_defs is None:
         return None

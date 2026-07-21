@@ -185,3 +185,27 @@ def test_current_no_points_is_none(monkeypatch):
 
 def test_current_unknown_provider_is_none():
     assert away.current("nope", {"zip": "x", "lat": 1, "lon": 2}) is None
+
+
+def test_current_airnow_uses_live_observation_not_history(monkeypatch):
+    # Unlike the other three, AirNow's current() doesn't reduce a history
+    # point -- its historical endpoint has no per-pollutant breakdown to
+    # reduce. It calls the live current-observation endpoint directly, so a
+    # get_away_history stub is deliberately left unset here: if current()
+    # ever regresses to calling it, this test would error rather than pass.
+    monkeypatch.setattr(away.airnow, "get_current_observation", lambda zip_code: {
+        "aqi": 172, "category": "Unhealthy", "band": "bad", "dominant_pollutant": "O3",
+        "reporting_area": "Chicago, IL", "observed_hour": 14,
+        "pollutants": [{"parameter": "O3", "aqi": 172, "category": "Unhealthy"}],
+    })
+    loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
+    obs = away.current("airnow", loc)
+    assert obs["aqi"] == 172
+    assert obs["pollutants"] == [{"parameter": "O3", "aqi": 172, "category": "Unhealthy"}]
+    assert obs["time"] is None  # AirNow's live shape carries no "time" key -- normalized here
+
+
+def test_current_airnow_no_data_is_none(monkeypatch):
+    monkeypatch.setattr(away.airnow, "get_current_observation", lambda zip_code: None)
+    loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
+    assert away.current("airnow", loc) is None

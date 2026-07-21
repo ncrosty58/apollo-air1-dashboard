@@ -326,6 +326,20 @@
     document.getElementById("add-location-form").hidden = true;
   });
 
+  // The header's Home/Away rail (common.js) jumps this page to the other
+  // location too, same as the dashboard and Technical -- without this it
+  // only took effect on a fresh page load via ?zip=, not while already here.
+  document.addEventListener("modechange", async (e) => {
+    if (e.detail && e.detail.mode === "away") {
+      const awayLoc = await fetchAwayLoc();
+      selectedZip = awayLoc ? awayLoc.zip : null;
+    } else {
+      selectedZip = null;
+    }
+    renderLocationSwitch();
+    loadForecast();
+  });
+
   document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
   loadLocations();
   fetchAwayLoc().then(renderLocationSwitch);

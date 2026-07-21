@@ -94,21 +94,34 @@ def test_outside_away_unsupported_provider_rejected(client):
     assert "Away mode" in res.get_json()["error"]
 
 
-def test_outside_away_airnow_works_on_limited_basis(client, monkeypatch):
-    # AirNow is included in Away (its historical endpoint is zip-keyed) but
-    # its away points carry only {time, aqi} -- no per-pollutant breakdown --
-    # a coarser series than the hourly providers (see away.py's docstring).
+def test_outside_away_airnow_uses_live_current_not_history(client, monkeypatch):
+    # AirNow's *historical* endpoint (the chart) collapses each hour to one
+    # dominant AQI with no per-pollutant breakdown -- current conditions calls
+    # the live current-observation endpoint directly instead (same one Home's
+    # AirNow reading uses), so it shows a full pollutant breakdown like every
+    # other provider rather than a bare headline number.
     monkeypatch.setenv("AIRNOW_API_KEY", "k")
     monkeypatch.setattr(home_config, "get_away",
                         lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
-    monkeypatch.setattr(away.airnow, "get_away_history",
-                        lambda zip_code, days: [{"time": "2026-07-20T10:00:00Z", "aqi": 42}])
-    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+    monkeypatch.setattr(away.airnow, "get_current_observation", lambda zip_code: {
+        "aqi": 172, "category": "Unhealthy", "band": "bad", "dominant_pollutant": "O3",
+        "reporting_area": "Chicago, IL", "observed_hour": 14,
+        "pollutants": [{"parameter": "O3", "aqi": 172, "category": "Unhealthy"}],
+    })
     res = client.get("/api/outside?provider=airnow&mode=away")
     assert res.status_code == 200
     body = res.get_json()
-    assert body["aqi"] == 42
-    assert body["pollutants"] == []
+    assert body["aqi"] == 172
+    assert body["pollutants"] == [{"parameter": "O3", "aqi": 172, "category": "Unhealthy"}]
+
+
+def test_outside_away_airnow_no_data_is_404(client, monkeypatch):
+    monkeypatch.setenv("AIRNOW_API_KEY", "k")
+    monkeypatch.setattr(home_config, "get_away",
+                        lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
+    monkeypatch.setattr(away.airnow, "get_current_observation", lambda zip_code: None)
+    res = client.get("/api/outside?provider=airnow&mode=away")
+    assert res.status_code == 404
 
 
 def test_outside_away_missing_key_is_400(client, monkeypatch):
