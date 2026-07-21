@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime, timedelta
 
 import requests
 
@@ -6,6 +7,7 @@ import aq_shared
 from epa_aqi import band_for_aqi, band_for_category  # used internally; band math lives in epa_aqi
 
 API_URL = "https://www.airnowapi.org/aq/observation/zipCode/current/"
+HISTORICAL_API_URL = "https://www.airnowapi.org/aq/observation/zipCode/historical/"
 FORECAST_API_URL = "https://www.airnowapi.org/aq/forecast/zipCode/"
 CACHE_TTL_S = 20 * 60  # AirNow refreshes hourly, but the exact publish moment within the
 # hour isn't fixed and its own reporting lag varies -- a shorter cache
@@ -197,3 +199,50 @@ def _fetch_forecast(zip_code):
 
 def get_forecast(zip_code, force=False):
     return _forecast_cache.get(zip_code, lambda: _fetch_forecast(zip_code), force=force)
+
+
+def _fetch_historical(zip_code, day):
+    """One AirNow historical-observation call for a single date. Best-effort:
+    returns [] on any error so a sparse/failed day just contributes no points
+    rather than sinking the whole window."""
+    try:
+        resp = requests.get(
+            HISTORICAL_API_URL,
+            params={
+                "format": "application/json",
+                "zipCode": zip_code,
+                "date": day.strftime("%Y-%m-%dT00-0000"),
+                "distance": SEARCH_DISTANCE_MI,
+                "API_KEY": os.environ["AIRNOW_API_KEY"],
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return resp.json() or []
+    except Exception:
+        return []
+
+
+def get_away_history(zip_code, days):
+    """LIVE AirNow historical-by-zip for an away location. AirNow's historical
+    endpoint is date-parameterized (one call per day) and its archive is sparse,
+    so this is a coarser series than the hourly providers -- one call per day
+    over the window, keeping the dominant (max across pollutants) AQI at each
+    observed hour. Points come back in the shared flat history shape ({time,
+    aqi}). AirNow is keyed by zip directly, so no geocoding is needed."""
+    today = datetime.now(UTC).date()
+    by_time = {}
+    for d in range(days):
+        day = today - timedelta(days=d)
+        for r in _fetch_historical(zip_code, day):
+            aqi = r.get("AQI")
+            if aqi is None or aqi < 0:  # -1 = not computed
+                continue
+            date_observed = (r.get("DateObserved") or "").strip()
+            hour = r.get("HourObserved")
+            if not date_observed or hour is None:
+                continue
+            ts = f"{date_observed}T{int(hour):02d}:00:00"
+            if ts not in by_time or aqi > by_time[ts]:
+                by_time[ts] = int(round(aqi))
+    return [{"time": t, "aqi": v} for t, v in sorted(by_time.items())]

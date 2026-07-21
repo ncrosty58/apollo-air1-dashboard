@@ -525,6 +525,7 @@ def api_away_clear():
 # Away history is live per provider -- each needs its own API key set on the app
 # container (unlike Home, which reads Node-RED's writes from the DB).
 _AWAY_PROVIDER_KEYS = {
+    "airnow": "AIRNOW_API_KEY",
     "google": "GOOGLE_AQ_API_KEY",
     "openweathermap": "OWM_API_KEY",
     "purpleair": "PURPLEAIR_API_KEY",
@@ -548,7 +549,7 @@ def api_away_history():
     days = max(1, min(days, 30))
     force = request.args.get("refresh") in ("1", "true")
     try:
-        result = away.history(provider, away_loc["lat"], away_loc["lon"], days, force=force)
+        result = away.history(provider, away_loc, days, force=force)
     except Exception:
         logging.exception("Away history fetch failed provider=%s", provider)
         return jsonify({"error": f"{provider} request failed"}), 502
