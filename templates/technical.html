@@ -157,6 +157,15 @@
         <span class="section-title">Outside only</span>
         <span class="section-note">Same range as above</span>
       </div>
+      <!-- Home already has this signal for free -- the outside half of the
+           Inside-vs-Outside AQI overlay above. That section is hidden in Away
+           mode (no indoor reading to compare against), so this is Away's own
+           plain AQI trend line instead -- the one field every provider's
+           history carries, including AirNow's otherwise-empty away chart. -->
+      <div class="chart-card" id="card-outside-aqi-history" hidden>
+        <h4>Outside AQI history</h4>
+        <div class="chart-svg-wrap" id="chart-outside-aqi-history"></div>
+      </div>
       <div class="chart-card" id="card-outside-pollutants-aqi">
         <h4>Outside pollutants <span class="eyebrow" style="font-weight:500">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>

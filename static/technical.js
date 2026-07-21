@@ -163,6 +163,17 @@
   }
 
   function renderOutsideCharts(outsidePoints, rangeLabel) {
+    // Away's plain AQI trend line -- see the card's own comment in
+    // technical.html for why this only shows there (Home already has this
+    // via the Inside-vs-Outside AQI overlay, hidden in Away mode).
+    const isAway = currentMode() === "away";
+    document.getElementById("card-outside-aqi-history").hidden = !isAway;
+    if (isAway) {
+      renderPollutantRows("chart-outside-aqi-history", outsidePoints, [
+        ["aqi", "AQI", "", 0, bandFromAqi],
+      ], rangeLabel, "Outside AQI history");
+    }
+
     const mode = outsideExtraPollutantsMode();
     document.getElementById("card-outside-pollutants-aqi").hidden = mode !== "aqi";
     document.getElementById("card-outside-pollutants-gases").hidden = mode !== "gases";
