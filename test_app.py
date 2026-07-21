@@ -87,12 +87,28 @@ def test_outside_away_no_location_is_404(client, monkeypatch):
     assert "no away location set" in res.get_json()["error"]
 
 
-def test_outside_away_airnow_rejected(client):
-    # AirNow has no live per-location API -- excluded from Away regardless of
-    # whether an away location is set or a key is configured.
-    res = client.get("/api/outside?provider=airnow&mode=away")
+def test_outside_away_unsupported_provider_rejected(client):
+    # Only providers away.py actually supports are offered in Away mode.
+    res = client.get("/api/outside?provider=nope&mode=away")
     assert res.status_code == 400
     assert "Away mode" in res.get_json()["error"]
+
+
+def test_outside_away_airnow_works_on_limited_basis(client, monkeypatch):
+    # AirNow is included in Away (its historical endpoint is zip-keyed) but
+    # its away points carry only {time, aqi} -- no per-pollutant breakdown --
+    # a coarser series than the hourly providers (see away.py's docstring).
+    monkeypatch.setenv("AIRNOW_API_KEY", "k")
+    monkeypatch.setattr(home_config, "get_away",
+                        lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
+    monkeypatch.setattr(away.airnow, "get_away_history",
+                        lambda zip_code, days: [{"time": "2026-07-20T10:00:00Z", "aqi": 42}])
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+    res = client.get("/api/outside?provider=airnow&mode=away")
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["aqi"] == 42
+    assert body["pollutants"] == []
 
 
 def test_outside_away_missing_key_is_400(client, monkeypatch):
@@ -117,7 +133,8 @@ def test_outside_away_happy_path(client, monkeypatch):
     assert res.get_json()["reporting_area"] == "Chicago"
 
 
-def test_outside_all_away_filters_to_away_providers(client, monkeypatch):
+def test_outside_all_away_covers_every_provider(client, monkeypatch):
+    monkeypatch.setenv("AIRNOW_API_KEY", "k")
     monkeypatch.setenv("GOOGLE_AQ_API_KEY", "k")
     monkeypatch.setenv("OWM_API_KEY", "k")
     monkeypatch.setenv("PURPLEAIR_API_KEY", "k")
@@ -125,7 +142,7 @@ def test_outside_all_away_filters_to_away_providers(client, monkeypatch):
     res = client.get("/api/outside/all?mode=away")
     assert res.status_code == 200
     body = res.get_json()
-    assert set(body.keys()) == {"google", "purpleair", "openweathermap"}
+    assert set(body.keys()) == {"airnow", "google", "purpleair", "openweathermap"}
     assert all(v == {"available": False, "reason": "no away location set"} for v in body.values())
 
 
@@ -144,6 +161,34 @@ def test_outside_history_away_trims_to_hours(client, monkeypatch):
     assert res.status_code == 200
     points = res.get_json()
     assert points == [{"time": recent, "aqi": 2}]
+
+
+def test_outside_away_repeated_requests_share_one_upstream_call(client, monkeypatch):
+    # A page refresh (or the current-conditions card and the history chart
+    # both loading) must not re-hit the provider -- away.history's 1h TTL
+    # cache is shared across every mode=away route, keyed regardless of
+    # which endpoint asks first.
+    # The real .env is loaded into os.environ at app import time -- explicitly
+    # unset the other providers' keys so a mistake here can't quietly fall
+    # through to a real network call the way it did until this was caught.
+    monkeypatch.setenv("GOOGLE_AQ_API_KEY", "k")
+    monkeypatch.delenv("AIRNOW_API_KEY", raising=False)
+    monkeypatch.delenv("OWM_API_KEY", raising=False)
+    monkeypatch.delenv("PURPLEAIR_API_KEY", raising=False)
+    monkeypatch.setattr(home_config, "get_away",
+                        lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
+    calls = []
+    monkeypatch.setattr(away.google_aq, "get_away_history", lambda lat, lon, days: (
+        calls.append(1) or [{"time": "2026-07-20T10:00:00Z", "aqi": 42, "pm2_5_ugm3": 12.0}]
+    ))
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+
+    assert client.get("/api/outside?provider=google&mode=away").status_code == 200
+    assert client.get("/api/outside?provider=google&mode=away").status_code == 200
+    assert client.get("/api/outside/history?provider=google&mode=away&hours=24").status_code == 200
+    assert client.get("/api/outside/all?mode=away").status_code == 200
+
+    assert len(calls) == 1  # every request above served from the one cache entry
 
 
 def test_forecast_zip_resolves_away_location(client, monkeypatch):

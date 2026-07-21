@@ -103,11 +103,6 @@
   function defaultProvider() {
     return currentMode() === "away" ? "google" : "airnow";
   }
-  function providersForMode() {
-    // AirNow has no live per-location story -- Away only ever offers the
-    // three providers away.py supports (see away.PROVIDER_KEYS server-side).
-    return currentMode() === "away" ? PROVIDER_ORDER.filter((p) => p !== "airnow") : PROVIDER_ORDER;
-  }
   let currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
 
   function providerLabel() {
@@ -133,7 +128,7 @@
     try {
       const res = await fetch(`/api/outside/all?mode=${currentMode()}`);
       const summary = res.ok ? await res.json() : {};
-      wrap.innerHTML = providersForMode().map((p) => {
+      wrap.innerHTML = PROVIDER_ORDER.map((p) => {
         const s = summary[p] || { available: false };
         const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
         const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";

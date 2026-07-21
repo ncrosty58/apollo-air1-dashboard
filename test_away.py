@@ -184,4 +184,4 @@ def test_current_no_points_is_none(monkeypatch):
 
 
 def test_current_unknown_provider_is_none():
-    assert away.current("airnow", {"zip": "x", "lat": 1, "lon": 2}) is None
+    assert away.current("nope", {"zip": "x", "lat": 1, "lon": 2}) is None

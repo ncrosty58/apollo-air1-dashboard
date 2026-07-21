@@ -1,14 +1,17 @@
-"""Away view -- live, unpersisted 7-day history for a second location the user
-wants to peek at, without polluting Home's InfluxDB series (see
-home_config.py). Each provider's history is a live upstream call, so results
-are cached with a long-ish TTL: away history moves slowly and these calls are
-billable, so a page refresh or a second viewer must not re-hit the APIs.
+"""Away view -- live, unpersisted history for a second location the user wants
+to peek at, without polluting Home's InfluxDB series (see home_config.py).
+Each provider's history is a live upstream call, so results are cached with a
+long-ish TTL: away history moves slowly and these calls are billable/rate-
+limited, so a page refresh or a second viewer must not re-hit the APIs.
 
-Nothing here writes to InfluxDB; Away never appears in Grafana. Only the
-providers with a historical-by-coordinate API are supported -- Google, OWM
-pollution, and PurpleAir (via its nearest-sensor resolver). See the reconcile
-note in home_config.py."""
+Nothing here writes to InfluxDB; Away never appears in Grafana. AirNow is
+included on a more limited basis than the other three: its historical
+endpoint is zip- and date-parameterized (one HTTP call per day of window,
+not a single ranged call), and its archive is sparse -- a coarser, roughly-
+daily series next to Google/OWM/PurpleAir's hourly ones. The 1h cache below
+caps that cost the same way it caps the others."""
 
+import airnow
 import aq_shared
 import google_aq
 import owm
@@ -21,12 +24,11 @@ CACHE_TTL_S = 60 * 60
 _cache = aq_shared.TTLCache(CACHE_TTL_S)
 
 # provider -> fetcher(loc, days) -> {"points": [...], "sensor"?: {...}}, where
-# loc carries {zip, lat, lon}. Google/OWM/PurpleAir key off coords. Google/OWM
-# return a bare point list; PurpleAir also reports which sensor it resolved.
-# Normalized to carry "points". AirNow is deliberately not offered here -- it
-# has no live per-location story the way the other three do (see
-# home-away-location-plan), so Away only ever covers these three.
+# loc carries {zip, lat, lon}. AirNow keys off the zip directly (no geocoding);
+# Google/OWM/PurpleAir off coords. Google/OWM/AirNow return a bare point list;
+# PurpleAir also reports which sensor it resolved. Normalized to carry "points".
 _FETCHERS = {
+    "airnow": lambda loc, days: {"points": airnow.get_away_history(loc["zip"], days)},
     "google": lambda loc, days: {"points": google_aq.get_away_history(loc["lat"], loc["lon"], days)},
     "openweathermap": lambda loc, days: {"points": owm.get_away_history(loc["lat"], loc["lon"], days)},
     "purpleair": lambda loc, days: purpleair.get_away_history(loc["lat"], loc["lon"], days),
@@ -39,8 +41,12 @@ PROVIDERS = tuple(_FETCHERS)
 # latest point into the same pollutants-list shape the DB-backed providers'
 # current-observation reads already carry (see aq_shared.point_to_pollutants).
 # Mirrors google_aq._HISTORY_FIELD_MAP / owm._AWAY_HISTORY_FIELDS / the fields
-# purpleair.get_away_history actually writes onto a point.
+# purpleair.get_away_history actually writes onto a point. AirNow's away
+# points carry only {time, aqi} -- no per-pollutant concentration -- so it
+# gets an empty list: current() still shows the headline AQI/category, just
+# with no pollutant breakdown, same sparsity tradeoff as its history chart.
 _FIELD_DEFS = {
+    "airnow": [],
     "google": [
         ("pm2_5_ugm3", "PM2.5", "MICROGRAMS_PER_CUBIC_METER"),
         ("pm10_ugm3", "PM10", "MICROGRAMS_PER_CUBIC_METER"),
@@ -67,6 +73,7 @@ _FIELD_DEFS = {
 # the location-config route (/api/away/*) and the mode-aware outside routes
 # (/api/outside*?mode=away) so both gate on the same source of truth.
 PROVIDER_KEYS = {
+    "airnow": "AIRNOW_API_KEY",
     "google": "GOOGLE_AQ_API_KEY",
     "openweathermap": "OWM_API_KEY",
     "purpleair": "PURPLEAIR_API_KEY",

@@ -431,8 +431,21 @@
 
 /* Each chip carries its own provider's live AQI, not just a selected state --
    closer to the outside-tech pollutant badges than to a plain tab control,
-   since tapping one is also how you learn what the other three are reading. */
+   since tapping one is also how you learn what the other three are reading.
+   Four chips don't fit one line on a phone -- flex-wrap there produces a
+   ragged, uneven-looking second row, so below the breakpoint this becomes a
+   single horizontally-scrolling row instead (a native, familiar mobile
+   pattern) rather than wrapping. Bleeds to the rack's own edges so a partial
+   next chip peeks in as a scroll affordance. */
 .provider-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+@media (max-width: 560px) {
+  .provider-chips {
+    flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity;
+    margin: 0 -18px 12px; padding: 0 18px 4px; scrollbar-width: none;
+  }
+  .provider-chips::-webkit-scrollbar { display: none; }
+  .provider-chip { flex: none; scroll-snap-align: start; }
+}
 .provider-chip {
   display: flex; align-items: center; gap: 6px; border: none;
   font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.02em;

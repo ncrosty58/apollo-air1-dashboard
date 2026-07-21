@@ -215,9 +215,9 @@ _NEEDS_HOME_LABEL = {"google", "openweathermap"}
 
 def _fetch_away_current(provider):
     """Away's analogue of _read_from_db above: live per-provider read via
-    away.current() instead of an InfluxDB query. Only the three providers with
-    a live per-location API are offered (see away.PROVIDER_KEYS) -- AirNow and
-    anything else fails closed with a 400 rather than silently serving Home."""
+    away.current() instead of an InfluxDB query. Only providers away.py
+    supports (see away.PROVIDER_KEYS) are offered -- anything else fails
+    closed with a 400 rather than silently serving Home."""
     env_key = away.PROVIDER_KEYS.get(provider)
     if env_key is None:
         return None, f"{provider} isn't available in Away mode", 400
@@ -281,10 +281,7 @@ def api_outside():
     return jsonify(data)
 
 
-# The Home chip row (every provider Node-RED polls) vs the Away chip row (only
-# the three providers with a live per-location API -- see away.PROVIDER_KEYS).
-_HOME_PROVIDERS = ("airnow", "google", "purpleair", "openweathermap")
-_AWAY_PROVIDERS = ("google", "purpleair", "openweathermap")
+_OUTSIDE_PROVIDERS = ("airnow", "google", "purpleair", "openweathermap")
 
 
 @app.route("/api/outside/all")
@@ -298,8 +295,7 @@ def api_outside_all():
     # Resolve the shared home label once rather than per-provider, and skip the
     # AirNow discussion fetch entirely -- the chips only show aqi/band/category.
     home_label = _home_reporting_area() if mode != "away" else None
-    providers = _AWAY_PROVIDERS if mode == "away" else _HOME_PROVIDERS
-    for provider in providers:
+    for provider in _OUTSIDE_PROVIDERS:
         data, error, _ = _fetch_outside_current(provider, want_discussion=False, home_label=home_label, mode=mode)
         if data is None:
             summary[provider] = {"available": False, "reason": error}
