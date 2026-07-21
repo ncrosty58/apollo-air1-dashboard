@@ -179,8 +179,10 @@ document.addEventListener("click", (e) => {
  * A third piece of shared, per-browser client state alongside theme/readout --
  * which location the whole app (dashboard, Technical, Forecast) currently
  * shows. Persisted so a wall display and a phone can independently sit in
- * different modes. apollo-air1-away-provider mirrors apollo-air1-provider but
- * scoped to Away, so flipping modes never clobbers your Home provider choice. */
+ * different modes. The provider choice itself (apollo-air1-provider, see
+ * dashboard.js) is deliberately *not* split per mode -- it used to be, but a
+ * provider silently changing underneath you when you flip modes turned out
+ * to be more confusing than useful. */
 function currentMode() {
   return localStorage.getItem("apollo-air1-mode") || "home";
 }

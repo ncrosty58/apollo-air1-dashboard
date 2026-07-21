@@ -94,16 +94,11 @@
    * PROVIDER_NAMES / PROVIDER_ORDER / PROVIDERS_WITHOUT_FORECAST live in
    * common.js so this page and the server's api_forecast set can't drift.
    *
-   * Home and Away each remember their own provider choice (currentMode/
-   * getAwayLoc come from common.js) so flipping modes never clobbers the
-   * other's pick -- same reasoning as the old Away page's own storage key. */
-  function providerStorageKey() {
-    return currentMode() === "away" ? "apollo-air1-away-provider" : "apollo-air1-provider";
-  }
-  function defaultProvider() {
-    return currentMode() === "away" ? "google" : "airnow";
-  }
-  let currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
+   * One shared choice across Home and Away (not per-mode) -- all 4 providers
+   * work in both now, and a provider that silently changes underneath you
+   * when you flip modes is more confusing than useful. getAwayLoc comes
+   * from common.js. */
+  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
@@ -148,7 +143,7 @@
     const btn = e.target.closest(".provider-chip");
     if (!btn) return;
     currentProvider = btn.getAttribute("data-provider");
-    localStorage.setItem(providerStorageKey(), currentProvider);
+    localStorage.setItem("apollo-air1-provider", currentProvider);
     loadProviderChips();
     updateForecastLink();
     loadOutside();
@@ -156,9 +151,9 @@
   });
 
   // The header's Home/Away rail (common.js) flips the whole outside half of
-  // this page over to the other location's data.
+  // this page over to the other location's data -- the provider choice
+  // itself doesn't change, just what it's fetched for.
   document.addEventListener("modechange", () => {
-    currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
     loadProviderChips();
     updateForecastLink();
     loadOutside();

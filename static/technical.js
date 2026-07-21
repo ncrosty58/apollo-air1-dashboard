@@ -197,16 +197,9 @@
   }
 
   /* ---------- provider (read-only here -- switching only happens on Basic) ----------
-   * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. Home and
-   * Away each remember their own provider choice (currentMode/getAwayLoc come
-   * from common.js too), same storage-key split as dashboard.js. */
-  function providerStorageKey() {
-    return currentMode() === "away" ? "apollo-air1-away-provider" : "apollo-air1-provider";
-  }
-  function defaultProvider() {
-    return currentMode() === "away" ? "google" : "airnow";
-  }
-  let currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
+   * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. One shared
+   * choice across Home and Away (not per-mode) -- see dashboard.js. */
+  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
@@ -363,8 +356,6 @@
   // The header's Home/Away rail (common.js) flips this whole page over to
   // the other location's data.
   document.addEventListener("modechange", () => {
-    currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
-    document.getElementById("outside-source-tech").textContent = providerLabel();
     applyModeVisibility();
     updateForecastLink();
     loadOutside();
