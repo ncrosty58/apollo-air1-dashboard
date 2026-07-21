@@ -126,5 +126,14 @@ def current(provider, loc):
         return None
     obs = aq_shared.away_observation(points[-1], field_defs, reporting_area=loc.get("reporting_area"))
     if obs is not None and provider == "purpleair":
-        obs["sensor"] = result.get("sensor")
+        sensor = result.get("sensor")
+        obs["sensor"] = sensor
+        # Home's PurpleAir reading names the specific sensor (SENSOR_NAME,
+        # see purpleair.py) rather than the generic AirNow-resolved region --
+        # Away should read the same way instead of showing the same coarse
+        # region every other provider does, now with a distance since (unlike
+        # Home's fixed sensor) which one resolves can change with the zip.
+        if sensor:
+            name = sensor.get("name") or f"Sensor #{sensor['index']}"
+            obs["reporting_area"] = f"{name} — {sensor['distance_km']} km"
     return obs
