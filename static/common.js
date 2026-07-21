@@ -106,14 +106,14 @@ document.addEventListener("click", (e) => {
 });
 
 /* ---------- readout mode: AQI numbers vs engineering units ----------
- * Only the Dashboard and Forecast carry this toggle and honor it -- they're
- * the family-facing views, and defaulting to "aqi" keeps every pollutant on
- * the one comparable 0-500 scale (and drops anything with no AQI, e.g. NH3).
- * "units" shows the underlying concentrations for a more technical read. The
- * Technical page is always engineering units, and Indoor has no outside
- * pollutants, so neither shows the toggle. Lives here (not per-page like the
- * temperature toggle) because both pages read/render it identically; each page
- * just re-renders its own pollutant views on the readoutchange event below. */
+ * Dashboard, Forecast, and Technical all carry this toggle and default to
+ * "aqi" -- this app is for non-technical people, so every pollutant reads on
+ * the one comparable 0-500 scale (and drops anything with no AQI, e.g. NH3)
+ * unless someone opts into "units" for the underlying concentrations. Indoor
+ * has no outside pollutants, so it doesn't show the toggle. Lives here (not
+ * per-page like the temperature toggle) because every page that has it reads/
+ * renders it identically; each page just re-renders its own pollutant views
+ * on the readoutchange event below. */
 function readoutMode() {
   return localStorage.getItem("apollo-air1-readout") || "aqi";
 }

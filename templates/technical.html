@@ -52,6 +52,13 @@
 <div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
   <div class="settings-panel-head">Settings</div>
   <div class="settings-row">
+    <span class="cl-name">Readout</span>
+    <div class="settings-rail readout-toggle" role="tablist" aria-label="Pollutant readout">
+      <button type="button" data-readout="aqi" aria-pressed="true">AQI</button>
+      <button type="button" data-readout="units" aria-pressed="false">Units</button>
+    </div>
+  </div>
+  <div class="settings-row">
     <span class="cl-name">Units</span>
     <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
       <button type="button" data-unit="f" aria-pressed="true">°F</button>
@@ -143,45 +150,34 @@
       </div>
     </div>
 
-    <!-- Rows are colored by severity, not pollutant identity -- each row
-         is already labeled by name. Only pollutants with no indoor overlay
-         are here: O3/SO2 have no indoor sensor at all, and CO/NO2 would
-         need the optional MICS-4514 this unit doesn't have. PM2.5/PM10 do
-         overlay (providers with raw concentrations), so those live in the
-         Inside vs Outside section above instead and aren't plotted twice
-         here. Placed last since it's the least central of the outside
-         charts -- everything more directly useful (the current reading,
-         the inside/outside comparison) comes before it. -->
+    <!-- Fixed set of three cards, always rendered in this order regardless
+         of Home/Away or which provider is selected -- same chart in the same
+         slot every time so the page doesn't reshuffle under you when you
+         switch either one (see technical.js's renderOutsideCharts). Each
+         card degrades gracefully in place (a lighter row, or an empty state)
+         when the current mode/provider combination has nothing for it,
+         rather than disappearing and shifting everything below it. Rows are
+         colored by severity, not pollutant identity -- each row is already
+         labeled by name. -->
     <div class="section">
       <div class="section-head">
         <span class="section-title">Outside only</span>
         <span class="section-note">Same range as above</span>
       </div>
-      <!-- Home already has this signal for free -- the outside half of the
-           Inside-vs-Outside AQI overlay above. That section is hidden in Away
-           mode (no indoor reading to compare against), so this is Away's own
-           plain AQI trend line instead -- the one field every provider's
-           history carries, including AirNow's otherwise-empty away chart. -->
-      <div class="chart-card" id="card-outside-aqi-history" hidden>
+      <div class="chart-card" id="card-outside-aqi-history">
         <h4>Outside AQI history</h4>
         <div class="chart-svg-wrap" id="chart-outside-aqi-history"></div>
       </div>
-      <!-- Same reasoning as the AQI card above: Home gets PM2.5/PM10 for
-           free from the Inside-vs-Outside pollutant overlay, hidden in Away
-           mode. Google/OWM/PurpleAir's away history all carry these fields;
-           AirNow's doesn't (its historical endpoint gives no concentrations
-           at all), so this stays hidden for that provider specifically. -->
-      <div class="chart-card" id="card-outside-pm-history" hidden>
-        <h4>Outside PM2.5 / PM10 history <span class="eyebrow" style="font-weight:500">µg/m³</span></h4>
+      <div class="chart-card" id="card-outside-pm-history">
+        <h4>Outside PM2.5 / PM10 history <span class="eyebrow" style="font-weight:500" id="pm-history-unit-label">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pm-history"></div>
       </div>
-      <div class="chart-card" id="card-outside-pollutants-aqi">
-        <h4>Outside pollutants <span class="eyebrow" style="font-weight:500">AQI per pollutant</span></h4>
+      <!-- Everything beyond PM2.5/PM10 -- O3/SO2 have no indoor sensor at
+           all, and CO/NO2 would need the optional MICS-4514 this unit
+           doesn't have, so none of these ever overlay against Inside. -->
+      <div class="chart-card" id="card-outside-pollutants">
+        <h4>Outside pollutants <span class="eyebrow" style="font-weight:500" id="pollutants-unit-label">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
-      </div>
-      <div class="chart-card" id="card-outside-pollutants-gases" hidden>
-        <h4>Outside gases <span class="eyebrow" style="font-weight:500">ppb</span></h4>
-        <div class="chart-svg-wrap" id="chart-outside-gases"></div>
       </div>
     </div>
 

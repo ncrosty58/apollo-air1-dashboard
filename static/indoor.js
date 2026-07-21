@@ -3,9 +3,9 @@
 
   // fmt / timeAgo / escapeHtml / bandVar / seriesFor / bandFromCo2 /
   // bandForVocIndex come from common.js; the SVG chart renderers
-  // (measureWidth / renderChart / renderRowChart) from chart.js; bandFromAqi
-  // from aqi.js. Theme toggle, settings panel, and clock self-init in
-  // common.js.
+  // (measureWidth / renderChart / renderRowChart) from chart.js;
+  // bandFromAqi / aqiFromConcentration / bandForConcentration from aqi.js.
+  // Theme toggle, settings panel, and clock self-init in common.js.
 
   /* ---------- temperature unit (F/C) ---------- */
   let currentUnit = localStorage.getItem("apollo-air1-unit") || "f";
@@ -92,7 +92,7 @@
   const READOUT_DEFS = [
     { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
     { id: "aqi", label: "AQI", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
-    { id: "pm25", label: "PM2.5", unit: "µg/m³", key: "pm2_5_ugm3", decimals: 1, band: (v) => v > 35 ? "bad" : v > 12 ? "poor" : null },
+    { id: "pm25", label: "PM2.5 AQI", unit: "", key: "pm2_5_ugm3", decimals: 0, band: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER"), convert: (v) => aqiFromConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER") },
     { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: bandForVocIndex },
     { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
     { id: "temp", label: "Temperature", unit: () => tempUnitLabel(), key: "temperature_c", decimals: 1, band: () => null, convert: displayTemp },

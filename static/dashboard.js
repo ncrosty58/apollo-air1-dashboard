@@ -169,17 +169,26 @@
     return `<div class="rack-row"${style}><span class="rr-label">${escapeHtml(label)}</span><span class="rr-value">${valueHtml}</span></div>`;
   }
 
-  // VOC index is included here even though it has no outside equivalent --
-  // it's as central an indoor air quality signal as CO2/PM2.5. Temp/Humidity/
+  // PM2.5 leads (and, under Readout=AQI, reads on the same 0-500 scale as
+  // Outside's own first row) so it lands on the same row as Outside's PM2.5
+  // -- the one pollutant both racks share -- letting a glance across the two
+  // columns compare them directly instead of hunting for the matching label.
+  // VOC index comes next even though it has no outside equivalent -- it's as
+  // central an indoor air quality signal as CO2/PM2.5. Temp/Humidity/
   // Pressure/NOx have no severity bands anywhere in this app, so those rows
   // stay neutral-colored. The full set AIR-1's base hardware always reports
   // (SCD40 + SEN55 + DPS310) -- as opposed to the MICS-4514 gas readings,
   // which are an optional add-on this unit doesn't have and stay
   // Technical-only in the Gas sensors table.
   function insideRowsHtml(d) {
+    const units = readoutMode() === "units";
+    const pm25Band = bandForConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER");
+    const pm25 = units
+      ? { value: d.pm2_5_ugm3, decimals: 1, unit: "µg/m³", band: pm25Band }
+      : { value: aqiFromConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER"), decimals: 0, unit: "", band: pm25Band };
     const items = [
+      { label: "PM2.5", value: pm25.value, decimals: pm25.decimals, unit: pm25.unit, band: pm25.band },
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
-      { label: "PM2.5", value: d.pm2_5_ugm3, decimals: 1, unit: "µg/m³", band: bandForConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER") },
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
       { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
       { label: "Temp", value: displayTemp(d.temperature_c), decimals: 1, unit: tempUnitLabel(), band: null },
@@ -301,11 +310,16 @@
     }
   }
 
-  // Re-render the outside rows in place when the AQI/Units readout is toggled
-  // (common.js persists the choice and fires this event); no refetch needed.
+  // Re-render both racks' rows in place when the AQI/Units readout is
+  // toggled (common.js persists the choice and fires this event); no
+  // refetch needed. Inside's row order doesn't otherwise depend on this --
+  // only PM2.5's own value/unit does (see insideRowsHtml).
   document.addEventListener("readoutchange", () => {
     if (lastOutsidePollutants) {
       document.getElementById("outside-rows").innerHTML = outsideRowsHtml(lastOutsidePollutants);
+    }
+    if (lastInsideLatest) {
+      document.getElementById("inside-rows").innerHTML = insideRowsHtml(lastInsideLatest);
     }
   });
 
@@ -330,6 +344,10 @@
   }
 
   /* ---------- indoor latest reading ---------- */
+  // Kept so the AQI/Units readout toggle can re-render PM2.5's row without
+  // refetching -- same pattern as lastOutsidePollutants above.
+  let lastInsideLatest = null;
+
   async function loadLatest() {
     try {
       const res = await fetch("/api/latest");
@@ -346,6 +364,7 @@
       inAqi.style.setProperty("--band-color", bandVar(band));
       document.getElementById("in-category").textContent = bandLabel(band) || "Waiting for a reading…";
       document.getElementById("in-sub").textContent = insideSentence(band);
+      lastInsideLatest = d;
       document.getElementById("inside-rows").innerHTML = insideRowsHtml(d);
       // When the AIR-1 last reported a reading into the DB.
       document.getElementById("in-updated").textContent = d.time ? "Updated " + timeAgo(d.time) : "";
@@ -360,6 +379,7 @@
     const inAqi = document.getElementById("in-aqi");
     inAqi.textContent = "—";
     inAqi.style.setProperty("--band-color", "var(--ink-dim)");
+    lastInsideLatest = null;
     document.getElementById("inside-rows").innerHTML = insideRowsHtml({});
     document.getElementById("in-updated").textContent = "";
   }
