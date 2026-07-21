@@ -327,12 +327,14 @@
    * factory-reset controls above, which are also rarely-touched device
    * config. This is the same form the old /away page used to host. */
 
+  // PurpleAir sensor status isn't repeated here -- it's already reflected on
+  // the dashboard itself (the provider chip goes unavailable, with the real
+  // reason as its hover title, when there's no healthy sensor nearby).
   function renderHome(home) {
     const el = document.getElementById("home-current");
     if (!home || !home.zip) { el.textContent = "No home set"; return; }
     const where = home.reporting_area || home.location_slug || home.zip;
-    const sensor = home.purpleair_sensor != null ? ` · PurpleAir #${home.purpleair_sensor}` : " · no PurpleAir sensor";
-    el.innerHTML = `${escapeHtml(where)} <span class="eyebrow">(ZIP ${escapeHtml(home.zip)}${escapeHtml(sensor)})</span>`;
+    el.innerHTML = `${escapeHtml(where)} <span class="eyebrow">(ZIP ${escapeHtml(home.zip)})</span>`;
   }
 
   async function loadHome() {

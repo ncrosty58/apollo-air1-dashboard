@@ -139,7 +139,12 @@
         const s = summary[p] || { available: false };
         const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
         const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";
-        return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === currentProvider}" data-unavailable="${!s.available}" style="--pc-color: ${color}">` +
+        // A dim chip alone doesn't say why -- e.g. "no healthy PurpleAir
+        // sensor nearby" vs. "no away location set" are both just "off"
+        // without this, so the reason the API already returns goes on the
+        // chip as a hover title.
+        const titleAttr = !s.available && s.reason ? ` title="${escapeHtml(s.reason)}"` : "";
+        return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === currentProvider}" data-unavailable="${!s.available}" style="--pc-color: ${color}"${titleAttr}>` +
           `<span class="pc-dot"></span>${PROVIDER_NAMES[p]} <span class="pc-aqi">${aqiText}</span></button>`;
       }).join("");
     } catch (e) {
@@ -277,10 +282,14 @@
   let lastOutsidePollutants = null;
 
   async function loadOutside() {
+    // Kept outside the try/catch so the catch block can tell an API-reported
+    // reason (e.g. "no healthy PurpleAir sensor nearby") apart from a genuine
+    // network/parse failure, and show the real one instead of a generic line.
+    let apiErrorMsg = null;
     try {
       const res = await fetch(`/api/outside?provider=${currentProvider}&mode=${currentMode()}`);
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "request failed");
+      if (!res.ok) { apiErrorMsg = d.error || "request failed"; throw new Error(apiErrorMsg); }
 
       const band = d.band;
       const outAqi = document.getElementById("out-aqi");
@@ -296,7 +305,7 @@
       document.getElementById("out-updated").textContent = d.time ? "Updated " + timeAgo(d.time) : "";
     } catch (e) {
       document.getElementById("out-aqi").textContent = "—";
-      document.getElementById("out-category").textContent = "Couldn't reach " + providerLabel() + ".";
+      document.getElementById("out-category").textContent = apiErrorMsg || ("Couldn't reach " + providerLabel() + ".");
       document.getElementById("out-sub").textContent = "";
       lastOutsidePollutants = null;
       document.getElementById("outside-rows").innerHTML = "";

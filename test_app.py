@@ -124,6 +124,20 @@ def test_outside_away_airnow_no_data_is_404(client, monkeypatch):
     assert res.status_code == 404
 
 
+def test_outside_away_purpleair_no_sensor_has_specific_reason(client, monkeypatch):
+    # A dim provider chip alone doesn't say why -- this is the message that
+    # ends up as its hover title and on the Outside card when you switch to
+    # it, so it should name the actual cause, not a generic "no data".
+    monkeypatch.setenv("PURPLEAIR_API_KEY", "k")
+    monkeypatch.setattr(home_config, "get_away",
+                        lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
+    monkeypatch.setattr(away.purpleair, "get_away_history", lambda lat, lon, days: {"points": [], "sensor": None})
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+    res = client.get("/api/outside?provider=purpleair&mode=away")
+    assert res.status_code == 404
+    assert res.get_json()["error"] == "no healthy PurpleAir sensor nearby"
+
+
 def test_outside_away_missing_key_is_400(client, monkeypatch):
     monkeypatch.setattr(home_config, "get_away",
                         lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})

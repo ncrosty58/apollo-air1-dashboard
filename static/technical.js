@@ -247,10 +247,14 @@
 
   /* ---------- outside current reading ---------- */
   async function loadOutside() {
+    // Kept outside the try/catch so the catch block can show the API's own
+    // reason (e.g. "no healthy PurpleAir sensor nearby") instead of a bare
+    // "Unavailable" when it has one -- same as dashboard.js.
+    let apiErrorMsg = null;
     try {
       const res = await fetch(`/api/outside?provider=${currentProvider}&mode=${currentMode()}`);
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "request failed");
+      if (!res.ok) { apiErrorMsg = d.error || "request failed"; throw new Error(apiErrorMsg); }
 
       const band = d.band;
       const whenText = d.time ? timeAgo(d.time) : formatObservedHour(d.observed_hour);
@@ -265,7 +269,7 @@
       document.getElementById("outside-pollutants").innerHTML = pollutantFactorsHtml(d.pollutants);
     } catch (e) {
       document.getElementById("outside-aqi-tech").textContent = "—";
-      document.getElementById("outside-category-tech").textContent = "Unavailable";
+      document.getElementById("outside-category-tech").textContent = apiErrorMsg || "Unavailable";
       document.getElementById("outside-dominant-tech").textContent = "";
       document.getElementById("outside-pollutants").innerHTML = "";
     }

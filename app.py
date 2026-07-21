@@ -216,7 +216,12 @@ def _fetch_away_current(provider):
         logging.exception("Away current-conditions fetch failed provider=%s", provider)
         return None, f"{provider} request failed", 502
     if data is None:
-        return None, "no data available for this away location", 404
+        # PurpleAir's "no data" case is specifically "no healthy sensor found
+        # near this location" (see purpleair.nearest_outdoor_sensor) -- worth
+        # saying plainly rather than the generic message, since it's the one
+        # the dashboard's provider chip and Outside card surface directly.
+        reason = "no healthy PurpleAir sensor nearby" if provider == "purpleair" else "no data available for this away location"
+        return None, reason, 404
     return data, None, 200
 
 
