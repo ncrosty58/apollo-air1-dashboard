@@ -10,7 +10,6 @@ import away
 import google_aq
 import home_config
 import influx
-import locations as locations_store
 import mqtt_bridge
 import owm
 import purpleair
@@ -157,27 +156,12 @@ def _home_reporting_area():
 def _resolve_latlon_for_zip(zip_code):
     if zip_code == home_config.home_zip():
         return _resolve_home_latlon()
-    # The Away location isn't in the saved-locations list -- it's its own slot
-    # in home_config -- so check it before falling through to that list. This
-    # is what lets the Forecast page's existing ?zip= mechanism serve the Away
-    # location too, instead of Away needing its own forecast plumbing.
+    # The only other zip Forecast's ?zip= mechanism is ever asked to resolve
+    # is the Away location -- the saved-locations list this used to also fall
+    # back to was removed along with Forecast's own location picker.
     away_loc = home_config.get_away()
     if away_loc and away_loc.get("zip") == zip_code and away_loc.get("lat") is not None:
         return away_loc["lat"], away_loc["lon"], away_loc.get("reporting_area")
-    for loc in locations_store.list_locations():
-        if loc["zip"] != zip_code:
-            continue
-        if loc.get("lat") is not None:
-            return loc["lat"], loc["lon"], loc["label"]
-        # Saved before this lat/lon capture existed -- backfill from AirNow's
-        # (cached) forecast lookup rather than making the user re-add it.
-        try:
-            forecast = airnow.get_forecast(zip_code)
-        except Exception:
-            return None, None, None
-        if forecast and forecast.get("lat") is not None:
-            return forecast["lat"], forecast["lon"], loc["label"]
-        return None, None, None
     return None, None, None
 
 
@@ -410,7 +394,7 @@ _LIVE_FORECAST_PROVIDERS = {
 @app.route("/api/forecast")
 def api_forecast():
     zip_code = request.args.get("zip") or home_config.home_zip()
-    if not locations_store.ZIP_RE.match(zip_code):
+    if not home_config.ZIP_RE.match(zip_code):
         return jsonify({"error": "zip must be 5 digits"}), 400
     provider = request.args.get("provider", "airnow")
     force = request.args.get("refresh") in ("1", "true")
@@ -445,46 +429,6 @@ def api_forecast():
     return jsonify(data)
 
 
-@app.route("/api/locations")
-def api_locations():
-    return jsonify(locations_store.list_locations())
-
-
-@app.route("/api/locations", methods=["POST"])
-def api_locations_add():
-    body = request.get_json(silent=True) or {}
-    try:
-        label, zip_code = locations_store.validate_new(body.get("label"), body.get("zip"))
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
-    # Confirm AirNow actually has forecast coverage for this zip before
-    # saving it — otherwise it'd sit in the list failing every time it's
-    # selected (this is exactly how the 54554 zip broke).
-    try:
-        forecast = airnow.get_forecast(zip_code)
-    except Exception:
-        logging.exception("Failed to verify forecast for new location zip=%s", zip_code)
-        return jsonify({"error": "couldn't reach AirNow to verify that zip"}), 502
-    if forecast is None:
-        return jsonify({"error": "AirNow doesn't have forecast data for that zip"}), 400
-
-    # AirNow's own response already resolved this zip to a lat/lon -- grab
-    # it now so the Google provider can use this location later without a
-    # separate geocoding call/dependency.
-    result = locations_store.add_location(label, zip_code, forecast.get("lat"), forecast.get("lon"))
-    return jsonify(result)
-
-
-@app.route("/api/locations/<zip_code>", methods=["DELETE"])
-def api_locations_delete(zip_code):
-    try:
-        result = locations_store.remove_location(zip_code)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
-    return jsonify(result)
-
-
 def _resolve_zip(zip_code):
     """Resolve a zip to coordinates + reporting area via AirNow's current-obs
     response (which geocodes the zip for us), and double as a coverage check --
@@ -508,10 +452,10 @@ def api_home_get():
 @app.route("/api/home", methods=["POST"])
 def api_home_set():
     """Change the tracked home location. Resolves + verifies the zip, resolves
-    the nearest healthy PurpleAir sensor (unless the confirm step passed an
-    explicit one), then persists and pushes the record to Node-RED over the
-    retained config topic. Changing home starts a fresh Influx series under the
-    new location slug -- old data stays under the old one."""
+    the nearest healthy PurpleAir sensor, then persists and pushes the record
+    to Node-RED over the retained config topic. Changing home starts a fresh
+    Influx series under the new location slug -- old data stays under the old
+    one."""
     body = request.get_json(silent=True) or {}
     zip_code = (body.get("zip") or "").strip()
     label = (body.get("label") or "").strip() or None
@@ -521,8 +465,9 @@ def api_home_set():
     if resolved is None:
         return jsonify({"error": "couldn't resolve or verify that zip with AirNow"}), 400
 
-    # Honor an explicit sensor from the suggest-and-confirm step; otherwise auto-
-    # resolve, best-effort (a location with no nearby sensor just gets None).
+    # An explicit sensor index in the body is honored if ever passed (e.g. a
+    # future admin/scripted call); the app's own UI never sends one anymore,
+    # so this always auto-resolves, best-effort (no nearby sensor -> None).
     sensor = None
     sensor_index = body.get("purpleair_sensor")
     if sensor_index is None:
@@ -537,26 +482,6 @@ def api_home_set():
         reporting_area=resolved["reporting_area"], purpleair_sensor=sensor_index, label=label,
     )
     return jsonify({"home": home, "purpleair": sensor, "published": published})
-
-
-@app.route("/api/purpleair/nearest")
-def api_purpleair_nearest():
-    """Suggest the nearest healthy outdoor PurpleAir sensor for a zip, without
-    saving -- backs the suggest-and-confirm step of the location editor."""
-    zip_code = (request.args.get("zip") or "").strip()
-    if not home_config.ZIP_RE.match(zip_code):
-        return jsonify({"error": "zip must be 5 digits"}), 400
-    if not os.environ.get("PURPLEAIR_API_KEY"):
-        return jsonify({"error": "PurpleAir isn't configured"}), 400
-    resolved = _resolve_zip(zip_code)
-    if resolved is None:
-        return jsonify({"error": "couldn't resolve that zip"}), 400
-    try:
-        sensor = purpleair.nearest_outdoor_sensor(resolved["lat"], resolved["lon"])
-    except Exception:
-        logging.exception("PurpleAir nearest-sensor lookup failed")
-        return jsonify({"error": "PurpleAir lookup failed"}), 502
-    return jsonify({"sensor": sensor, "reporting_area": resolved["reporting_area"]})
 
 
 @app.route("/api/away")

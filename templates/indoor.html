@@ -34,10 +34,6 @@
     <div class="header-controls">
       <a class="pill-link" href="/">← Dashboard</a>
       {% if grafana_url %}<a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Grafana ↗</a>{% endif %}
-      <div class="settings-rail mode-rail" id="mode-rail" role="tablist" aria-label="Location mode">
-        <button type="button" data-mode="home" aria-pressed="true">Home</button>
-        <button type="button" data-mode="away" aria-pressed="false">Away</button>
-      </div>
       <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3.2"/>
@@ -64,14 +60,6 @@
       <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
     </div>
-  </div>
-  <div class="settings-row">
-    <span class="cl-name">Away location</span>
-    <div class="away-location-current eyebrow" id="away-location-current">Loading…</div>
-    <form class="add-location-form" id="away-location-form">
-      <input type="text" id="away-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-      <button type="submit">Save</button>
-    </form>
   </div>
 </div>
 
