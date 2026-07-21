@@ -20,9 +20,12 @@ def hc(tmp_path, monkeypatch):
 
 
 def test_default_home_when_no_file(hc):
+    # Default reflects the real current home (Node-RED's fallback literals), so
+    # the app display is truthful before any save.
     home = hc.get_home()
     assert home["zip"] == "48324"
-    assert home["lat"] is None
+    assert home["location_slug"] == "orchard_lake"
+    assert home["purpleair_sensor"] == 178257
     assert hc.get_away() is None
 
 
@@ -77,8 +80,17 @@ def test_away_set_and_clear_never_publishes(hc, monkeypatch):
     assert calls == []  # away is unpersisted-to-Node-RED by design
 
 
-def test_republish_home_noop_without_coords(hc, monkeypatch):
+def test_republish_home_noop_without_saved_file(hc, monkeypatch):
     calls = []
     monkeypatch.setattr(hc.mqtt_bridge, "publish_config", lambda *a, **k: calls.append(1) or True)
-    assert hc.republish_home() is False  # default home has lat None
+    # No home.json saved yet -> the seeded default is never auto-published.
+    assert hc.republish_home() is False
     assert calls == []
+
+
+def test_republish_home_publishes_saved_home(hc, monkeypatch):
+    hc.set_home(zip_code="90210", lat=1.0, lon=2.0, reporting_area="X, CA", purpleair_sensor=9)
+    calls = []
+    monkeypatch.setattr(hc.mqtt_bridge, "publish_config", lambda *a, **k: calls.append(1) or True)
+    assert hc.republish_home() is True  # a real saved home does re-publish
+    assert len(calls) == 1

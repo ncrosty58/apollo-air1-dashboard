@@ -36,17 +36,20 @@ _write_lock = threading.Lock()
 
 
 def _default_home():
-    # Before the user ever sets a home, fall back to the AIRNOW_ZIP the app has
-    # always used. lat/lon/sensor stay None (unresolved) and no config is
-    # published, so Node-RED keeps using its own built-in literals until a real
-    # home is saved from the app.
+    # The pre-existing home this dashboard was built around, kept in sync with
+    # Node-RED's built-in fallback literals (Orchard Lake coords, PurpleAir
+    # 178257 "St. Marys", slug orchard_lake -- the slug Node-RED already tags
+    # writes with). Shown until the user saves a home through the app, so the
+    # display reflects what's actually being polled rather than a hollow blank.
+    # This default is never auto-published (republish_home only fires for a
+    # genuinely saved home.json), so it changes nothing about what Node-RED does.
     return {
-        "zip": os.environ.get("AIRNOW_ZIP", ""),
-        "lat": None,
-        "lon": None,
-        "location_slug": "home",
-        "reporting_area": None,
-        "purpleair_sensor": None,
+        "zip": os.environ.get("AIRNOW_ZIP", "48324"),
+        "lat": 42.5988,
+        "lon": -83.3577,
+        "location_slug": "orchard_lake",
+        "reporting_area": "Orchard Lake, MI",
+        "purpleair_sensor": 178257,
     }
 
 
@@ -130,6 +133,11 @@ def republish_home():
     in a previous run is (re)published as a retained message even if the broker
     was down at the moment it was originally saved. No-op/False when the link
     is down or no real home (with coords) has been saved yet."""
+    # Only a genuinely saved home should be re-pushed -- never the seeded
+    # default (which matches Node-RED's own literals anyway), so a fresh app
+    # with no home.json never publishes anything Node-RED wasn't already doing.
+    if not os.path.exists(HOME_FILE):
+        return False
     home = get_home()
     if home.get("lat") is None:
         return False
