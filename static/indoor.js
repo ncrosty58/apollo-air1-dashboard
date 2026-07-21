@@ -344,27 +344,9 @@
     }
   }
 
-  // Suggest-and-confirm: preview the nearest PurpleAir sensor before saving, so
-  // a bad/flaky pick is visible rather than silently locked in.
-  document.getElementById("home-find").addEventListener("click", async () => {
-    const zip = document.getElementById("home-zip").value;
-    const preview = document.getElementById("home-preview");
-    preview.hidden = false;
-    preview.textContent = "Looking…";
-    try {
-      const res = await fetch(`/api/purpleair/nearest?zip=${encodeURIComponent(zip)}`);
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || "request failed");
-      const s = d.sensor;
-      const area = d.reporting_area ? ` — ${d.reporting_area}` : "";
-      preview.innerHTML = s
-        ? `Will use PurpleAir <strong>${escapeHtml(s.name || "#" + s.index)}</strong> (${s.distance_km} km, confidence ${s.confidence ?? "?"})${escapeHtml(area)}`
-        : `No PurpleAir sensor nearby${escapeHtml(area)} — home will have no PurpleAir card.`;
-    } catch (err) {
-      preview.textContent = "Couldn't check PurpleAir — " + err.message;
-    }
-  });
-
+  // The save resolves the nearest PurpleAir sensor server-side, same as
+  // Away's own zip-entry flow -- no separate preview step needed, the toast
+  // just reports what got picked after the fact.
   document.getElementById("home-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const zip = document.getElementById("home-zip").value;
@@ -378,10 +360,11 @@
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "request failed");
       renderHome(d.home);
-      document.getElementById("home-preview").hidden = true;
       document.getElementById("home-zip").value = "";
       document.getElementById("home-label").value = "";
-      toast(d.published ? "Home updated" : "Home saved (Node-RED will pick it up when the broker reconnects)");
+      const s = d.purpleair;
+      const sensorMsg = s ? ` — using PurpleAir ${s.name || "#" + s.index} (${s.distance_km} km)` : " — no PurpleAir sensor nearby";
+      toast((d.published ? "Home updated" : "Home saved (Node-RED will pick it up when the broker reconnects)") + sensorMsg);
     } catch (err) {
       toast("Couldn't save — " + err.message);
     }

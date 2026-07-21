@@ -108,72 +108,14 @@
     return PROVIDER_LABELS[provider || currentProvider] || "AirNow";
   }
 
-  let savedLocations = [];
-  // null = home; otherwise a zip -- seeded from ?zip= so a link built with
-  // the away location (e.g. the header's Forecast link while in Away mode)
-  // opens pre-selected. currentMode/getAwayLoc/fetchAwayLoc come from
-  // common.js.
-  let selectedZip = new URLSearchParams(location.search).get("zip") || null;
+  // null = home; a zip when Away is active. Driven entirely by the header's
+  // Home/Away rail -- Forecast has no location picker of its own (currentMode/
+  // getAwayLoc/fetchAwayLoc come from common.js).
+  let selectedZip = null;
 
-  async function loadLocations() {
-    try {
-      const res = await fetch("/api/locations");
-      savedLocations = res.ok ? await res.json() : [];
-    } catch (e) {
-      savedLocations = [];
-    }
-    renderLocationSwitch();
-  }
-
-  function renderLocationSwitch() {
-    const wrap = document.getElementById("location-switch");
-    const homeBtn = `<button type="button" class="location-chip" data-zip="" aria-pressed="${selectedZip === null}">Home</button>`;
-    // The Away location lives in its own home_config slot, not the saved-
-    // locations list -- surfaced here as a first-class chip (rather than
-    // requiring a raw ?zip=) so Forecast participates in the same Home/Away
-    // mode concept as the dashboard and Technical page.
-    const awayLoc = getAwayLoc();
-    const awayBtn = awayLoc
-      ? `<button type="button" class="location-chip" data-zip="${awayLoc.zip}" aria-pressed="${selectedZip === awayLoc.zip}">${escapeHtml(awayLoc.reporting_area || "Away")}</button>`
-      : "";
-    const chips = savedLocations.map((loc) => `
-      <span class="location-chip-wrap">
-        <button type="button" class="location-chip" data-zip="${loc.zip}" aria-pressed="${selectedZip === loc.zip}">${escapeHtml(loc.label)}</button>
-        <button type="button" class="location-chip-remove" data-zip="${loc.zip}" aria-label="Remove ${escapeHtml(loc.label)}">×</button>
-      </span>`).join("");
-    const addBtn = `<button type="button" class="location-chip location-chip-add" id="add-location-toggle">+ Add</button>`;
-    wrap.innerHTML = homeBtn + awayBtn + chips + addBtn;
-
-    wrap.querySelectorAll(".location-chip[data-zip]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        selectedZip = btn.getAttribute("data-zip") || null;
-        renderLocationSwitch();
-        loadForecast();
-      });
-    });
-    wrap.querySelectorAll(".location-chip-remove").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const zip = btn.getAttribute("data-zip");
-        try {
-          const res = await fetch(`/api/locations/${zip}`, { method: "DELETE" });
-          const result = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(result.error || "request failed");
-          savedLocations = result;
-          if (selectedZip === zip) {
-            selectedZip = null;
-            loadForecast();
-          }
-          renderLocationSwitch();
-          toast("Removed");
-        } catch (err) {
-          toast("Couldn't remove that — " + err.message);
-        }
-      });
-    });
-    document.getElementById("add-location-toggle").addEventListener("click", () => {
-      document.getElementById("add-location-form").hidden = false;
-    });
+  async function applyMode() {
+    const awayLoc = currentMode() === "away" ? await fetchAwayLoc() : null;
+    selectedZip = awayLoc ? awayLoc.zip : null;
   }
 
   // Held so the AQI/Units readout toggle re-renders the day cards in place,
@@ -300,49 +242,14 @@
     groups.hidden = expanded;
   });
 
-  document.getElementById("add-location-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const label = document.getElementById("new-location-label").value;
-    const zip = document.getElementById("new-location-zip").value;
-    try {
-      const res = await fetch("/api/locations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, zip }),
-      });
-      const result = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(result.error || "request failed");
-      savedLocations = result;
-      document.getElementById("new-location-label").value = "";
-      document.getElementById("new-location-zip").value = "";
-      document.getElementById("add-location-form").hidden = true;
-      renderLocationSwitch();
-      toast("Saved");
-    } catch (err) {
-      toast("Couldn't save that — " + err.message);
-    }
-  });
-  document.getElementById("cancel-location-btn").addEventListener("click", () => {
-    document.getElementById("add-location-form").hidden = true;
-  });
-
   // The header's Home/Away rail (common.js) jumps this page to the other
-  // location too, same as the dashboard and Technical -- without this it
-  // only took effect on a fresh page load via ?zip=, not while already here.
-  document.addEventListener("modechange", async (e) => {
-    if (e.detail && e.detail.mode === "away") {
-      const awayLoc = await fetchAwayLoc();
-      selectedZip = awayLoc ? awayLoc.zip : null;
-    } else {
-      selectedZip = null;
-    }
-    renderLocationSwitch();
+  // location too, same as the dashboard and Technical.
+  document.addEventListener("modechange", async () => {
+    await applyMode();
     loadForecast();
   });
 
   document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
-  loadLocations();
-  fetchAwayLoc().then(renderLocationSwitch);
-  loadForecast();
+  applyMode().then(loadForecast);
   pollInterval(loadForecast, 15 * 60000);
 })();
