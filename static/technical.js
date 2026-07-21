@@ -174,6 +174,17 @@
       ], rangeLabel, "Outside AQI history");
     }
 
+    // AirNow's away history carries no concentrations at all (see the card's
+    // own comment in technical.html), so this stays hidden for that provider.
+    const showPmHistory = isAway && currentProvider !== "airnow";
+    document.getElementById("card-outside-pm-history").hidden = !showPmHistory;
+    if (showPmHistory) {
+      renderPollutantRows("chart-outside-pm-history", outsidePoints, [
+        ["pm2_5_ugm3", "PM2.5", " µg/m³", 1, (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER")],
+        ["pm10_ugm3", "PM10", " µg/m³", 1, (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER")],
+      ], rangeLabel, "Outside PM2.5/PM10 history");
+    }
+
     const mode = outsideExtraPollutantsMode();
     document.getElementById("card-outside-pollutants-aqi").hidden = mode !== "aqi";
     document.getElementById("card-outside-pollutants-gases").hidden = mode !== "gases";

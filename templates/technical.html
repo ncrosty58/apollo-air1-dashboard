@@ -166,6 +166,15 @@
         <h4>Outside AQI history</h4>
         <div class="chart-svg-wrap" id="chart-outside-aqi-history"></div>
       </div>
+      <!-- Same reasoning as the AQI card above: Home gets PM2.5/PM10 for
+           free from the Inside-vs-Outside pollutant overlay, hidden in Away
+           mode. Google/OWM/PurpleAir's away history all carry these fields;
+           AirNow's doesn't (its historical endpoint gives no concentrations
+           at all), so this stays hidden for that provider specifically. -->
+      <div class="chart-card" id="card-outside-pm-history" hidden>
+        <h4>Outside PM2.5 / PM10 history <span class="eyebrow" style="font-weight:500">µg/m³</span></h4>
+        <div class="chart-svg-wrap" id="chart-outside-pm-history"></div>
+      </div>
       <div class="chart-card" id="card-outside-pollutants-aqi">
         <h4>Outside pollutants <span class="eyebrow" style="font-weight:500">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
