@@ -98,11 +98,20 @@
     setTimeout(() => el.remove(), 3200);
   }
 
-  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-
   // The active provider is chosen on the dashboard (the AQI chips) and shared
   // via localStorage; the Forecast page just follows it and shows which agency
   // served the data (forecast-source), rather than carrying its own switcher.
+  // Home and Away each remember their own provider choice under separate keys
+  // (see dashboard.js/technical.js) so this has to read whichever one matches
+  // the current mode, not always the Home key.
+  function providerStorageKey() {
+    return currentMode() === "away" ? "apollo-air1-away-provider" : "apollo-air1-provider";
+  }
+  function defaultProvider() {
+    return currentMode() === "away" ? "google" : "airnow";
+  }
+  let currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
+
   const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow" };
   function providerLabel(provider) {
     return PROVIDER_LABELS[provider || currentProvider] || "AirNow";
@@ -114,6 +123,7 @@
   let selectedZip = null;
 
   async function applyMode() {
+    currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
     const awayLoc = currentMode() === "away" ? await fetchAwayLoc() : null;
     selectedZip = awayLoc ? awayLoc.zip : null;
   }
