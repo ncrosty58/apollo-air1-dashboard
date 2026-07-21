@@ -267,14 +267,17 @@
   }
 
   // Indoor air is physically tied to Home -- hide the Inside vs Outside
-  // overlay charts entirely in Away mode (comparing it to a remote location
-  // would be misleading), leaving just the current reading + outside-only
-  // history. The shared range toggle stays visible either way (it also
-  // drives the Outside-only section below).
+  // overlay charts, and the Temperature/humidity/pressure section at the
+  // bottom of the page, entirely in Away mode (comparing either to a remote
+  // location would be misleading), leaving just the current reading +
+  // outside-only history. The shared range toggle stays visible either way
+  // (it also drives the Outside-only section in between).
   function applyModeVisibility() {
     const away = currentMode() === "away";
     const chartsEl = document.getElementById("inside-outside-charts");
     if (chartsEl) chartsEl.hidden = away;
+    const weatherEl = document.getElementById("section-inside-outside-weather");
+    if (weatherEl) weatherEl.hidden = away;
     const titleEl = document.getElementById("inside-outside-title");
     if (titleEl) titleEl.textContent = away ? "Outside history" : "Inside vs Outside";
   }

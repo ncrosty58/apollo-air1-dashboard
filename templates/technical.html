@@ -32,8 +32,7 @@
       </div>
     </div>
     <div class="header-controls">
-      <a class="pill-link" href="/">← Dashboard</a>
-      {% if grafana_url %}<a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Grafana ↗</a>{% endif %}
+      <a class="pill-link icon-pill" href="/" aria-label="Back to dashboard" title="Back to dashboard">←</a>
       <div class="settings-rail mode-rail" id="mode-rail" role="tablist" aria-label="Location mode">
         <button type="button" data-mode="home" aria-pressed="true">Home</button>
         <button type="button" data-mode="away" aria-pressed="false">Away</button>
@@ -72,6 +71,12 @@
       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
     </div>
   </div>
+  {% if grafana_url %}
+  <div class="settings-row">
+    <span class="cl-name">Grafana</span>
+    <a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Open dashboard ↗</a>
+  </div>
+  {% endif %}
   <div class="settings-row">
     <span class="cl-name">Away location</span>
     <div class="away-location-current eyebrow" id="away-location-current">Loading…</div>
@@ -143,10 +148,6 @@
           <h4>Pollutants</h4>
           <div class="chart-svg-wrap" id="chart-inside-outside-pollutants"></div>
         </div>
-        <div class="chart-card">
-          <h4>Temperature, humidity, pressure <span class="eyebrow" style="font-weight:500">your sensor only</span></h4>
-          <div class="chart-svg-wrap" id="chart-inside-outside-weather"></div>
-        </div>
       </div>
     </div>
 
@@ -178,6 +179,22 @@
       <div class="chart-card" id="card-outside-pollutants">
         <h4>Outside pollutants <span class="eyebrow" style="font-weight:500" id="pollutants-unit-label">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
+      </div>
+    </div>
+
+    <!-- Least central chart on the page -- weather isn't a pollutant and
+         only ever compares against your own sensor (no provider gives
+         outside temp/humidity/pressure), so it's last. Indoor air is
+         physically tied to Home -- comparing it against a remote Away
+         location is misleading, so this whole section is hidden in Away
+         mode (see technical.js's applyModeVisibility). -->
+    <div class="section" id="section-inside-outside-weather">
+      <div class="section-head">
+        <span class="section-title">Temperature, humidity, pressure</span>
+        <span class="section-note">Your sensor only · same range as above</span>
+      </div>
+      <div class="chart-card">
+        <div class="chart-svg-wrap" id="chart-inside-outside-weather"></div>
       </div>
     </div>
 

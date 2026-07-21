@@ -145,7 +145,10 @@
     max-width: 1080px; margin: 0 auto; padding: 16px 20px;
     display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   }
-  .device-id { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 6px; }
+  /* min-width: 0 lets this shrink below its text's natural width instead of
+     forcing .faceplate-inner wider -- needed for .device-sub's ellipsis
+     (below) to actually engage instead of just sitting unused. */
+  .device-id { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 6px; min-width: 0; }
   .lamp {
     width: 13px; height: 13px; border-radius: 50%; flex: none;
     box-shadow: var(--shadow-inset), 0 0 0 3px var(--panel-sunken);
@@ -162,11 +165,26 @@
   .lamp.pulse-once { animation: lampin 900ms ease-out; }
   @keyframes lampin { 0% { transform: scale(0.4); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
 
-  .device-name-block { display: flex; flex-direction: column; gap: 2px; }
+  .device-name-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .device-name { font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem; letter-spacing: 0.01em; }
-  .device-sub { font-size: 0.75rem; color: var(--ink-dim); }
+  /* Connection status text ("Asleep — last seen 3 hours ago") can run long --
+     clipped rather than wrapped or forcing the header wider, since the lamp
+     dot already carries the same state at a glance. */
+  .device-sub { font-size: 0.75rem; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
 
   .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  /* Back-to-dashboard on Technical/Indoor/Forecast -- an icon-only circle
+     (same footprint as the settings gear) instead of a text pill, so the
+     header has room for the mode rail without wrapping on a phone.
+     Compound selector (not just .icon-pill) so this outranks the plain
+     .pill-link display/padding declared later in this file -- equal-
+     specificity rules would otherwise let source order win instead. */
+  .pill-link.icon-pill {
+    display: flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; padding: 0; flex: none;
+    font-size: 1.05rem; line-height: 1;
+  }
 
   /* The header holds just a single gear that opens everything you set once
      and forget (units, theme). A rocker-plate idiom: a sunken track

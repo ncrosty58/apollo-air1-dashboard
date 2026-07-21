@@ -32,8 +32,7 @@
       </div>
     </div>
     <div class="header-controls">
-      <a class="pill-link" href="/">← Dashboard</a>
-      {% if grafana_url %}<a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Grafana ↗</a>{% endif %}
+      <a class="pill-link icon-pill" href="/" aria-label="Back to dashboard" title="Back to dashboard">←</a>
       <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3.2"/>
@@ -61,6 +60,12 @@
       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
     </div>
   </div>
+  {% if grafana_url %}
+  <div class="settings-row">
+    <span class="cl-name">Grafana</span>
+    <a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Open dashboard ↗</a>
+  </div>
+  {% endif %}
 </div>
 
 <div class="wrap">
