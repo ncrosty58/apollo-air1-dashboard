@@ -131,9 +131,8 @@ document.addEventListener("click", (e) => {
 });
 
 /* ---------- settings panel (self-initializing on every page) ----------
- * openSettingsPanel is exposed on window so the mode-rail's edit control
- * (below) can pop it open from outside this closure -- same panel, no
- * second popover implementation. */
+ * openSettingsPanel is exposed on window so the mode-rail (below) can pop it
+ * open when Away is tapped with no location saved yet. */
 (function initSettingsPanel() {
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsPanel = document.getElementById("settings-panel");
@@ -243,13 +242,6 @@ function renderAwayLocationRow() {
     }
     setMode(mode);
   });
-
-  const editBtn = document.getElementById("mode-edit-toggle");
-  if (editBtn) {
-    editBtn.addEventListener("click", () => {
-      if (window.openSettingsPanel) window.openSettingsPanel();
-    });
-  }
 
   const form = document.getElementById("away-location-form");
   if (form) {
