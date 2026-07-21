@@ -385,29 +385,6 @@
     }, 200);
   });
 
-  /* ---------- connection status (lamp) -- read-only awareness, Setup lives on /indoor ---------- */
-  async function loadConnectionStatus() {
-    try {
-      const res = await fetch("/api/controls");
-      if (!res.ok) throw new Error("request failed");
-      const s = await res.json();
-      const lamp = document.getElementById("lamp");
-      const connStatus = document.getElementById("conn-status");
-      if (s.online) {
-        lamp.setAttribute("data-state", "mqtt");
-        connStatus.textContent = "Online now";
-      } else if (s.status_seen_at) {
-        lamp.setAttribute("data-state", "offline");
-        connStatus.textContent = `Asleep — last seen ${timeAgo(s.status_seen_at)}`;
-      } else {
-        lamp.setAttribute("data-state", "stale");
-        connStatus.textContent = "No connection data yet";
-      }
-    } catch (e) {
-      // Staying at the last-known display is preferable to blanking it out.
-    }
-  }
-
   /* ---------- range toggle ---------- */
   let currentRangeOutside = 24;
   document.querySelectorAll("#range-toggle-outside button").forEach((btn) => {
@@ -443,8 +420,6 @@
   fetchAwayLoc().then(updateForecastLink);
   loadOutside();
   loadOutsideHistorySection(currentRangeOutside);
-  loadConnectionStatus();
   pollInterval(loadOutside, 15 * 60000);
-  pollInterval(loadConnectionStatus, 30000);
   pollInterval(() => { loadOutsideHistorySection(currentRangeOutside); }, 60000);
 })();

@@ -218,19 +218,6 @@
       if (!res.ok) throw new Error("request failed");
       const s = await res.json();
 
-      const lamp = document.getElementById("lamp");
-      const connStatus = document.getElementById("conn-status");
-      if (s.online) {
-        lamp.setAttribute("data-state", "mqtt");
-        connStatus.textContent = "Online now";
-      } else if (s.status_seen_at) {
-        lamp.setAttribute("data-state", "offline");
-        connStatus.textContent = `Asleep — last seen ${timeAgo(s.status_seen_at)}`;
-      } else {
-        lamp.setAttribute("data-state", "stale");
-        connStatus.textContent = "No connection data yet";
-      }
-
       const rocker = document.getElementById("rocker-sleep");
       rocker.setAttribute("aria-pressed", String(!!s.prevent_sleep));
 

@@ -384,29 +384,6 @@
     document.getElementById("in-updated").textContent = "";
   }
 
-  /* ---------- connection status (lamp) ---------- */
-  async function loadControls() {
-    try {
-      const res = await fetch("/api/controls");
-      if (!res.ok) throw new Error("request failed");
-      const s = await res.json();
-      const lamp = document.getElementById("lamp");
-      const connStatus = document.getElementById("conn-status");
-      if (s.online) {
-        lamp.setAttribute("data-state", "mqtt");
-        connStatus.textContent = "Online now";
-      } else if (s.status_seen_at) {
-        lamp.setAttribute("data-state", "offline");
-        connStatus.textContent = `Asleep — last seen ${timeAgo(s.status_seen_at)}`;
-      } else {
-        lamp.setAttribute("data-state", "stale");
-        connStatus.textContent = "No connection data yet";
-      }
-    } catch (e) {
-      // Staying at the last-known display is preferable to blanking it out.
-    }
-  }
-
   /* ---------- init ---------- */
   loadProviderChips();
   updateForecastLink();
@@ -415,8 +392,6 @@
   loadLatest();
   loadOutside();
   loadBasicSparks();
-  loadControls();
   pollInterval(loadLatest, 60000);
   pollInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
-  pollInterval(loadControls, 30000);
 })();
