@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import airnow
+import away
 import google_aq
+import home_config
 import influx
 import locations as locations_store
 import mqtt_bridge
@@ -39,6 +41,11 @@ BUTTON_IDS = {
 # set; only start the MQTT client in the process that's actually serving.
 if not DEBUG or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     mqtt_bridge.start()
+    # Best-effort re-push of a previously saved home to Node-RED. The broker
+    # normally still holds the retained copy from the last save, so this only
+    # matters after a broker data loss; it's a no-op when the link isn't up yet
+    # (connect is async) or no real home has been saved.
+    home_config.republish_home()
 
 
 @app.context_processor
@@ -75,6 +82,11 @@ def technical_page():
 @app.route("/indoor")
 def indoor_page():
     return render_template("indoor.html")
+
+
+@app.route("/away")
+def away_page():
+    return render_template("away.html")
 
 
 @app.route("/manifest.webmanifest")
@@ -122,7 +134,7 @@ def _resolve_home_latlon():
     live forecast path needs this now; current conditions read the home label
     from the DB (see _home_reporting_area)."""
     try:
-        obs = airnow.get_current_observation(os.environ["AIRNOW_ZIP"])
+        obs = airnow.get_current_observation(home_config.home_zip())
     except Exception:
         return None, None, None
     if obs is None or obs.get("lat") is None:
@@ -147,7 +159,7 @@ def _home_reporting_area():
 
 
 def _resolve_latlon_for_zip(zip_code):
-    if zip_code == os.environ["AIRNOW_ZIP"]:
+    if zip_code == home_config.home_zip():
         return _resolve_home_latlon()
     for loc in locations_store.list_locations():
         if loc["zip"] != zip_code:
@@ -220,7 +232,7 @@ def _fetch_outside_current(provider, *, want_discussion=True, home_label=None):
         # sanctioned live AirNow call) rather than a separate lookup. Best-
         # effort: a forecast hiccup shouldn't take down the current reading.
         try:
-            forecast = airnow.get_forecast(os.environ["AIRNOW_ZIP"])
+            forecast = airnow.get_forecast(home_config.home_zip())
             data["discussion"] = forecast.get("discussion") if forecast else None
         except Exception:
             logging.exception("Failed to fetch forecast discussion from AirNow")
@@ -333,7 +345,7 @@ _LIVE_FORECAST_PROVIDERS = {
 
 @app.route("/api/forecast")
 def api_forecast():
-    zip_code = request.args.get("zip") or os.environ["AIRNOW_ZIP"]
+    zip_code = request.args.get("zip") or home_config.home_zip()
     if not locations_store.ZIP_RE.match(zip_code):
         return jsonify({"error": "zip must be 5 digits"}), 400
     provider = request.args.get("provider", "airnow")
@@ -406,6 +418,140 @@ def api_locations_delete(zip_code):
         result = locations_store.remove_location(zip_code)
     except ValueError as e:
         return jsonify({"error": str(e)}), 404
+    return jsonify(result)
+
+
+def _resolve_zip(zip_code):
+    """Resolve a zip to coordinates + reporting area via AirNow's current-obs
+    response (which geocodes the zip for us), and double as a coverage check --
+    a zip AirNow can't resolve won't have data for any provider. Returns a dict
+    or None."""
+    try:
+        obs = airnow.get_current_observation(zip_code)
+    except Exception:
+        logging.exception("Failed to resolve zip via AirNow zip=%s", zip_code)
+        return None
+    if not obs or obs.get("lat") is None:
+        return None
+    return {"lat": obs["lat"], "lon": obs["lon"], "reporting_area": obs.get("reporting_area")}
+
+
+@app.route("/api/home")
+def api_home_get():
+    return jsonify(home_config.get_home())
+
+
+@app.route("/api/home", methods=["POST"])
+def api_home_set():
+    """Change the tracked home location. Resolves + verifies the zip, resolves
+    the nearest healthy PurpleAir sensor (unless the confirm step passed an
+    explicit one), then persists and pushes the record to Node-RED over the
+    retained config topic. Changing home starts a fresh Influx series under the
+    new location slug -- old data stays under the old one."""
+    body = request.get_json(silent=True) or {}
+    zip_code = (body.get("zip") or "").strip()
+    label = (body.get("label") or "").strip() or None
+    if not home_config.ZIP_RE.match(zip_code):
+        return jsonify({"error": "zip must be 5 digits"}), 400
+    resolved = _resolve_zip(zip_code)
+    if resolved is None:
+        return jsonify({"error": "couldn't resolve or verify that zip with AirNow"}), 400
+
+    # Honor an explicit sensor from the suggest-and-confirm step; otherwise auto-
+    # resolve, best-effort (a location with no nearby sensor just gets None).
+    sensor = None
+    sensor_index = body.get("purpleair_sensor")
+    if sensor_index is None:
+        try:
+            sensor = purpleair.nearest_outdoor_sensor(resolved["lat"], resolved["lon"])
+        except Exception:
+            logging.exception("PurpleAir nearest-sensor lookup failed")
+        sensor_index = sensor["index"] if sensor else None
+
+    home, published = home_config.set_home(
+        zip_code=zip_code, lat=resolved["lat"], lon=resolved["lon"],
+        reporting_area=resolved["reporting_area"], purpleair_sensor=sensor_index, label=label,
+    )
+    return jsonify({"home": home, "purpleair": sensor, "published": published})
+
+
+@app.route("/api/purpleair/nearest")
+def api_purpleair_nearest():
+    """Suggest the nearest healthy outdoor PurpleAir sensor for a zip, without
+    saving -- backs the suggest-and-confirm step of the location editor."""
+    zip_code = (request.args.get("zip") or "").strip()
+    if not home_config.ZIP_RE.match(zip_code):
+        return jsonify({"error": "zip must be 5 digits"}), 400
+    if not os.environ.get("PURPLEAIR_API_KEY"):
+        return jsonify({"error": "PurpleAir isn't configured"}), 400
+    resolved = _resolve_zip(zip_code)
+    if resolved is None:
+        return jsonify({"error": "couldn't resolve that zip"}), 400
+    try:
+        sensor = purpleair.nearest_outdoor_sensor(resolved["lat"], resolved["lon"])
+    except Exception:
+        logging.exception("PurpleAir nearest-sensor lookup failed")
+        return jsonify({"error": "PurpleAir lookup failed"}), 502
+    return jsonify({"sensor": sensor, "reporting_area": resolved["reporting_area"]})
+
+
+@app.route("/api/away")
+def api_away_get():
+    return jsonify(home_config.get_away())
+
+
+@app.route("/api/away", methods=["POST"])
+def api_away_set():
+    body = request.get_json(silent=True) or {}
+    zip_code = (body.get("zip") or "").strip()
+    if not home_config.ZIP_RE.match(zip_code):
+        return jsonify({"error": "zip must be 5 digits"}), 400
+    resolved = _resolve_zip(zip_code)
+    if resolved is None:
+        return jsonify({"error": "couldn't resolve that zip with AirNow"}), 400
+    away_loc = home_config.set_away(
+        zip_code=zip_code, lat=resolved["lat"], lon=resolved["lon"],
+        reporting_area=resolved["reporting_area"],
+    )
+    return jsonify(away_loc)
+
+
+@app.route("/api/away", methods=["DELETE"])
+def api_away_clear():
+    home_config.clear_away()
+    return jsonify({"cleared": True})
+
+
+# Away history is live per provider -- each needs its own API key set on the app
+# container (unlike Home, which reads Node-RED's writes from the DB).
+_AWAY_PROVIDER_KEYS = {
+    "google": "GOOGLE_AQ_API_KEY",
+    "openweathermap": "OWM_API_KEY",
+    "purpleair": "PURPLEAIR_API_KEY",
+}
+
+
+@app.route("/api/away/history")
+def api_away_history():
+    provider = request.args.get("provider", "google")
+    if provider not in away.PROVIDERS:
+        return jsonify({"error": "unknown provider"}), 400
+    if not os.environ.get(_AWAY_PROVIDER_KEYS[provider]):
+        return jsonify({"error": f"{provider} isn't configured"}), 400
+    away_loc = home_config.get_away()
+    if not away_loc or away_loc.get("lat") is None:
+        return jsonify({"error": "no away location set"}), 404
+    try:
+        days = int(request.args.get("days", 7))
+    except ValueError:
+        days = 7
+    days = max(1, min(days, 30))
+    force = request.args.get("refresh") in ("1", "true")
+    try:
+        result = away.history(provider, away_loc["lat"], away_loc["lon"], days, force=force)
+    except Exception:
+        logging.exception("Away history fetch failed provider=%s", provider)
+        return jsonify({"error": f"{provider} request failed"}), 502
     return jsonify(result)
 
 
