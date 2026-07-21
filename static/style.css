@@ -432,19 +432,17 @@
 /* Each chip carries its own provider's live AQI, not just a selected state --
    closer to the outside-tech pollutant badges than to a plain tab control,
    since tapping one is also how you learn what the other three are reading.
-   Four chips of uneven natural width (label length + a 1-3 digit AQI) don't
-   fit one flex row on a phone -- wrapping left them floating unevenly, and a
-   horizontal scroll still let each chip claim only as much width as its own
-   text needed, so neighboring chips never lined up. A fixed 2-column grid
-   below the breakpoint gives every chip the same cell width instead, so the
-   row reads as one evenly spaced control regardless of label length. */
-.provider-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+   A flex row lets each of the 4 chips claim only as much width as its own
+   label+AQI text needs, so neighboring chips of different lengths never line
+   up -- a fixed grid instead gives every chip the same cell width regardless
+   of content, so the row reads as one evenly spaced control at any size: all
+   4 in a row on desktop, 2x2 on a phone. */
+.provider-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
 @media (max-width: 560px) {
-  .provider-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .provider-chip { justify-content: center; }
+  .provider-chips { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 .provider-chip {
-  display: flex; align-items: center; gap: 6px; border: none;
+  display: flex; align-items: center; justify-content: center; gap: 6px; border: none;
   font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.01em;
   background: var(--panel-sunken); color: var(--ink-dim);
   border-radius: 999px; padding: 9px 13px 9px 11px; cursor: pointer; min-height: 44px;
