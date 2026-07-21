@@ -4,11 +4,13 @@ the control endpoints. Upstream/DB calls are monkeypatched -- no network or
 InfluxDB is touched."""
 import pytest
 
+import airnow
 import app as app_module
 import away
 import google_aq
 import home_config
 import influx
+import purpleair
 
 
 @pytest.fixture
@@ -238,3 +240,68 @@ def test_forecast_zip_resolves_away_location(client, monkeypatch):
     assert res.status_code == 200
     assert seen == {"lat": 41.8, "lon": -87.6}
     assert res.get_json()["reporting_area"] == "Chicago"
+
+
+def test_forecast_home_zip_reads_stored_coords_not_a_live_airnow_call(client, monkeypatch):
+    # _resolve_home_latlon used to re-resolve home's coordinates via a fresh
+    # live AirNow zip lookup on every call -- confirmed that can drift several
+    # km from what's actually stored (two live lookups for the same zip
+    # landed ~11km apart). It now just reads the saved home record.
+    monkeypatch.setenv("GOOGLE_AQ_API_KEY", "k")
+    calls = []
+    monkeypatch.setattr(airnow, "get_current_observation", lambda zip_code: calls.append(zip_code) or None)
+    seen = {}
+
+    def fake_fetch_forecast(lat, lon):
+        seen["lat"], seen["lon"] = lat, lon
+        return {"days": []}
+
+    monkeypatch.setattr(google_aq, "_fetch_forecast", fake_fetch_forecast)
+    expected_home = home_config.get_home()
+    res = client.get("/api/forecast?provider=google")
+    assert res.status_code == 200
+    assert calls == []  # no live AirNow call for home's own coordinates
+    assert seen["lat"] == expected_home["lat"]
+    assert seen["lon"] == expected_home["lon"]
+
+
+def test_home_set_uses_resolved_coordinates_by_default(client, monkeypatch):
+    monkeypatch.setattr(airnow, "get_current_observation",
+                        lambda zip_code: {"lat": 42.5, "lon": -83.4, "reporting_area": "Somewhere, MI"})
+    monkeypatch.setattr(purpleair, "nearest_outdoor_sensor", lambda lat, lon: None)
+    monkeypatch.setattr(home_config, "set_home", lambda **kw: (kw, True))
+    res = client.post("/api/home", json={"zip": "48324"})
+    assert res.status_code == 200
+    home = res.get_json()["home"]
+    assert home["lat"] == 42.5 and home["lon"] == -83.4
+
+
+def test_home_set_coordinate_override(client, monkeypatch):
+    monkeypatch.setattr(airnow, "get_current_observation",
+                        lambda zip_code: {"lat": 42.5, "lon": -83.4, "reporting_area": "Somewhere, MI"})
+    seen = {}
+    monkeypatch.setattr(purpleair, "nearest_outdoor_sensor",
+                        lambda lat, lon: seen.update(lat=lat, lon=lon) or None)
+    monkeypatch.setattr(home_config, "set_home", lambda **kw: (kw, True))
+    res = client.post("/api/home", json={"zip": "48324", "lat": 42.5988, "lon": -83.3577})
+    assert res.status_code == 200
+    home = res.get_json()["home"]
+    assert home["lat"] == 42.5988 and home["lon"] == -83.3577
+    # The PurpleAir search used the override, not the zip's resolved point.
+    assert seen == {"lat": 42.5988, "lon": -83.3577}
+
+
+def test_home_set_invalid_coordinates_is_400(client, monkeypatch):
+    monkeypatch.setattr(airnow, "get_current_observation",
+                        lambda zip_code: {"lat": 42.5, "lon": -83.4, "reporting_area": "Somewhere, MI"})
+    res = client.post("/api/home", json={"zip": "48324", "lat": "nope", "lon": -83.4})
+    assert res.status_code == 400
+    assert "numbers" in res.get_json()["error"]
+
+
+def test_home_set_out_of_range_coordinates_is_400(client, monkeypatch):
+    monkeypatch.setattr(airnow, "get_current_observation",
+                        lambda zip_code: {"lat": 42.5, "lon": -83.4, "reporting_area": "Somewhere, MI"})
+    res = client.post("/api/home", json={"zip": "48324", "lat": 999, "lon": -83.4})
+    assert res.status_code == 400
+    assert "range" in res.get_json()["error"]

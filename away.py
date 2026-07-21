@@ -131,9 +131,7 @@ def current(provider, loc):
         # Home's PurpleAir reading names the specific sensor (SENSOR_NAME,
         # see purpleair.py) rather than the generic AirNow-resolved region --
         # Away should read the same way instead of showing the same coarse
-        # region every other provider does, now with a distance since (unlike
-        # Home's fixed sensor) which one resolves can change with the zip.
+        # region every other provider does.
         if sensor:
-            name = sensor.get("name") or f"Sensor #{sensor['index']}"
-            obs["reporting_area"] = f"{name} — {sensor['distance_km']} km"
+            obs["reporting_area"] = sensor.get("name") or f"Sensor #{sensor['index']}"
     return obs

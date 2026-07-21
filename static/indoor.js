@@ -353,17 +353,34 @@
     e.preventDefault();
     const zip = document.getElementById("home-zip").value;
     const label = document.getElementById("home-label").value;
+    const coordsRaw = document.getElementById("home-coords").value.trim();
+
+    // Optional -- pins the PurpleAir search + Google/OWM forecast to an
+    // exact point instead of wherever AirNow resolves the zip to (see the
+    // away-hint text). Blank is fine (falls back to that zip resolution);
+    // anything entered has to actually parse as "lat, lon", though.
+    let lat = null, lon = null;
+    if (coordsRaw) {
+      const parts = coordsRaw.split(",").map((p) => Number(p.trim()));
+      if (parts.length !== 2 || parts.some(Number.isNaN)) {
+        toast("Coordinates should look like: 42.5988, -83.3577");
+        return;
+      }
+      [lat, lon] = parts;
+    }
+
     try {
       const res = await fetch("/api/home", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zip, label }),
+        body: JSON.stringify({ zip, label, lat, lon }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || "request failed");
       renderHome(d.home);
       document.getElementById("home-zip").value = "";
       document.getElementById("home-label").value = "";
+      document.getElementById("home-coords").value = "";
       const s = d.purpleair;
       const sensorMsg = s ? ` — using PurpleAir ${s.name || "#" + s.index} (${s.distance_km} km)` : " — no PurpleAir sensor nearby";
       toast((d.published ? "Home updated" : "Home saved (Node-RED will pick it up when the broker reconnects)") + sensorMsg);

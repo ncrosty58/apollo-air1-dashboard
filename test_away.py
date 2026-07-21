@@ -168,8 +168,7 @@ def test_current_reduces_latest_history_point(monkeypatch):
 def test_current_purpleair_names_sensor_instead_of_region(monkeypatch):
     # Matches Home's PurpleAir reading, which names the specific sensor
     # (purpleair.SENSOR_NAME) rather than the generic AirNow-resolved region
-    # every other provider shows -- with a distance too, since which sensor
-    # resolves can change with the away zip (unlike Home's fixed one).
+    # every other provider shows.
     away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
     monkeypatch.setattr(away.purpleair, "get_away_history", lambda lat, lon, days: {
         "points": [{"time": "2026-07-20T10:00:00Z", "aqi": 20, "pm2_5_ugm3": 5.0}],
@@ -178,7 +177,7 @@ def test_current_purpleair_names_sensor_instead_of_region(monkeypatch):
     loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
     obs = away.current("purpleair", loc)
     assert obs["sensor"]["index"] == 7
-    assert obs["reporting_area"] == "S — 1.2 km"
+    assert obs["reporting_area"] == "S"
 
 
 def test_current_purpleair_unnamed_sensor_falls_back_to_index(monkeypatch):
@@ -189,7 +188,7 @@ def test_current_purpleair_unnamed_sensor_falls_back_to_index(monkeypatch):
     })
     loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
     obs = away.current("purpleair", loc)
-    assert obs["reporting_area"] == "Sensor #7 — 1.2 km"
+    assert obs["reporting_area"] == "Sensor #7"
 
 
 def test_current_no_points_is_none(monkeypatch):

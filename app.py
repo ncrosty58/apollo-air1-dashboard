@@ -123,18 +123,20 @@ def api_history():
 
 
 def _resolve_home_latlon():
-    """Google's/OWM's forecast APIs need coordinates, not a zip -- AirNow's
-    own response for the home zip already resolved that, so reuse its
-    (cached) call instead of adding a separate geocoding dependency. Only the
-    live forecast path needs this now; current conditions read the home label
-    from the DB (see _home_reporting_area)."""
-    try:
-        obs = airnow.get_current_observation(home_config.home_zip())
-    except Exception:
+    """Google's/OWM's forecast APIs need coordinates, not a zip -- read them
+    straight from the saved home record instead of re-resolving via a fresh
+    AirNow zip lookup each time. A second live call isn't guaranteed to
+    return the same point as the one used when home was saved: AirNow
+    resolves a zip to its *nearest reporting station*, not a true centroid,
+    and that can drift several km between calls (confirmed directly -- two
+    live lookups for the same zip landed ~11km apart, enough to flip which
+    PurpleAir sensor came back nearest). Reading the stored value keeps every
+    consumer of "home's coordinates" pinned to the one point that was
+    actually resolved (or manually entered) at save time -- see api_home_set."""
+    home = home_config.get_home()
+    if home.get("lat") is None:
         return None, None, None
-    if obs is None or obs.get("lat") is None:
-        return None, None, None
-    return obs["lat"], obs["lon"], obs.get("reporting_area") or "Home"
+    return home["lat"], home["lon"], home.get("reporting_area") or "Home"
 
 
 def _home_reporting_area():
@@ -470,6 +472,23 @@ def api_home_set():
     if resolved is None:
         return jsonify({"error": "couldn't resolve or verify that zip with AirNow"}), 400
 
+    # The zip is still required -- AirNow's own Home poll (via Node-RED) only
+    # takes a zip, and it doubles as the reporting-area label lookup above.
+    # But AirNow's zip resolution is "nearest reporting station", not a true
+    # centroid, and can land noticeably off from the actual location (see
+    # _resolve_home_latlon) -- optional exact coordinates override that
+    # point for everything else that matters (the PurpleAir sensor search
+    # right below, and Google/OWM's forecast).
+    lat, lon = resolved["lat"], resolved["lon"]
+    lat_in, lon_in = body.get("lat"), body.get("lon")
+    if lat_in is not None and lon_in is not None:
+        try:
+            lat, lon = float(lat_in), float(lon_in)
+        except (TypeError, ValueError):
+            return jsonify({"error": "coordinates must be numbers"}), 400
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            return jsonify({"error": "coordinates out of range"}), 400
+
     # An explicit sensor index in the body is honored if ever passed (e.g. a
     # future admin/scripted call); the app's own UI never sends one anymore,
     # so this always auto-resolves, best-effort (no nearby sensor -> None).
@@ -477,13 +496,13 @@ def api_home_set():
     sensor_index = body.get("purpleair_sensor")
     if sensor_index is None:
         try:
-            sensor = purpleair.nearest_outdoor_sensor(resolved["lat"], resolved["lon"])
+            sensor = purpleair.nearest_outdoor_sensor(lat, lon)
         except Exception:
             logging.exception("PurpleAir nearest-sensor lookup failed")
         sensor_index = sensor["index"] if sensor else None
 
     home, published = home_config.set_home(
-        zip_code=zip_code, lat=resolved["lat"], lon=resolved["lon"],
+        zip_code=zip_code, lat=lat, lon=lon,
         reporting_area=resolved["reporting_area"], purpleair_sensor=sensor_index, label=label,
     )
     return jsonify({"home": home, "purpleair": sensor, "published": published})

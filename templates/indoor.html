@@ -208,9 +208,10 @@
           <form class="add-location-form" id="home-form">
             <input type="text" id="home-label" placeholder="Name (optional)" maxlength="40" autocomplete="off">
             <input type="text" id="home-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            <input type="text" id="home-coords" placeholder="Coordinates (optional) — lat, lon" autocomplete="off">
             <button type="submit">Save home</button>
           </form>
-          <p class="away-hint eyebrow">Changing home re-points what's polled and logged, and finds the nearest PurpleAir community sensor to poll too. Old history stays under the old location; charts spanning the change show a step.</p>
+          <p class="away-hint eyebrow">Changing home re-points what's polled and logged, and finds the nearest PurpleAir community sensor to poll too. Old history stays under the old location; charts spanning the change show a step. The zip is still required (AirNow's own poll needs one) but its resolved location can land a few km off -- enter exact coordinates to pin the PurpleAir search and Google/OWM forecast precisely instead.</p>
         </div>
 
         <div class="control-card danger-card">
