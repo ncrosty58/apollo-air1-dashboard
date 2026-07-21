@@ -175,6 +175,77 @@ def test_outside_all_away_covers_every_provider(client, monkeypatch):
     assert all(v == {"available": False, "reason": "no away location set"} for v in body.values())
 
 
+def test_outside_all_fetches_providers_in_parallel(client, monkeypatch):
+    # A hung/slow provider (confirmed live: AirNow returning a 504 after its
+    # full 10s timeout) must not block the others from appearing -- total
+    # time should be bounded by the slowest single provider, not their sum.
+    import time
+
+    monkeypatch.setenv("AIRNOW_API_KEY", "k")
+    monkeypatch.setenv("GOOGLE_AQ_API_KEY", "k")
+    monkeypatch.setenv("OWM_API_KEY", "k")
+    monkeypatch.setenv("PURPLEAIR_API_KEY", "k")
+    monkeypatch.setattr(home_config, "get_away",
+                        lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
+
+    def slow_airnow(zip_code):
+        time.sleep(0.3)
+        return None
+
+    monkeypatch.setattr(away.airnow, "get_current_observation", slow_airnow)
+    monkeypatch.setattr(away.google_aq, "get_away_history", lambda lat, lon, days: [])
+    monkeypatch.setattr(away.owm, "get_away_history", lambda lat, lon, days: [])
+    monkeypatch.setattr(away.purpleair, "get_away_history", lambda lat, lon, days: {"points": [], "sensor": None})
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+
+    start = time.monotonic()
+    res = client.get("/api/outside/all?mode=away")
+    elapsed = time.monotonic() - start
+
+    assert res.status_code == 200
+    assert elapsed < 0.6  # well under 4x0.3s -- would be ~1.2s+ if still sequential
+
+
+def test_outside_all_gives_up_on_a_provider_past_the_budget(client, monkeypatch):
+    # A provider that's still running past _OUTSIDE_ALL_TIMEOUT_S is reported
+    # unavailable rather than making the whole chip row wait on it (that
+    # thread keeps running on its own in the background -- not asserted here,
+    # just that this request doesn't block on it).
+    import threading
+    import time
+
+    monkeypatch.setattr(app_module, "_OUTSIDE_ALL_TIMEOUT_S", 0.1)
+    monkeypatch.setenv("AIRNOW_API_KEY", "k")
+    monkeypatch.setenv("GOOGLE_AQ_API_KEY", "k")
+    monkeypatch.setenv("OWM_API_KEY", "k")
+    monkeypatch.setenv("PURPLEAIR_API_KEY", "k")
+    monkeypatch.setattr(home_config, "get_away",
+                        lambda: {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"})
+
+    release = threading.Event()
+
+    def hung_airnow(zip_code):
+        release.wait(timeout=2)  # released at the end of the test, not the request
+        return None
+
+    monkeypatch.setattr(away.airnow, "get_current_observation", hung_airnow)
+    monkeypatch.setattr(away.google_aq, "get_away_history", lambda lat, lon, days: [])
+    monkeypatch.setattr(away.owm, "get_away_history", lambda lat, lon, days: [])
+    monkeypatch.setattr(away.purpleair, "get_away_history", lambda lat, lon, days: {"points": [], "sensor": None})
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+
+    start = time.monotonic()
+    try:
+        res = client.get("/api/outside/all?mode=away")
+        elapsed = time.monotonic() - start
+        assert res.status_code == 200
+        assert elapsed < 1  # bounded by the 0.1s budget, not airnow's 2s hang
+        body = res.get_json()
+        assert body["airnow"] == {"available": False, "reason": "taking too long to respond"}
+    finally:
+        release.set()  # let the background thread finish so it doesn't linger past the test
+
+
 def test_outside_history_away_trims_to_hours(client, monkeypatch):
     from datetime import UTC, datetime, timedelta
     monkeypatch.setenv("GOOGLE_AQ_API_KEY", "k")

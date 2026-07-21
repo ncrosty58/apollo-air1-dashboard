@@ -1,3 +1,4 @@
+import concurrent.futures
 import logging
 import os
 
@@ -275,29 +276,63 @@ def api_outside():
 _OUTSIDE_PROVIDERS = ("airnow", "google", "purpleair", "openweathermap")
 
 
+# This is a glance summary for the provider chips, not a considered read of
+# any one of them -- a provider that hasn't answered within this budget is
+# reported unavailable rather than making the whole chip row wait on it.
+# Confirmed directly against a real AirNow outage: its own HTTP timeout is
+# 10s, well past what a "glance" should ever wait for.
+_OUTSIDE_ALL_TIMEOUT_S = 5
+
+
 @app.route("/api/outside/all")
 def api_outside_all():
     """Compact current summary from every provider at once, for the
     at-a-glance provider chips. Each is best-effort and served from the
     same caches the full endpoint uses, so this costs no extra upstream
-    calls beyond what browsing the providers individually would."""
+    calls beyond what browsing the providers individually would.
+
+    Fetched in parallel, not one after another, and bounded by
+    _OUTSIDE_ALL_TIMEOUT_S -- these are independent calls (each provider's
+    own API or DB query), and running them sequentially with no budget meant
+    one slow/hung provider (confirmed directly: AirNow's API returning a 504
+    only after its full 10s timeout) blocked every other chip from appearing
+    at all, not just its own. A provider that's still running past the
+    budget keeps running in its own thread (so it still populates that
+    module's cache whenever it does finish, same as before) -- this request
+    just stops waiting on it."""
     mode = request.args.get("mode", "home")
-    summary = {}
     # Resolve the shared home label once rather than per-provider, and skip the
     # AirNow discussion fetch entirely -- the chips only show aqi/band/category.
     home_label = _home_reporting_area() if mode != "away" else None
-    for provider in _OUTSIDE_PROVIDERS:
+
+    def fetch_one(provider):
         data, error, _ = _fetch_outside_current(provider, want_discussion=False, home_label=home_label, mode=mode)
-        if data is None:
-            summary[provider] = {"available": False, "reason": error}
-        else:
-            summary[provider] = {
-                "available": True,
-                "aqi": data.get("aqi"),
-                "band": data.get("band"),
-                "category": data.get("category"),
-                "dominant_pollutant": data.get("dominant_pollutant"),
-            }
+        return provider, data, error
+
+    summary = {}
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(_OUTSIDE_PROVIDERS))
+    try:
+        future_to_provider = {pool.submit(fetch_one, provider): provider for provider in _OUTSIDE_PROVIDERS}
+        done, not_done = concurrent.futures.wait(future_to_provider, timeout=_OUTSIDE_ALL_TIMEOUT_S)
+        for future in done:
+            provider, data, error = future.result()
+            if data is None:
+                summary[provider] = {"available": False, "reason": error}
+            else:
+                summary[provider] = {
+                    "available": True,
+                    "aqi": data.get("aqi"),
+                    "band": data.get("band"),
+                    "category": data.get("category"),
+                    "dominant_pollutant": data.get("dominant_pollutant"),
+                }
+        for future in not_done:
+            summary[future_to_provider[future]] = {"available": False, "reason": "taking too long to respond"}
+    finally:
+        # wait=False -- don't block the response on threads we've already
+        # given up on; Python can't force-kill a thread mid requests.get()
+        # anyway, so it finishes (or times out) on its own in the background.
+        pool.shutdown(wait=False)
     return jsonify(summary)
 
 
