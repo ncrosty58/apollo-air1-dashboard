@@ -161,14 +161,19 @@ def history_points(rows, aqi_field, field_map):
 def points_since(points, hours):
     """Trim a flat point list (see history_points/point_to_pollutants) to the
     trailing `hours` window. Points carry ISO timestamps in whatever format
-    the provider gave (Z-suffixed or a +00:00 offset), normalized here rather
-    than assumed -- Away's per-provider fetchers don't all agree. Lets one
+    the provider gave -- Z-suffixed, a +00:00 offset, or (AirNow's away
+    history, built from its DateObserved/HourObserved fields) no offset at
+    all. A naive timestamp is assumed UTC rather than left to crash comparing
+    against the (aware) cutoff -- an approximation for AirNow specifically,
+    whose historical hours are actually station-local, but exact-to-the-hour
+    precision isn't the point of an already-daily-granularity chart. Lets one
     cached multi-day fetch (see away.history) serve every range a range
     toggle asks for without a separate upstream call per range."""
     cutoff = datetime.now(UTC) - timedelta(hours=hours)
 
     def _parse(ts):
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
     return [p for p in points if p.get("time") and _parse(p["time"]) >= cutoff]
 

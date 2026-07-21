@@ -117,13 +117,6 @@
     link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
   }
 
-  // Technical's Away support isn't solid yet -- hide the entry point rather
-  // than send someone to a page that doesn't hold up, until that's fixed.
-  function updateDetailsLink() {
-    const link = document.getElementById("outside-details-link");
-    if (link) link.hidden = currentMode() === "away";
-  }
-
   // Each chip shows that provider's own live AQI (from /api/outside/all,
   // one best-effort call per provider server-side, no extra upstream
   // traffic beyond what browsing them individually would cost) so tapping
@@ -168,7 +161,6 @@
     currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
     loadProviderChips();
     updateForecastLink();
-    updateDetailsLink();
     loadOutside();
     loadBasicSparks();
   });
@@ -403,7 +395,6 @@
   /* ---------- init ---------- */
   loadProviderChips();
   updateForecastLink();
-  updateDetailsLink();
   fetchAwayLoc().then(updateForecastLink);
   renderUnitToggle();
   loadLatest();

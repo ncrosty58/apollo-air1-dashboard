@@ -55,5 +55,16 @@ def test_points_since_handles_z_and_offset_timestamp_formats():
     assert aq_shared.points_since(points, 24) == [{"time": recent, "aqi": 2}]
 
 
+def test_points_since_handles_naive_timestamps():
+    # AirNow's away history builds timestamps from DateObserved/HourObserved
+    # with no timezone marker at all -- used to crash comparing a naive
+    # datetime against the (aware) cutoff. Assumed UTC rather than raising.
+    now = datetime.now(UTC)
+    old_naive = (now - timedelta(days=5)).replace(tzinfo=None).isoformat()
+    recent_naive = (now - timedelta(hours=1)).replace(tzinfo=None).isoformat()
+    points = [{"time": old_naive, "aqi": 1}, {"time": recent_naive, "aqi": 2}]
+    assert aq_shared.points_since(points, 24) == [{"time": recent_naive, "aqi": 2}]
+
+
 def test_points_since_drops_points_with_no_time():
     assert aq_shared.points_since([{"aqi": 1}], 24) == []
