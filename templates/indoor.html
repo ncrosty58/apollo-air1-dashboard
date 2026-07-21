@@ -34,6 +34,15 @@
     <div class="header-controls">
       <a class="pill-link" href="/">← Dashboard</a>
       {% if grafana_url %}<a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Grafana ↗</a>{% endif %}
+      <div class="settings-rail mode-rail" id="mode-rail" role="tablist" aria-label="Location mode">
+        <button type="button" data-mode="home" aria-pressed="true">Home</button>
+        <button type="button" data-mode="away" aria-pressed="false">Away</button>
+      </div>
+      <button type="button" class="settings-gear mode-edit" id="mode-edit-toggle" aria-label="Edit away location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 20l1-4.2L15.6 5.2a1.5 1.5 0 0 1 2.1 0l1.1 1.1a1.5 1.5 0 0 1 0 2.1L8.2 19l-4.2 1z"/>
+        </svg>
+      </button>
       <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3.2"/>
@@ -60,6 +69,14 @@
       <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
     </div>
+  </div>
+  <div class="settings-row">
+    <span class="cl-name">Away location</span>
+    <div class="away-location-current eyebrow" id="away-location-current">Loading…</div>
+    <form class="add-location-form" id="away-location-form">
+      <input type="text" id="away-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+      <button type="submit">Save</button>
+    </form>
   </div>
 </div>
 
@@ -200,6 +217,19 @@
             <span>Clean particulate sensor</span>
             <span class="btn-id">Runs the fan autoclean</span>
           </button>
+        </div>
+
+        <div class="control-card">
+          <h3>Home location</h3>
+          <div class="fd-dominant" id="home-current">Loading…</div>
+          <form class="add-location-form" id="home-form">
+            <input type="text" id="home-label" placeholder="Name (optional)" maxlength="40" autocomplete="off">
+            <input type="text" id="home-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            <button type="button" id="home-find">Find sensor</button>
+            <button type="submit">Save home</button>
+          </form>
+          <div class="fd-dominant" id="home-preview" hidden></div>
+          <p class="away-hint eyebrow">Changing home re-points what's polled and logged. Old history stays under the old location; charts spanning the change show a step.</p>
         </div>
 
         <div class="control-card danger-card">

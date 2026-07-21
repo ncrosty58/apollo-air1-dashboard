@@ -319,6 +319,76 @@
   holdBtn.addEventListener("touchstart", startHold, { passive: true });
   ["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((ev) => holdBtn.addEventListener(ev, cancelHold));
 
+  /* ---------- home location editor ----------
+   * Deliberately rare to touch: it repoints what Node-RED polls and logs to
+   * InfluxDB (see home_config.py), unlike Away (edited from the header's
+   * settings panel on every page). Living here rather than in that popover
+   * is the friction -- same "Setup" section as the sleep/calibration/
+   * factory-reset controls above, which are also rarely-touched device
+   * config. This is the same form the old /away page used to host. */
+
+  function renderHome(home) {
+    const el = document.getElementById("home-current");
+    if (!home || !home.zip) { el.textContent = "No home set"; return; }
+    const where = home.reporting_area || home.location_slug || home.zip;
+    const sensor = home.purpleair_sensor != null ? ` · PurpleAir #${home.purpleair_sensor}` : " · no PurpleAir sensor";
+    el.innerHTML = `${escapeHtml(where)} <span class="eyebrow">(ZIP ${escapeHtml(home.zip)}${escapeHtml(sensor)})</span>`;
+  }
+
+  async function loadHome() {
+    try {
+      const res = await fetch("/api/home");
+      renderHome(res.ok ? await res.json() : null);
+    } catch (e) {
+      renderHome(null);
+    }
+  }
+
+  // Suggest-and-confirm: preview the nearest PurpleAir sensor before saving, so
+  // a bad/flaky pick is visible rather than silently locked in.
+  document.getElementById("home-find").addEventListener("click", async () => {
+    const zip = document.getElementById("home-zip").value;
+    const preview = document.getElementById("home-preview");
+    preview.hidden = false;
+    preview.textContent = "Looking…";
+    try {
+      const res = await fetch(`/api/purpleair/nearest?zip=${encodeURIComponent(zip)}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "request failed");
+      const s = d.sensor;
+      const area = d.reporting_area ? ` — ${d.reporting_area}` : "";
+      preview.innerHTML = s
+        ? `Will use PurpleAir <strong>${escapeHtml(s.name || "#" + s.index)}</strong> (${s.distance_km} km, confidence ${s.confidence ?? "?"})${escapeHtml(area)}`
+        : `No PurpleAir sensor nearby${escapeHtml(area)} — home will have no PurpleAir card.`;
+    } catch (err) {
+      preview.textContent = "Couldn't check PurpleAir — " + err.message;
+    }
+  });
+
+  document.getElementById("home-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const zip = document.getElementById("home-zip").value;
+    const label = document.getElementById("home-label").value;
+    try {
+      const res = await fetch("/api/home", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zip, label }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "request failed");
+      renderHome(d.home);
+      document.getElementById("home-preview").hidden = true;
+      document.getElementById("home-zip").value = "";
+      document.getElementById("home-label").value = "";
+      toast(d.published ? "Home updated" : "Home saved (Node-RED will pick it up when the broker reconnects)");
+    } catch (err) {
+      toast("Couldn't save — " + err.message);
+    }
+  });
+
+  loadHome();
+
   /* ---------- range toggle ---------- */
   let currentRange = 24;
   document.querySelectorAll("#range-toggle button").forEach((btn) => {

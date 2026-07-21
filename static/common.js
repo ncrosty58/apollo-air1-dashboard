@@ -130,7 +130,10 @@ document.addEventListener("click", (e) => {
   document.dispatchEvent(new CustomEvent("readoutchange"));
 });
 
-/* ---------- settings panel (self-initializing on every page) ---------- */
+/* ---------- settings panel (self-initializing on every page) ----------
+ * openSettingsPanel is exposed on window so the mode-rail's edit control
+ * (below) can pop it open from outside this closure -- same panel, no
+ * second popover implementation. */
 (function initSettingsPanel() {
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsPanel = document.getElementById("settings-panel");
@@ -170,6 +173,118 @@ document.addEventListener("click", (e) => {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !settingsPanel.hidden) closeSettings();
   });
+  window.openSettingsPanel = openSettings;
+})();
+
+/* ---------- location mode: Home / Away (self-initializing on every page) ----------
+ * A third piece of shared, per-browser client state alongside theme/readout --
+ * which location the whole app (dashboard, Technical, Forecast) currently
+ * shows. Persisted so a wall display and a phone can independently sit in
+ * different modes. apollo-air1-away-provider mirrors apollo-air1-provider but
+ * scoped to Away, so flipping modes never clobbers your Home provider choice. */
+function currentMode() {
+  return localStorage.getItem("apollo-air1-mode") || "home";
+}
+
+// undefined = not fetched yet; null = fetched, no away location saved.
+let _awayLoc;
+
+async function fetchAwayLoc(force) {
+  if (_awayLoc !== undefined && !force) return _awayLoc;
+  try {
+    const res = await fetch("/api/away");
+    _awayLoc = res.ok ? await res.json() : null;
+  } catch (e) {
+    _awayLoc = null;
+  }
+  if (_awayLoc && _awayLoc.lat == null) _awayLoc = null; // stored but unresolved
+  return _awayLoc;
+}
+
+// Synchronous read of the last fetch -- callers that just need "is there one
+// / what's its zip" (e.g. building a Forecast link) use this; callers driving
+// the mode-rail/settings row itself await fetchAwayLoc() directly.
+function getAwayLoc() {
+  return _awayLoc === undefined ? null : _awayLoc;
+}
+
+function renderModeRail() {
+  const mode = currentMode();
+  document.querySelectorAll(".mode-rail button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.getAttribute("data-mode") === mode));
+  });
+}
+
+function setMode(mode) {
+  localStorage.setItem("apollo-air1-mode", mode);
+  renderModeRail();
+  document.dispatchEvent(new CustomEvent("modechange", { detail: { mode } }));
+}
+
+function renderAwayLocationRow() {
+  const el = document.getElementById("away-location-current");
+  if (!el) return;
+  const loc = getAwayLoc();
+  el.textContent = loc ? (loc.reporting_area || loc.zip) : "Not set — pick a ZIP below";
+}
+
+(function initModeRail() {
+  if (!document.querySelector(".mode-rail")) return;
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".mode-rail button");
+    if (!btn) return;
+    const mode = btn.getAttribute("data-mode");
+    if (mode === "away" && !(await fetchAwayLoc())) {
+      // Nothing to flip to yet -- open the settings panel's Away location
+      // row instead of switching to an empty view.
+      if (window.openSettingsPanel) window.openSettingsPanel();
+      return;
+    }
+    setMode(mode);
+  });
+
+  const editBtn = document.getElementById("mode-edit-toggle");
+  if (editBtn) {
+    editBtn.addEventListener("click", () => {
+      if (window.openSettingsPanel) window.openSettingsPanel();
+    });
+  }
+
+  const form = document.getElementById("away-location-form");
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("away-location-zip");
+      const zip = input.value;
+      const btn = form.querySelector("button");
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/away", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zip }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || "request failed");
+        _awayLoc = d;
+        renderAwayLocationRow();
+        input.value = "";
+        // Away is now configured -- if the rail is already sitting on Away
+        // (e.g. editing to change it), refresh the app for the new location.
+        if (currentMode() === "away") setMode("away");
+      } catch (err) {
+        // The settings panel has no toast stack on every page -- a plain
+        // alert-free inline message would need its own element; keeping this
+        // minimal for now matches the panel's other rows (no error states).
+        document.getElementById("away-location-current").textContent = "Couldn't save that ZIP";
+      }
+      btn.disabled = false;
+    });
+  }
+
+  fetchAwayLoc().then(renderAwayLocationRow);
+  renderModeRail();
 })();
 
 /* ---------- footer clock (self-initializing on every page) ---------- */

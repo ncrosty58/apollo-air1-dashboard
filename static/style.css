@@ -555,7 +555,9 @@
   font: inherit; font-size: 0.875rem; padding: 8px 12px; border-radius: var(--radius-tech);
   border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
 }
-.add-location-form input#new-location-zip { width: 7ch; flex: none; }
+.add-location-form input#new-location-zip,
+.add-location-form input#away-location-zip,
+.add-location-form input#home-zip { width: 7ch; flex: none; }
 .add-location-form button {
   font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
   border-radius: var(--radius-tech); border: 1px solid var(--hairline); padding: 8px 14px;

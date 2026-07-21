@@ -3,6 +3,7 @@ owm), so the current-reading, history, and forecast-caching patterns live in
 one place instead of being copy-pasted per provider."""
 
 import time
+from datetime import UTC, datetime, timedelta
 
 import epa_aqi
 
@@ -91,6 +92,54 @@ def observation(row, *, aqi_field, category_field, dominant_field,
     }
 
 
+def point_to_pollutants(point, field_defs):
+    """Build a pollutants list from a flat history point (the shape away.py's
+    live fetchers return), for the Away providers that carry no per-pollutant
+    AQI in that point -- same concentration-only shape Google/OWM/PurpleAir's
+    own DB-backed current-observation cards already show. `field_defs` is
+    [(point_key, parameter, units)]."""
+    pollutants = []
+    for key, parameter, units in field_defs:
+        value = point.get(key)
+        if value is not None:
+            pollutants.append({"parameter": parameter, "concentration_value": value, "concentration_units": units})
+    return pollutants
+
+
+def dominant_from_pollutants(pollutants):
+    """Which pollutant drives the reading, by recomputing each one's AQI from
+    its concentration and taking the worst -- the same worst-of pattern
+    already used by google_aq._recomputed_aqi / owm._forecast_aqi_dominant /
+    purpleair._worst_pm_aqi. Returns None when no pollutant converts."""
+    best = None
+    for p in pollutants:
+        aqi = epa_aqi.aqi_from_concentration(p["parameter"], p["concentration_value"])
+        if aqi is not None and (best is None or aqi > best[0]):
+            best = (aqi, p["parameter"])
+    return best[1] if best else None
+
+
+def away_observation(point, field_defs, reporting_area):
+    """Away's analogue of observation() above: assembles the same current-
+    conditions shape from one live history point instead of a stored InfluxDB
+    row, so every existing renderer (dashboard rack, Technical card) works on
+    Away data unmodified. Returns None when the point carries no AQI."""
+    aqi = point.get("aqi")
+    if aqi is None:
+        return None
+    pollutants = point_to_pollutants(point, field_defs)
+    return {
+        "aqi": aqi,
+        "band": epa_aqi.band_for_aqi(aqi),
+        "category": epa_aqi.category_name(aqi),
+        "dominant_pollutant": dominant_from_pollutants(pollutants),
+        "reporting_area": reporting_area,
+        "observed_hour": None,
+        "time": point.get("time"),
+        "pollutants": pollutants,
+    }
+
+
 def history_points(rows, aqi_field, field_map):
     """Turn stored InfluxDB rows into the flat history-point shape the
     frontend overlays expect: {time, aqi, <mapped fields>}. `field_map` is
@@ -107,6 +156,21 @@ def history_points(rows, aqi_field, field_map):
         if len(cleaned) > 1:  # more than just "time"
             points.append(cleaned)
     return points
+
+
+def points_since(points, hours):
+    """Trim a flat point list (see history_points/point_to_pollutants) to the
+    trailing `hours` window. Points carry ISO timestamps in whatever format
+    the provider gave (Z-suffixed or a +00:00 offset), normalized here rather
+    than assumed -- Away's per-provider fetchers don't all agree. Lets one
+    cached multi-day fetch (see away.history) serve every range a range
+    toggle asks for without a separate upstream call per range."""
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+
+    def _parse(ts):
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+    return [p for p in points if p.get("time") and _parse(p["time"]) >= cutoff]
 
 
 def worst_hour_per_day(points, date_of, aqi_of):

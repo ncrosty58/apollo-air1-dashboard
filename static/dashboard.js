@@ -92,16 +92,34 @@
    * The only screen with a switcher -- Technical and Forecast just display
    * whichever provider is currently selected (shared via localStorage).
    * PROVIDER_NAMES / PROVIDER_ORDER / PROVIDERS_WITHOUT_FORECAST live in
-   * common.js so this page and the server's api_forecast set can't drift. */
-  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
+   * common.js so this page and the server's api_forecast set can't drift.
+   *
+   * Home and Away each remember their own provider choice (currentMode/
+   * getAwayLoc come from common.js) so flipping modes never clobbers the
+   * other's pick -- same reasoning as the old Away page's own storage key. */
+  function providerStorageKey() {
+    return currentMode() === "away" ? "apollo-air1-away-provider" : "apollo-air1-provider";
+  }
+  function defaultProvider() {
+    return currentMode() === "away" ? "google" : "airnow";
+  }
+  function providersForMode() {
+    // AirNow has no live per-location story -- Away only ever offers the
+    // three providers away.py supports (see away.PROVIDER_KEYS server-side).
+    return currentMode() === "away" ? PROVIDER_ORDER.filter((p) => p !== "airnow") : PROVIDER_ORDER;
+  }
+  let currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
   }
 
-  function renderForecastLinkVisibility() {
+  function updateForecastLink() {
     const link = document.getElementById("forecast-link");
-    if (link) link.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
+    if (!link) return;
+    link.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
+    const awayLoc = currentMode() === "away" ? getAwayLoc() : null;
+    link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
   }
 
   // Each chip shows that provider's own live AQI (from /api/outside/all,
@@ -113,9 +131,9 @@
     const wrap = document.getElementById("provider-chips");
     if (!wrap) return;
     try {
-      const res = await fetch("/api/outside/all");
+      const res = await fetch(`/api/outside/all?mode=${currentMode()}`);
       const summary = res.ok ? await res.json() : {};
-      wrap.innerHTML = PROVIDER_ORDER.map((p) => {
+      wrap.innerHTML = providersForMode().map((p) => {
         const s = summary[p] || { available: false };
         const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
         const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";
@@ -130,9 +148,19 @@
     const btn = e.target.closest(".provider-chip");
     if (!btn) return;
     currentProvider = btn.getAttribute("data-provider");
-    localStorage.setItem("apollo-air1-provider", currentProvider);
+    localStorage.setItem(providerStorageKey(), currentProvider);
     loadProviderChips();
-    renderForecastLinkVisibility();
+    updateForecastLink();
+    loadOutside();
+    loadBasicSparks();
+  });
+
+  // The header's Home/Away rail (common.js) flips the whole outside half of
+  // this page over to the other location's data.
+  document.addEventListener("modechange", () => {
+    currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
+    loadProviderChips();
+    updateForecastLink();
     loadOutside();
     loadBasicSparks();
   });
@@ -247,7 +275,7 @@
 
   async function loadOutside() {
     try {
-      const res = await fetch(`/api/outside?provider=${currentProvider}`);
+      const res = await fetch(`/api/outside?provider=${currentProvider}&mode=${currentMode()}`);
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "request failed");
 
@@ -289,7 +317,7 @@
     try {
       const [insideRes, outsideRes] = await Promise.allSettled([
         fetch("/api/history?hours=6"),
-        fetch(`/api/outside/history?hours=6&provider=${currentProvider}`),
+        fetch(`/api/outside/history?hours=6&provider=${currentProvider}&mode=${currentMode()}`),
       ]);
       const insidePoints = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
       const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
@@ -362,7 +390,8 @@
 
   /* ---------- init ---------- */
   loadProviderChips();
-  renderForecastLinkVisibility();
+  updateForecastLink();
+  fetchAwayLoc().then(updateForecastLink);
   renderUnitToggle();
   loadLatest();
   loadOutside();

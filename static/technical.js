@@ -186,11 +186,40 @@
   }
 
   /* ---------- provider (read-only here -- switching only happens on Basic) ----------
-   * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. */
-  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
+   * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. Home and
+   * Away each remember their own provider choice (currentMode/getAwayLoc come
+   * from common.js too), same storage-key split as dashboard.js. */
+  function providerStorageKey() {
+    return currentMode() === "away" ? "apollo-air1-away-provider" : "apollo-air1-provider";
+  }
+  function defaultProvider() {
+    return currentMode() === "away" ? "google" : "airnow";
+  }
+  let currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
 
   function providerLabel() {
     return PROVIDER_NAMES[currentProvider] || "AirNow";
+  }
+
+  function updateForecastLink() {
+    const link = document.getElementById("forecast-link");
+    if (!link) return;
+    link.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
+    const awayLoc = currentMode() === "away" ? getAwayLoc() : null;
+    link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
+  }
+
+  // Indoor air is physically tied to Home -- hide the Inside vs Outside
+  // overlay charts entirely in Away mode (comparing it to a remote location
+  // would be misleading), leaving just the current reading + outside-only
+  // history. The shared range toggle stays visible either way (it also
+  // drives the Outside-only section below).
+  function applyModeVisibility() {
+    const away = currentMode() === "away";
+    const chartsEl = document.getElementById("inside-outside-charts");
+    if (chartsEl) chartsEl.hidden = away;
+    const titleEl = document.getElementById("inside-outside-title");
+    if (titleEl) titleEl.textContent = away ? "Outside history" : "Inside vs Outside";
   }
 
   // Technical is the engineering view: prefer the raw concentration (µg/m³ /
@@ -219,7 +248,7 @@
   /* ---------- outside current reading ---------- */
   async function loadOutside() {
     try {
-      const res = await fetch(`/api/outside?provider=${currentProvider}`);
+      const res = await fetch(`/api/outside?provider=${currentProvider}&mode=${currentMode()}`);
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "request failed");
 
@@ -254,17 +283,21 @@
   let lastOutsideSectionInsidePoints = null, lastOutsidePoints = null, lastOutsideRangeLabel = "";
 
   async function loadOutsideHistorySection(hours) {
-    const [insideRes, outsideRes] = await Promise.allSettled([
-      fetch(`/api/history?hours=${hours}`),
-      fetch(`/api/outside/history?hours=${hours}&provider=${currentProvider}`),
-    ]);
-    const insidePoints = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
+    const mode = currentMode();
+    const outsideUrl = `/api/outside/history?hours=${hours}&provider=${currentProvider}&mode=${mode}`;
+    // Away has no indoor reading to compare against -- skip the inside fetch
+    // entirely rather than pulling Home's sensor history just to discard it.
+    const fetches = mode === "away"
+      ? [Promise.resolve(null), fetch(outsideUrl)]
+      : [fetch(`/api/history?hours=${hours}`), fetch(outsideUrl)];
+    const [insideRes, outsideRes] = await Promise.allSettled(fetches);
+    const insidePoints = insideRes.status === "fulfilled" && insideRes.value && insideRes.value.ok ? await insideRes.value.json() : [];
     const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
     lastOutsideSectionInsidePoints = insidePoints;
     lastOutsidePoints = outsidePoints;
     lastOutsideRangeLabel = rangeLabelFor(hours);
     renderOutsideCharts(outsidePoints, lastOutsideRangeLabel);
-    renderInsideOutsideCharts(insidePoints, outsidePoints, lastOutsideRangeLabel);
+    if (mode !== "away") renderInsideOutsideCharts(insidePoints, outsidePoints, lastOutsideRangeLabel);
   }
 
   let resizeTimer = null;
@@ -273,7 +306,7 @@
     resizeTimer = setTimeout(() => {
       if (lastOutsidePoints) {
         renderOutsideCharts(lastOutsidePoints, lastOutsideRangeLabel);
-        renderInsideOutsideCharts(lastOutsideSectionInsidePoints, lastOutsidePoints, lastOutsideRangeLabel);
+        if (currentMode() !== "away") renderInsideOutsideCharts(lastOutsideSectionInsidePoints, lastOutsidePoints, lastOutsideRangeLabel);
       }
     }, 200);
   });
@@ -312,11 +345,23 @@
     });
   });
 
+  // The header's Home/Away rail (common.js) flips this whole page over to
+  // the other location's data.
+  document.addEventListener("modechange", () => {
+    currentProvider = localStorage.getItem(providerStorageKey()) || defaultProvider();
+    document.getElementById("outside-source-tech").textContent = providerLabel();
+    applyModeVisibility();
+    updateForecastLink();
+    loadOutside();
+    loadOutsideHistorySection(currentRangeOutside);
+  });
+
   /* ---------- init ---------- */
   renderUnitToggle();
   document.getElementById("outside-source-tech").textContent = providerLabel();
-  const forecastLink = document.getElementById("forecast-link");
-  if (forecastLink) forecastLink.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
+  applyModeVisibility();
+  updateForecastLink();
+  fetchAwayLoc().then(updateForecastLink);
   loadOutside();
   loadOutsideHistorySection(currentRangeOutside);
   loadConnectionStatus();

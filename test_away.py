@@ -145,3 +145,43 @@ def test_away_history_caches(monkeypatch):
     r2 = away.history("google", loc, 7)
     assert r1 == r2 == {"points": [{"time": "t", "aqi": 1}]}
     assert len(calls) == 1  # second call served from cache, no upstream hit
+
+
+# ---------- away.current() -- the mode=away analogue of get_current_observation ----------
+
+def test_current_reduces_latest_history_point(monkeypatch):
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+    monkeypatch.setattr(away.google_aq, "get_away_history", lambda lat, lon, days: [
+        {"time": "2026-07-19T10:00:00Z", "aqi": 40, "pm2_5_ugm3": 12.0},
+        {"time": "2026-07-20T10:00:00Z", "aqi": 55, "pm2_5_ugm3": 200.0, "o3_ppb": 30.0},
+    ])
+    loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
+    obs = away.current("google", loc)
+    assert obs["aqi"] == 55  # the latest point, not the first
+    assert obs["reporting_area"] == "Chicago"
+    assert obs["time"] == "2026-07-20T10:00:00Z"
+    assert obs["dominant_pollutant"] == "PM2.5"  # 200 ug/m3 recomputes worse than 30 ppb O3
+    assert {"parameter": "PM2.5", "concentration_value": 200.0, "concentration_units": "MICROGRAMS_PER_CUBIC_METER"} in obs["pollutants"]
+    assert "sensor" not in obs  # only PurpleAir attaches one
+
+
+def test_current_purpleair_attaches_sensor(monkeypatch):
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+    monkeypatch.setattr(away.purpleair, "get_away_history", lambda lat, lon, days: {
+        "points": [{"time": "2026-07-20T10:00:00Z", "aqi": 20, "pm2_5_ugm3": 5.0}],
+        "sensor": {"index": 7, "name": "S", "distance_km": 1.2},
+    })
+    loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
+    obs = away.current("purpleair", loc)
+    assert obs["sensor"]["index"] == 7
+
+
+def test_current_no_points_is_none(monkeypatch):
+    away._cache = away.aq_shared.TTLCache(away.CACHE_TTL_S)
+    monkeypatch.setattr(away.purpleair, "get_away_history", lambda lat, lon, days: {"points": [], "sensor": None})
+    loc = {"zip": "60601", "lat": 41.8, "lon": -87.6, "reporting_area": "Chicago"}
+    assert away.current("purpleair", loc) is None
+
+
+def test_current_unknown_provider_is_none():
+    assert away.current("airnow", {"zip": "x", "lat": 1, "lon": 2}) is None

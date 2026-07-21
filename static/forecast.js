@@ -109,7 +109,11 @@
   }
 
   let savedLocations = [];
-  let selectedZip = null; // null = home (AIRNOW_ZIP)
+  // null = home; otherwise a zip -- seeded from ?zip= so a link built with
+  // the away location (e.g. the header's Forecast link while in Away mode)
+  // opens pre-selected. currentMode/getAwayLoc/fetchAwayLoc come from
+  // common.js.
+  let selectedZip = new URLSearchParams(location.search).get("zip") || null;
 
   async function loadLocations() {
     try {
@@ -124,13 +128,21 @@
   function renderLocationSwitch() {
     const wrap = document.getElementById("location-switch");
     const homeBtn = `<button type="button" class="location-chip" data-zip="" aria-pressed="${selectedZip === null}">Home</button>`;
+    // The Away location lives in its own home_config slot, not the saved-
+    // locations list -- surfaced here as a first-class chip (rather than
+    // requiring a raw ?zip=) so Forecast participates in the same Home/Away
+    // mode concept as the dashboard and Technical page.
+    const awayLoc = getAwayLoc();
+    const awayBtn = awayLoc
+      ? `<button type="button" class="location-chip" data-zip="${awayLoc.zip}" aria-pressed="${selectedZip === awayLoc.zip}">${escapeHtml(awayLoc.reporting_area || "Away")}</button>`
+      : "";
     const chips = savedLocations.map((loc) => `
       <span class="location-chip-wrap">
         <button type="button" class="location-chip" data-zip="${loc.zip}" aria-pressed="${selectedZip === loc.zip}">${escapeHtml(loc.label)}</button>
         <button type="button" class="location-chip-remove" data-zip="${loc.zip}" aria-label="Remove ${escapeHtml(loc.label)}">×</button>
       </span>`).join("");
     const addBtn = `<button type="button" class="location-chip location-chip-add" id="add-location-toggle">+ Add</button>`;
-    wrap.innerHTML = homeBtn + chips + addBtn;
+    wrap.innerHTML = homeBtn + awayBtn + chips + addBtn;
 
     wrap.querySelectorAll(".location-chip[data-zip]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -316,6 +328,7 @@
 
   document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
   loadLocations();
+  fetchAwayLoc().then(renderLocationSwitch);
   loadForecast();
   pollInterval(loadForecast, 15 * 60000);
 })();

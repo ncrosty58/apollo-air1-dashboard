@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 import airnow
+import aq_shared
 import away
 import google_aq
 import home_config
@@ -84,11 +85,6 @@ def indoor_page():
     return render_template("indoor.html")
 
 
-@app.route("/away")
-def away_page():
-    return render_template("away.html")
-
-
 @app.route("/manifest.webmanifest")
 def manifest():
     return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")
@@ -161,6 +157,13 @@ def _home_reporting_area():
 def _resolve_latlon_for_zip(zip_code):
     if zip_code == home_config.home_zip():
         return _resolve_home_latlon()
+    # The Away location isn't in the saved-locations list -- it's its own slot
+    # in home_config -- so check it before falling through to that list. This
+    # is what lets the Forecast page's existing ?zip= mechanism serve the Away
+    # location too, instead of Away needing its own forecast plumbing.
+    away_loc = home_config.get_away()
+    if away_loc and away_loc.get("zip") == zip_code and away_loc.get("lat") is not None:
+        return away_loc["lat"], away_loc["lon"], away_loc.get("reporting_area")
     for loc in locations_store.list_locations():
         if loc["zip"] != zip_code:
             continue
@@ -210,13 +213,41 @@ _CURRENT_READERS = {
 _NEEDS_HOME_LABEL = {"google", "openweathermap"}
 
 
-def _fetch_outside_current(provider, *, want_discussion=True, home_label=None):
+def _fetch_away_current(provider):
+    """Away's analogue of _read_from_db above: live per-provider read via
+    away.current() instead of an InfluxDB query. Only the three providers with
+    a live per-location API are offered (see away.PROVIDER_KEYS) -- AirNow and
+    anything else fails closed with a 400 rather than silently serving Home."""
+    env_key = away.PROVIDER_KEYS.get(provider)
+    if env_key is None:
+        return None, f"{provider} isn't available in Away mode", 400
+    if not os.environ.get(env_key):
+        return None, f"{provider} isn't configured", 400
+    away_loc = home_config.get_away()
+    if not away_loc or away_loc.get("lat") is None:
+        return None, "no away location set", 404
+    try:
+        data = away.current(provider, away_loc)
+    except Exception:
+        logging.exception("Away current-conditions fetch failed provider=%s", provider)
+        return None, f"{provider} request failed", 502
+    if data is None:
+        return None, "no data available for this away location", 404
+    return data, None, 200
+
+
+def _fetch_outside_current(provider, *, want_discussion=True, home_label=None, mode="home"):
     """Returns (data, error_message, http_status). data is None on error.
 
     want_discussion=False skips the live AirNow forecast-discussion fetch, for
     callers (the /api/outside/all chip summary) that don't render it.
     home_label lets a caller resolve the shared home label once and pass it in
-    rather than each provider re-querying it."""
+    rather than each provider re-querying it. mode="away" reads live from the
+    Away location instead (see _fetch_away_current) -- discussion/home_label
+    don't apply there."""
+    if mode == "away":
+        return _fetch_away_current(provider)
+
     fetch, label, missing_msg = _CURRENT_READERS.get(provider, _CURRENT_READERS["airnow"])
     data, error, status = _read_from_db(fetch, label, missing_msg)
     if data is None:
@@ -243,10 +274,17 @@ def _fetch_outside_current(provider, *, want_discussion=True, home_label=None):
 @app.route("/api/outside")
 def api_outside():
     provider = request.args.get("provider", "airnow")
-    data, error, status = _fetch_outside_current(provider)
+    mode = request.args.get("mode", "home")
+    data, error, status = _fetch_outside_current(provider, mode=mode)
     if data is None:
         return jsonify({"error": error}), status
     return jsonify(data)
+
+
+# The Home chip row (every provider Node-RED polls) vs the Away chip row (only
+# the three providers with a live per-location API -- see away.PROVIDER_KEYS).
+_HOME_PROVIDERS = ("airnow", "google", "purpleair", "openweathermap")
+_AWAY_PROVIDERS = ("google", "purpleair", "openweathermap")
 
 
 @app.route("/api/outside/all")
@@ -255,12 +293,14 @@ def api_outside_all():
     at-a-glance provider chips. Each is best-effort and served from the
     same caches the full endpoint uses, so this costs no extra upstream
     calls beyond what browsing the providers individually would."""
+    mode = request.args.get("mode", "home")
     summary = {}
     # Resolve the shared home label once rather than per-provider, and skip the
     # AirNow discussion fetch entirely -- the chips only show aqi/band/category.
-    home_label = _home_reporting_area()
-    for provider in ("airnow", "google", "purpleair", "openweathermap"):
-        data, error, _ = _fetch_outside_current(provider, want_discussion=False, home_label=home_label)
+    home_label = _home_reporting_area() if mode != "away" else None
+    providers = _AWAY_PROVIDERS if mode == "away" else _HOME_PROVIDERS
+    for provider in providers:
+        data, error, _ = _fetch_outside_current(provider, want_discussion=False, home_label=home_label, mode=mode)
         if data is None:
             summary[provider] = {"available": False, "reason": error}
         else:
@@ -305,6 +345,30 @@ _HISTORY_READERS = {
 }
 
 
+def _api_outside_history_away(provider, hours):
+    """Away's analogue of the DB-backed branch below: one cached 7-day live
+    fetch (see away.history) trimmed to the requested window with
+    aq_shared.points_since, so every range the Technical page's toggle offers
+    (up to 7d) reuses the same cache entry instead of a separate upstream call
+    per range. The shared outside-weather feed (_with_outside_weather) is
+    Home-only -- it's physically tied to Home's own sensor, so it's skipped."""
+    env_key = away.PROVIDER_KEYS.get(provider)
+    if env_key is None:
+        return jsonify({"error": f"{provider} isn't available in Away mode"}), 400
+    if not os.environ.get(env_key):
+        return jsonify({"error": f"{provider} isn't configured"}), 400
+    away_loc = home_config.get_away()
+    if not away_loc or away_loc.get("lat") is None:
+        return jsonify({"error": "no away location set"}), 404
+    try:
+        result = away.history(provider, away_loc, days=7)
+    except Exception:
+        logging.exception("Away history fetch failed provider=%s", provider)
+        return jsonify({"error": f"{provider} request failed"}), 502
+    points = (result or {}).get("points") or []
+    return jsonify(aq_shared.points_since(points, hours))
+
+
 @app.route("/api/outside/history")
 def api_outside_history():
     try:
@@ -313,6 +377,10 @@ def api_outside_history():
         hours = 24
     hours = max(1, min(hours, 168))
     provider = request.args.get("provider", "airnow")
+    mode = request.args.get("mode", "home")
+
+    if mode == "away":
+        return _api_outside_history_away(provider, hours)
 
     reader = _HISTORY_READERS.get(provider)
     if reader is not None:
@@ -520,40 +588,6 @@ def api_away_set():
 def api_away_clear():
     home_config.clear_away()
     return jsonify({"cleared": True})
-
-
-# Away history is live per provider -- each needs its own API key set on the app
-# container (unlike Home, which reads Node-RED's writes from the DB).
-_AWAY_PROVIDER_KEYS = {
-    "airnow": "AIRNOW_API_KEY",
-    "google": "GOOGLE_AQ_API_KEY",
-    "openweathermap": "OWM_API_KEY",
-    "purpleair": "PURPLEAIR_API_KEY",
-}
-
-
-@app.route("/api/away/history")
-def api_away_history():
-    provider = request.args.get("provider", "google")
-    if provider not in away.PROVIDERS:
-        return jsonify({"error": "unknown provider"}), 400
-    if not os.environ.get(_AWAY_PROVIDER_KEYS[provider]):
-        return jsonify({"error": f"{provider} isn't configured"}), 400
-    away_loc = home_config.get_away()
-    if not away_loc or away_loc.get("lat") is None:
-        return jsonify({"error": "no away location set"}), 404
-    try:
-        days = int(request.args.get("days", 7))
-    except ValueError:
-        days = 7
-    days = max(1, min(days, 30))
-    force = request.args.get("refresh") in ("1", "true")
-    try:
-        result = away.history(provider, away_loc, days, force=force)
-    except Exception:
-        logging.exception("Away history fetch failed provider=%s", provider)
-        return jsonify({"error": f"{provider} request failed"}), 502
-    return jsonify(result)
 
 
 @app.route("/api/controls")
