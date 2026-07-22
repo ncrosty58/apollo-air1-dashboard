@@ -1,5 +1,7 @@
-const CACHE_NAME = "apollo-air1-shell-v5";
+const CACHE_NAME = "apollo-air1-shell-v6";
 const SHELL_FILES = [
+  "/static/fonts/instrument-sans.woff2",
+  "/static/fonts/martian-mono.woff2",
   "/",
   "/forecast",
   "/technical",

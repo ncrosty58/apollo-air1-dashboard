@@ -1,3 +1,18 @@
+@font-face {
+  font-family: 'Instrument Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/static/fonts/instrument-sans.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Martian Mono';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/static/fonts/martian-mono.woff2') format('woff2');
+}
+
   /* ---------- tokens ---------- */
   /* One block covers both themes: light-dark() resolves per color-scheme.
      "light dark" on :root follows the OS; a saved choice pins it via the
@@ -24,8 +39,11 @@
     --danger: light-dark(#b23a3a, #e07272);
 
     --radius: 10px;
-    --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    /* One characterful sans for text, one characterful mono for the numbers
+       -- but unlike the original design, the mono never leaks into labels,
+       buttons, or titles, so the flavor stays a seasoning, not the dish. */
+    --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'Martian Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
     --shadow-raised: 0 1px 3px light-dark(rgba(20,25,20,0.05), rgba(0,0,0,0.35));
   }
