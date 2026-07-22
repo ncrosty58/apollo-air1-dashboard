@@ -85,11 +85,6 @@ def indoor_page():
     return render_template("indoor.html")
 
 
-@app.route("/manifest.webmanifest")
-def manifest():
-    return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")
-
-
 @app.route("/sw.js")
 def service_worker():
     # Served from the root (not /static/sw.js) so its default scope covers the whole app.
