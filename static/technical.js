@@ -264,14 +264,6 @@
     return PROVIDER_NAMES[currentProvider] || "AirNow";
   }
 
-  function updateForecastLink() {
-    const link = document.getElementById("forecast-link");
-    if (!link) return;
-    link.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
-    const awayLoc = currentMode() === "away" ? getAwayLoc() : null;
-    link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
-  }
-
   // Indoor air is physically tied to Home -- in Away mode, hide the
   // Temperature/humidity/pressure section at the bottom of the page
   // (comparing the sensor to a remote location would be misleading) and the

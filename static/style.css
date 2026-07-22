@@ -57,15 +57,41 @@
     font-weight: 500;
   }
 
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 80px; }
+  /* Bottom padding clears the fixed tab bar (plus phone home-indicator
+     inset) so the footer is never trapped underneath it. */
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px calc(96px + env(safe-area-inset-bottom, 0px)); }
   /* Every extra px of side padding on a narrow phone is a px the chart
      itself doesn't get -- both the faceplate and .wrap eat into the same
      budget, so both come down together below this width. */
   @media (max-width: 420px) {
-    .wrap { padding: 0 14px 80px; }
+    .wrap { padding-left: 14px; padding-right: 14px; }
     .faceplate-inner { padding: 14px; }
     .chart-card { padding: 14px 14px 10px; }
   }
+
+  /* ---------- bottom tab bar ----------
+     The one navigation surface, identical on every page: four named tabs,
+     current page highlighted. Replaces the old scattered "Details →" pills
+     and the icon-only back button -- there's always exactly one visible way
+     to get anywhere. */
+  .tab-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; justify-content: center; gap: 4px;
+    background: var(--panel); border-top: 1px solid var(--hairline);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+  .tab-bar a {
+    flex: 0 1 160px; min-width: 0; text-align: center; text-decoration: none;
+    color: var(--ink-dim); font-size: 0.875rem; font-weight: 600;
+    padding: 12px 4px; border-radius: 8px;
+  }
+  .tab-bar a[aria-current="page"] {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  /* Same UA-[hidden]-vs-explicit-display footgun as .pill-link: the Forecast
+     tab is hidden by updateForecastLink for providers with no forecast. */
+  .tab-bar a[hidden] { display: none; }
 
   /* ---------- faceplate header ---------- */
   .faceplate {
@@ -103,40 +129,29 @@
 
   .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; flex: none; }
 
-  /* Back-to-dashboard on Technical/Indoor/Forecast -- an icon-only circle
-     (same footprint as the settings gear) instead of a text pill, so the
-     header has room for the mode rail without wrapping on a phone.
-     Compound selector (not just .icon-pill) so this outranks the plain
-     .pill-link display/padding declared later in this file -- equal-
-     specificity rules would otherwise let source order win instead. */
-  .pill-link.icon-pill {
-    display: flex; align-items: center; justify-content: center;
-    width: 40px; height: 40px; padding: 0; flex: none;
-    font-size: 1.05rem; line-height: 1;
-  }
-
   /* The header holds just a single gear that opens everything you set once
-     and forget (units, theme). A sunken track holding pill buttons; the
-     selected one fills with the accent -- same idiom as the range toggles
-     elsewhere. */
-  .settings-rail {
-    display: flex; align-items: stretch; background: var(--panel-sunken); border-radius: 999px; padding: 3px;
+     and forget (units, theme). One segmented-control idiom for every toggle
+     in the app: a sunken 8px track whose selected segment fills with the
+     accent -- the mode rail, the settings rows, and the range toggle all
+     share it (.range-toggle joins these rules below). */
+  .settings-rail, .range-toggle {
+    display: flex; align-items: stretch; background: var(--panel-sunken); border-radius: 8px; padding: 3px;
     border: 1px solid var(--hairline);
   }
-  .settings-rail button {
+  .settings-rail button, .range-toggle button {
     border: none; background: transparent; color: var(--ink-dim); cursor: pointer;
-    padding: 11px 14px; min-height: 40px; border-radius: 999px; white-space: nowrap;
-    font-size: 0.8125rem; font-weight: 600;
+    padding: 11px 14px; min-height: 40px; border-radius: 6px; white-space: nowrap;
+    font-size: 0.875rem; font-weight: 600;
     transition: background 150ms ease, color 150ms ease;
   }
-  .settings-rail button[aria-pressed="true"] {
+  .settings-rail button[aria-pressed="true"], .range-toggle button[aria-pressed="true"] {
     background: var(--accent); color: var(--accent-ink);
   }
 
   .settings-gear {
     display: flex; align-items: center; justify-content: center;
     width: 40px; height: 40px; flex: none; padding: 0;
-    border-radius: 50%; border: 1px solid var(--hairline); background: var(--panel-sunken);
+    border-radius: 8px; border: 1px solid var(--hairline); background: var(--panel-sunken);
     color: var(--ink-dim); cursor: pointer;
     transition: background 150ms ease, color 150ms ease;
   }
@@ -155,7 +170,7 @@
     .faceplate-inner { gap: 10px; }
     .header-controls { gap: 6px; }
     .mode-rail button { padding: 11px 10px; }
-    .device-name { font-size: 0.8125rem; }
+    .device-name { font-size: 0.875rem; }
   }
 
   .settings-backdrop {
@@ -192,7 +207,7 @@
      narrow settings popover reads better as stacked rows anyway. */
   .settings-row { padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }
   .settings-row + .settings-row { border-top: 1px solid var(--hairline); }
-  .settings-row .cl-name { font-size: 0.8125rem; }
+  .settings-row .cl-name { font-size: 0.875rem; }
   .settings-row .settings-rail { width: 100%; }
   .settings-row .settings-rail button { flex: 1 1 0; text-align: center; }
 
@@ -216,15 +231,8 @@
   .section { margin-top: 40px; }
   .section:first-child { margin-top: 0; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .section-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); }
-  .section-note { font-size: 0.8125rem; color: var(--ink-dim); }
-  /* Groups a freshness note with an action link on the right of a
-     section-head (e.g. "Updated 15m ago" + a "Forecast →" pill) -- the link
-     stays a proper .pill-link like everywhere else in the app (dashboard's
-     Details/Forecast, the header's back button) instead of reading as plain
-     text mid-sentence. */
-  .section-head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-
+  .section-title { font-size: 1rem; font-weight: 600; color: var(--ink); }
+  .section-note { font-size: 0.875rem; color: var(--ink-dim); }
   .readout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .readout {
     border-top: 3px solid var(--edge-color, var(--hairline));
@@ -235,7 +243,7 @@
   .readout .r-label > span:first-child { overflow-wrap: anywhere; }
   .readout .r-value { font-family: var(--font-mono); font-weight: 700; font-size: 1.5rem; margin-top: 8px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; }
   .readout .r-unit { font-size: 0.75rem; color: var(--ink-dim); font-weight: 500; font-family: var(--font-body); }
-  .trend { font-size: 0.7rem; }
+  .trend { font-size: 0.75rem; }
   .trend[data-dir="up"] { color: var(--poor); }
   .trend[data-dir="down"] { color: var(--good); }
   .trend[data-dir="flat"] { color: var(--ink-dim); }
@@ -246,11 +254,11 @@
     padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
     min-width: 0; overflow: hidden;
   }
-  .control-card h3 { margin: 0; font-size: 0.8125rem; color: var(--ink-dim); font-weight: 600; }
+  .control-card h3 { margin: 0; font-size: 0.875rem; color: var(--ink-dim); font-weight: 600; }
 
   .control-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .control-label { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
-  .control-label .cl-name { font-size: 0.9375rem; font-weight: 600; }
+  .control-label .cl-name { font-size: 1rem; font-weight: 600; }
   .control-label .cl-help { font-size: 0.75rem; color: var(--ink-dim); overflow-wrap: anywhere; }
 
   .rocker {
@@ -268,12 +276,12 @@
   .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
   .stepper button {
     width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--panel-sunken);
-    color: var(--ink); font-weight: 700; cursor: pointer; font-size: 0.9rem;
+    color: var(--ink); font-weight: 700; cursor: pointer; font-size: 0.875rem;
     display: flex; align-items: center; justify-content: center;
   }
   .stepper button:active { background: var(--accent); color: var(--accent-ink); }
   .stepper .stepper-value {
-    font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.9375rem;
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1rem;
     min-width: 4.5ch; text-align: center;
   }
   .stepper .stepper-unit { font-size: 0.75rem; color: var(--ink-dim); font-family: var(--font-body); }
@@ -297,15 +305,8 @@
   }
   .hold-btn .btn-label-inner { position: relative; z-index: 1; }
 
-  /* history charts */
-  .range-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
-  .range-toggle button {
-    font-size: 0.8125rem; font-weight: 600;
-    border: 1px solid var(--hairline); background: var(--panel-raised); color: var(--ink-dim);
-    border-radius: 6px; padding: 9px 13px; min-height: 40px; cursor: pointer;
-  }
-  .range-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-
+  /* history charts -- .range-toggle's look comes from the shared
+     segmented-control rules next to .settings-rail above. */
   .chart-card {
     padding: 16px 18px 10px; margin-bottom: 12px;
   }
@@ -318,7 +319,7 @@
   /* tables */
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-  table caption { text-align: left; padding: 12px 16px 0; font-size: 0.8125rem; font-weight: 600; color: var(--ink-dim); }
+  table caption { text-align: left; padding: 12px 16px 0; font-size: 0.875rem; font-weight: 600; color: var(--ink-dim); }
   th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--hairline); }
   tbody tr:last-child th, tbody tr:last-child td { border-bottom: none; }
   th { font-weight: 500; color: var(--ink-dim); }
@@ -331,7 +332,7 @@
     padding: 20px 18px; display: flex; flex-direction: column; gap: 8px; height: 100%;
   }
   .activity-card p { margin: 0; font-size: 0.875rem; color: var(--ink-dim); }
-  .activity-card .act-title { font-size: 0.9375rem; font-weight: 600; }
+  .activity-card .act-title { font-size: 1rem; font-weight: 600; }
   .activity-card code { font-family: var(--font-mono); font-size: 0.75rem; background: var(--panel-sunken); padding: 2px 5px; border-radius: 4px; }
 
   footer.page-footer {
@@ -341,9 +342,10 @@
   }
   footer.page-footer #footer-clock { font-variant-numeric: tabular-nums; }
 
-  .toast-stack { position: fixed; bottom: 18px; right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  /* Sits above the fixed tab bar, not on top of it. */
+  .toast-stack { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .toast {
-    background: var(--ink); color: var(--panel); font-size: 0.8125rem; font-weight: 600;
+    background: var(--ink); color: var(--panel); font-size: 0.875rem; font-weight: 600;
     padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow-raised);
     animation: toastin 200ms ease both;
   }
@@ -398,7 +400,7 @@
   font-size: 0.75rem; font-weight: 600;
   background: var(--panel-sunken); color: var(--ink-dim);
   border: 1px solid var(--hairline);
-  border-radius: 999px; padding: 9px 13px 9px 11px; cursor: pointer; min-height: 44px;
+  border-radius: 8px; padding: 9px 13px 9px 11px; cursor: pointer; min-height: 44px;
 }
 .provider-chip[aria-pressed="true"] {
   background: var(--panel-raised); color: var(--ink);
@@ -415,7 +417,7 @@
   color: var(--band-color); font-variant-numeric: tabular-nums; flex: none; line-height: 1;
 }
 .rack-stat-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
-.rack-category { font-size: 0.9375rem; font-weight: 600; overflow-wrap: break-word; }
+.rack-category { font-size: 1rem; font-weight: 600; overflow-wrap: break-word; }
 .rack-sub { font-size: 0.75rem; color: var(--ink-dim); overflow-wrap: break-word; }
 .rack-spark { width: 84px; height: 34px; flex: none; }
 .rack-spark svg { display: block; width: 100%; height: 100%; }
@@ -425,7 +427,7 @@
 .rack-rows:empty { display: none; border-top: none; }
 .rack-row {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 0.8125rem;
+  padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 0.875rem;
 }
 .rack-row:last-child { border-bottom: none; }
 .rack-row .rr-label { color: var(--ink-dim); }
@@ -440,18 +442,16 @@
   gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--hairline); margin-top: 2px;
 }
 .rack-foot .outside-discussion:empty { display: none; }
-.rack-foot-links { display: flex; gap: 8px; flex-wrap: wrap; flex: none; margin-left: auto; }
-/* "Updated Xm ago" freshness stamp, sitting at the left of the foot with the
-   links pushed to the right (margin-left:auto above). Recomputed on each
-   poll -- it doesn't tick between fetches. */
+/* "Updated Xm ago" freshness stamp at the left of the foot. Recomputed on
+   each poll -- it doesn't tick between fetches. */
 .rack-updated { font-size: 0.75rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .rack-updated:empty { display: none; }
 
 .pill-link {
   display: inline-block;
-  font-size: 0.8125rem; font-weight: 600;
+  font-size: 0.875rem; font-weight: 600;
   color: var(--ink); text-decoration: none;
-  border: 1px solid var(--hairline); border-radius: 999px; padding: 8px 18px;
+  border: 1px solid var(--hairline); border-radius: 8px; padding: 8px 18px;
 }
 .pill-link:hover { background: var(--panel-sunken); }
 /* .pill-link sets an explicit display, which overrides the UA [hidden]
@@ -479,7 +479,7 @@
   color: var(--band-color, var(--ink)); font-variant-numeric: tabular-nums;
 }
 .outside-tech-category-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.outside-tech-category { font-size: 0.9375rem; color: var(--ink-dim); font-weight: 600; overflow-wrap: break-word; }
+.outside-tech-category { font-size: 1rem; color: var(--ink-dim); font-weight: 600; overflow-wrap: break-word; }
 .outside-tech-dominant { font-size: 0.75rem; color: var(--ink-dim); font-weight: 400; }
 .outside-tech-pollutants { display: flex; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .outside-pollutant {
@@ -500,7 +500,7 @@
 .add-location-form input#away-location-zip,
 .add-location-form input#home-zip { width: 7ch; flex: none; }
 .add-location-form button {
-  font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  font-size: 0.875rem; font-weight: 600; cursor: pointer;
   border-radius: 6px; border: 1px solid var(--hairline); padding: 8px 14px;
 }
 .add-location-form button[type="submit"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -513,9 +513,9 @@
 .forecast-meta { display: flex; align-items: center; gap: 10px; }
 .forecast-source { font-size: 0.75rem; color: var(--ink-dim); white-space: nowrap; }
 .refresh-btn {
-  font-size: 0.8125rem; font-weight: 600;
+  font-size: 0.875rem; font-weight: 600;
   border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
-  border-radius: 999px; padding: 8px 14px; min-height: 36px; cursor: pointer;
+  border-radius: 8px; padding: 8px 14px; min-height: 36px; cursor: pointer;
 }
 .refresh-btn:disabled { opacity: 0.55; cursor: default; }
 /* auto-fit grid so any provider's day-count lays out cleanly: 1 AirNow day
@@ -548,37 +548,37 @@
 .fd-pollutant-item .fp-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; text-align: right; }
 
 .fd-action-badge {
-  display: inline-block; font-size: 0.6875rem; font-weight: 700;
+  display: inline-block; font-size: 0.75rem; font-weight: 700;
   color: var(--poor);
-  background: var(--poor-bg); border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;
+  background: var(--poor-bg); border-radius: 6px; padding: 3px 10px; margin-bottom: 8px;
 }
 
 .health-guidance { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); text-align: left; }
-.health-guidance p { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
+.health-guidance p { font-size: 0.875rem; color: var(--ink-dim); margin: 0; }
 .health-guidance p + p { margin-top: 8px; }
 .health-guidance strong { color: var(--ink); }
-.health-guidance-text { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
+.health-guidance-text { font-size: 0.875rem; color: var(--ink-dim); margin: 0; }
 .health-guidance-toggle {
-  font-size: 0.8125rem; font-weight: 600;
+  font-size: 0.875rem; font-weight: 600;
   background: none; border: none; color: var(--ink-dim); cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px;
   display: inline-block; margin: 8px -6px 0; padding: 9px 6px;
 }
 .health-guidance-groups { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .health-guidance-groups[hidden] { display: none; }
-.health-guidance-groups p { margin: 0; font-size: 0.8125rem; color: var(--ink-dim); }
+.health-guidance-groups p { margin: 0; font-size: 0.875rem; color: var(--ink-dim); }
 .health-guidance-groups strong { color: var(--ink); }
 
 .forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
 .discussion-toggle {
-  font-size: 0.8125rem; font-weight: 600;
+  font-size: 0.875rem; font-weight: 600;
   background: none; border: none; color: var(--ink-dim); cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px;
   /* Padding widens the tap target; the matching negative margin keeps the
      visible box exactly where it was so surrounding spacing doesn't shift. */
   display: inline-block; padding: 9px 6px; margin: -9px -6px;
 }
-.forecast-discussion p { white-space: pre-line; font-size: 0.8125rem; color: var(--ink-dim); margin: 10px 0 0; }
+.forecast-discussion p { white-space: pre-line; font-size: 0.875rem; color: var(--ink-dim); margin: 10px 0 0; }
 
 /* Fine-print note under the Home location form (Indoor page). */
 .away-hint { margin: 12px 0 0; color: var(--ink-dim); line-height: 1.4; }

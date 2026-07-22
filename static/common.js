@@ -229,6 +229,25 @@ function renderAwayLocationRow() {
   el.textContent = loc ? (loc.reporting_area || loc.zip) : "Not set — pick a ZIP below";
 }
 
+/* ---------- tab bar's Forecast link ---------- */
+// One shared handler for every page's bottom tab bar: in Away mode the tab
+// points at the away location's forecast, and it hides entirely for
+// providers that publish no forecast (PurpleAir). Pages that can change the
+// inputs (dashboard's provider chips, the mode rail) call this again on top
+// of the init below.
+function updateForecastLink() {
+  const link = document.getElementById("forecast-link");
+  if (!link) return;
+  link.hidden = PROVIDERS_WITHOUT_FORECAST.has(localStorage.getItem("apollo-air1-provider") || "airnow");
+  const awayLoc = currentMode() === "away" ? getAwayLoc() : null;
+  link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
+}
+(function initForecastLink() {
+  updateForecastLink();
+  fetchAwayLoc().then(updateForecastLink);
+  document.addEventListener("modechange", updateForecastLink);
+})();
+
 (function initModeRail() {
   if (!document.querySelector(".mode-rail")) return;
 

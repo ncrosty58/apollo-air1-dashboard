@@ -98,9 +98,6 @@
         <div class="rack-rows" id="inside-rows"></div>
         <div class="rack-foot">
           <span class="rack-updated" id="in-updated"></span>
-          <div class="rack-foot-links">
-            <a class="pill-link" href="/indoor">Details →</a>
-          </div>
         </div>
       </div>
 
@@ -121,10 +118,6 @@
         <div class="rack-foot">
           <span class="rack-updated" id="out-updated"></span>
           <div class="outside-discussion" id="outside-discussion"></div>
-          <div class="rack-foot-links">
-            <a class="pill-link" href="/technical">Details →</a>
-            <a class="pill-link" href="/forecast" id="forecast-link">Forecast →</a>
-          </div>
         </div>
       </div>
 
@@ -137,6 +130,12 @@
   </footer>
 </div>
 
+<nav class="tab-bar" aria-label="Pages">
+  <a href="/" aria-current="page">Overview</a>
+  <a href="/technical">Outdoor</a>
+  <a href="/indoor">Indoor</a>
+  <a href="/forecast" id="forecast-link">Forecast</a>
+</nav>
 
 <script src="{{ url_for('static', filename='aqi.js') }}"></script>
 <script src="{{ url_for('static', filename='common.js') }}"></script>

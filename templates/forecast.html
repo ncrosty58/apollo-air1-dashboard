@@ -28,7 +28,6 @@
       <span class="device-name">CosmosLab<br>Air Quality App</span>
     </div>
     <div class="header-controls">
-      <a class="pill-link icon-pill" href="/" aria-label="Back to dashboard" title="Back to dashboard">←</a>
       <div class="settings-rail mode-rail" id="mode-rail" role="tablist" aria-label="Location mode">
         <button type="button" data-mode="home" aria-pressed="true">Home</button>
         <button type="button" data-mode="away" aria-pressed="false">Away</button>
@@ -97,6 +96,13 @@
     <span id="footer-clock"></span>
   </footer>
 </div>
+
+<nav class="tab-bar" aria-label="Pages">
+  <a href="/">Overview</a>
+  <a href="/technical">Outdoor</a>
+  <a href="/indoor">Indoor</a>
+  <a href="/forecast" aria-current="page" id="forecast-link">Forecast</a>
+</nav>
 
 <div class="toast-stack" id="toast-stack"></div>
 

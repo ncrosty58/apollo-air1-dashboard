@@ -104,14 +104,6 @@
     return PROVIDER_NAMES[currentProvider] || "AirNow";
   }
 
-  function updateForecastLink() {
-    const link = document.getElementById("forecast-link");
-    if (!link) return;
-    link.hidden = PROVIDERS_WITHOUT_FORECAST.has(currentProvider);
-    const awayLoc = currentMode() === "away" ? getAwayLoc() : null;
-    link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
-  }
-
   // Each chip shows that provider's own live AQI (from /api/outside/all,
   // one best-effort call per provider server-side, no extra upstream
   // traffic beyond what browsing them individually would cost) so tapping
