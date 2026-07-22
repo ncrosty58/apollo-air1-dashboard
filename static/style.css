@@ -1,79 +1,36 @@
   /* ---------- tokens ---------- */
+  /* One block covers both themes: light-dark() resolves per color-scheme.
+     "light dark" on :root follows the OS; a saved choice pins it via the
+     data-theme attribute the inline head script sets before first paint. */
   :root {
-    --panel: #eef0ea;
-    --panel-raised: #ffffff;
-    --panel-sunken: #e3e6dd;
-    --hairline: #d5d9cd;
-    --ink: #1b211f;
-    --ink-dim: #5a655f;
-    --accent: #0e8a7f;
-    --accent-ink: #f2fbf9;
-    --zone-outside: #3d7dc9;
+    color-scheme: light dark;
 
-    --good: #2f8f45;
-    --fair: #a5810f;
-    --poor: #b25a1c;
-    --bad: #b23a3a;
-    --good-bg: #e3f1e2;
-    --fair-bg: #f4ecd6;
-    --poor-bg: #f5e2d3;
-    --bad-bg: #f6dede;
+    --panel: light-dark(#eef0ea, #14171a);
+    --panel-raised: light-dark(#ffffff, #1c2024);
+    --panel-sunken: light-dark(#e3e6dd, #0f1113);
+    --hairline: light-dark(#d5d9cd, #2a2f34);
+    --ink: light-dark(#1b211f, #e8e6dd);
+    --ink-dim: light-dark(#5a655f, #8a9199);
+    --accent: light-dark(#0e8a7f, #5fc9c1);
+    --accent-ink: light-dark(#f2fbf9, #0b1615);
+    --zone-outside: light-dark(#3d7dc9, #7ab3f0);
 
-    --danger: #b23a3a;
-    --danger-ink: #fdf3f3;
+    --good: light-dark(#2f8f45, #7bd17a);
+    --fair: light-dark(#a5810f, #e0c15a);
+    --poor: light-dark(#b25a1c, #e0935a);
+    --bad: light-dark(#b23a3a, #e07272);
+    --poor-bg: light-dark(#f5e2d3, #2e2119);
+
+    --danger: light-dark(#b23a3a, #e07272);
 
     --radius: 10px;
     --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
-    --shadow-raised: 0 1px 2px rgba(20,25,20,0.05);
+    --shadow-raised: 0 1px 3px light-dark(rgba(20,25,20,0.05), rgba(0,0,0,0.35));
   }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --panel: #14171a;
-      --panel-raised: #1c2024;
-      --panel-sunken: #0f1113;
-      --hairline: #2a2f34;
-      --ink: #e8e6dd;
-      --ink-dim: #8a9199;
-      --accent: #5fc9c1;
-      --accent-ink: #0b1615;
-      --zone-outside: #7ab3f0;
-
-      --good: #7bd17a;
-      --fair: #e0c15a;
-      --poor: #e0935a;
-      --bad: #e07272;
-      --good-bg: #1b2a1e;
-      --fair-bg: #2c2818;
-      --poor-bg: #2e2119;
-      --bad-bg: #2e1a1a;
-
-      --danger: #e07272;
-      --danger-ink: #2e1a1a;
-
-      --shadow-raised: 0 1px 3px rgba(0,0,0,0.35);
-    }
-  }
-  :root[data-theme="dark"] {
-    --panel: #14171a; --panel-raised: #1c2024; --panel-sunken: #0f1113;
-    --hairline: #2a2f34; --ink: #e8e6dd; --ink-dim: #8a9199;
-    --accent: #5fc9c1; --accent-ink: #0b1615; --zone-outside: #7ab3f0;
-    --good: #7bd17a; --fair: #e0c15a; --poor: #e0935a; --bad: #e07272;
-    --good-bg: #1b2a1e; --fair-bg: #2c2818; --poor-bg: #2e2119; --bad-bg: #2e1a1a;
-    --danger: #e07272; --danger-ink: #2e1a1a;
-    --shadow-raised: 0 1px 3px rgba(0,0,0,0.35);
-  }
-  :root[data-theme="light"] {
-    --panel: #eef0ea; --panel-raised: #ffffff; --panel-sunken: #e3e6dd;
-    --hairline: #d5d9cd; --ink: #1b211f; --ink-dim: #5a655f;
-    --accent: #0e8a7f; --accent-ink: #f2fbf9; --zone-outside: #3d7dc9;
-    --good: #2f8f45; --fair: #a5810f; --poor: #b25a1c; --bad: #b23a3a;
-    --good-bg: #e3f1e2; --fair-bg: #f4ecd6; --poor-bg: #f5e2d3; --bad-bg: #f6dede;
-    --danger: #b23a3a; --danger-ink: #fdf3f3;
-    --shadow-raised: 0 1px 2px rgba(20,25,20,0.05);
-  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
@@ -206,8 +163,7 @@
   }
   .settings-panel {
     position: fixed; z-index: 30; width: 220px;
-    background: var(--panel-raised); border-radius: var(--radius);
-    border: 1px solid var(--hairline); box-shadow: var(--shadow-raised);
+    box-shadow: var(--shadow-raised);
     padding: 6px 16px 12px; display: flex; flex-direction: column;
     animation: settingsin 140ms ease both;
   }
@@ -240,6 +196,16 @@
   .settings-row .settings-rail { width: 100%; }
   .settings-row .settings-rail button { flex: 1 1 0; text-align: center; }
 
+  /* ---------- shared card surface ----------
+     Every raised panel in the app -- readout tiles, chart cards, racks,
+     tables, the settings popover -- is the same recipe, declared once. */
+  .readout, .control-card, .chart-card, .table-wrap, .activity-card,
+  .rack, .outside-tech-card, .forecast-card, .settings-panel {
+    background: var(--panel-raised);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+  }
+
   /* ---------- view containers ---------- */
   .view { padding-top: 28px; }
   .view[hidden] { display: none; }
@@ -261,8 +227,6 @@
 
   .readout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .readout {
-    background: var(--panel-raised); border-radius: var(--radius);
-    border: 1px solid var(--hairline);
     border-top: 3px solid var(--edge-color, var(--hairline));
     padding: 14px 14px 12px;
     min-width: 0;
@@ -279,7 +243,6 @@
   /* controls */
   .control-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .control-card {
-    background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
     padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
     min-width: 0; overflow: hidden;
   }
@@ -323,7 +286,6 @@
   }
   .btn:hover { background: var(--hairline); }
   .btn .btn-id { font-size: 0.75rem; color: var(--ink-dim); font-weight: 500; overflow-wrap: anywhere; }
-  .btn.btn-status { color: var(--good); }
 
   .danger-card { border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--hairline)); }
   .hold-btn {
@@ -345,7 +307,6 @@
   .range-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
   .chart-card {
-    background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
     padding: 16px 18px 10px; margin-bottom: 12px;
   }
   .chart-card h4 { margin: 0 0 10px; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
@@ -353,10 +314,9 @@
   .chart-svg-wrap svg { display: block; width: 100%; height: auto; }
   .chart-grid-line { stroke: var(--hairline); stroke-width: 1; }
   .chart-axis-label { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-dim); }
-  .chart-endpoint { filter: drop-shadow(0 0 0 transparent); }
 
   /* tables */
-  .table-wrap { overflow-x: auto; background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline); }
+  .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
   table caption { text-align: left; padding: 12px 16px 0; font-size: 0.8125rem; font-weight: 600; color: var(--ink-dim); }
   th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--hairline); }
@@ -368,7 +328,6 @@
   @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
 
   .activity-card {
-    background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
     padding: 20px 18px; display: flex; flex-direction: column; gap: 8px; height: 100%;
   }
   .activity-card p { margin: 0; font-size: 0.875rem; color: var(--ink-dim); }
@@ -393,17 +352,20 @@
 /* ---------- zone grouping (Inside / Outside) ---------- */
 /* A quiet, consistent marker so every Inside card and every Outside card
    reads as belonging to the same cluster, without touching the AQI band
-   colors that the tiles themselves already use for severity. */
-.zone-banner {
+   colors that the tiles themselves already use for severity. One shared
+   recipe for the standalone banners (Technical/Indoor) and the rack heads
+   (Basic dashboard). */
+.zone-banner, .rack-zone {
   display: flex; align-items: baseline; gap: 8px;
-  margin: 40px 0 14px;
   font-size: 0.875rem; font-weight: 600; color: var(--ink-dim);
 }
+.zone-banner { margin: 40px 0 14px; }
 .zone-banner:first-child { margin-top: 0; }
-.zone-banner .zone-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.zone-banner--inside .zone-dot { background: var(--accent); }
-.zone-banner--outside .zone-dot { background: var(--zone-outside); }
-.zone-banner .zone-sub { font-weight: 500; color: var(--ink-dim); opacity: 0.8; }
+.rack-zone { flex-wrap: wrap; margin-bottom: 12px; }
+.zone-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.zone-banner--inside .zone-dot, .rack--inside .zone-dot { background: var(--accent); }
+.zone-banner--outside .zone-dot, .rack--outside .zone-dot { background: var(--zone-outside); }
+.zone-banner .zone-sub, .rack-area { font-weight: 500; opacity: 0.8; }
 
 /* ---------- rack (Basic view: Inside / Outside instrument panels) ----------
    Two panel modules reading as one system with the header faceplate and the
@@ -415,20 +377,11 @@
 @media (max-width: 720px) { .rack-grid { grid-template-columns: 1fr; } }
 
 .rack {
-  background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
   border-top: 3px solid var(--accent); overflow: hidden;
 }
 .rack--outside { border-top-color: var(--zone-outside); }
 
 .rack-head { padding: 16px 18px 14px; }
-.rack-zone {
-  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
-  font-size: 0.875rem; font-weight: 600; color: var(--ink-dim);
-}
-.rack-zone .zone-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.rack--inside .zone-dot { background: var(--accent); }
-.rack--outside .zone-dot { background: var(--zone-outside); }
-.rack-area { font-weight: 500; opacity: 0.8; }
 
 /* Each chip carries its own provider's live AQI, not just a selected state --
    closer to the outside-tech pollutant badges than to a plain tab control,
@@ -508,7 +461,6 @@
 .pill-link[hidden] { display: none; }
 
 .outside-tech-card {
-  background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
   padding: 18px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
   border-top: 3px solid var(--edge-color, var(--hairline));
 }
@@ -554,7 +506,6 @@
 .add-location-form button[type="submit"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 .forecast-card {
-  background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
   padding: 18px 20px;
 }
 .forecast-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -629,9 +580,5 @@
 }
 .forecast-discussion p { white-space: pre-line; font-size: 0.8125rem; color: var(--ink-dim); margin: 10px 0 0; }
 
-/* ---------- Away page ---------- */
-.away-stats { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 6px; }
-.away-stats strong { font-weight: 700; }
+/* Fine-print note under the Home location form (Indoor page). */
 .away-hint { margin: 12px 0 0; color: var(--ink-dim); line-height: 1.4; }
-#away-chart, #away-note { margin-top: 6px; }
-#home-preview:not([hidden]) { margin-top: 10px; }

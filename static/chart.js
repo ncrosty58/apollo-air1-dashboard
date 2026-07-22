@@ -79,7 +79,7 @@ function renderChart(el, series, opts) {
     svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />`;
     const last = s.points[s.points.length - 1];
     const [ex, ey] = pointAt(last, tMin, tMax, lo, hi, W);
-    svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+    svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
   });
   svg += `<text class="chart-axis-label" x="${CHART_PAD.l}" y="${CHART_H - 4}">${opts.leftLabel || ""}</text>`;
   svg += `<text class="chart-axis-label" x="${W - CHART_PAD.r}" y="${CHART_H - 4}" text-anchor="end">now</text>`;
@@ -129,7 +129,7 @@ function renderRowChart(el, rows, opts) {
     const last = r.points[r.points.length - 1];
     const lastColor = bandVar(r.bandFor(last.v));
     const ex = xAt(last.t), ey = yAt(last.v);
-    svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${lastColor}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+    svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${lastColor}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
     svg += `<circle cx="${(ROW_PAD.l + 3).toFixed(1)}" cy="${dotY.toFixed(1)}" r="3" fill="${lastColor}" />`;
     svg += `<text class="chart-axis-label" x="${(ROW_PAD.l + 10).toFixed(1)}" y="${labelY.toFixed(1)}">${escapeHtml(r.label)} <tspan style="fill:${lastColor}">${fmt(last.v, r.decimals)}${r.unit}</tspan></text>`;
   });
@@ -186,7 +186,7 @@ function renderOverlayRowChart(el, rows, opts) {
       if (dashed) {
         svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="var(--panel-raised)" stroke="${color}" stroke-width="2" />`;
       } else {
-        svg += `<circle class="chart-endpoint" cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+        svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
       }
       return last;
     };
