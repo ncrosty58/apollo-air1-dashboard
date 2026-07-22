@@ -1,20 +1,3 @@
-@font-face {
-  font-family: 'Instrument Sans';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('/static/fonts/instrument-sans.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Martian Mono';
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url('/static/fonts/martian-mono.woff2') format('woff2');
-}
-
-
-  
   /* ---------- tokens ---------- */
   :root {
     --panel: #eef0ea;
@@ -39,13 +22,11 @@
     --danger: #b23a3a;
     --danger-ink: #fdf3f3;
 
-    --radius-tech: 3px;
-    --radius-simple: 18px;
-    --font-body: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'Martian Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    --radius: 10px;
+    --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
 
-    --shadow-raised: 0 1px 0 rgba(0,0,0,0.03), 0 2px 6px rgba(20,25,20,0.06);
-    --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(0,0,0,0.04);
+    --shadow-raised: 0 1px 2px rgba(20,25,20,0.05);
   }
 
   @media (prefers-color-scheme: dark) {
@@ -72,8 +53,7 @@
       --danger: #e07272;
       --danger-ink: #2e1a1a;
 
-      --shadow-raised: 0 1px 0 rgba(0,0,0,0.2), 0 2px 10px rgba(0,0,0,0.35);
-      --shadow-inset: inset 0 1px 3px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.3);
+      --shadow-raised: 0 1px 3px rgba(0,0,0,0.35);
     }
   }
   :root[data-theme="dark"] {
@@ -83,8 +63,7 @@
     --good: #7bd17a; --fair: #e0c15a; --poor: #e0935a; --bad: #e07272;
     --good-bg: #1b2a1e; --fair-bg: #2c2818; --poor-bg: #2e2119; --bad-bg: #2e1a1a;
     --danger: #e07272; --danger-ink: #2e1a1a;
-    --shadow-raised: 0 1px 0 rgba(0,0,0,0.2), 0 2px 10px rgba(0,0,0,0.35);
-    --shadow-inset: inset 0 1px 3px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.3);
+    --shadow-raised: 0 1px 3px rgba(0,0,0,0.35);
   }
   :root[data-theme="light"] {
     --panel: #eef0ea; --panel-raised: #ffffff; --panel-sunken: #e3e6dd;
@@ -93,8 +72,7 @@
     --good: #2f8f45; --fair: #a5810f; --poor: #b25a1c; --bad: #b23a3a;
     --good-bg: #e3f1e2; --fair-bg: #f4ecd6; --poor-bg: #f5e2d3; --bad-bg: #f6dede;
     --danger: #b23a3a; --danger-ink: #fdf3f3;
-    --shadow-raised: 0 1px 0 rgba(0,0,0,0.03), 0 2px 6px rgba(20,25,20,0.06);
-    --shadow-inset: inset 0 1px 2px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(0,0,0,0.04);
+    --shadow-raised: 0 1px 2px rgba(20,25,20,0.05);
   }
 
   * { box-sizing: border-box; }
@@ -117,10 +95,7 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 0.75rem;
     color: var(--ink-dim);
     font-weight: 500;
   }
@@ -165,8 +140,8 @@
      overflow: hidden on device-id is the final backstop if it's still too
      narrow -- clips rather than wraps. */
   .device-name {
-    font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem;
-    letter-spacing: 0.01em; line-height: 1.3; white-space: nowrap;
+    font-weight: 700; font-size: 1rem;
+    line-height: 1.3; white-space: nowrap;
   }
 
   .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; flex: none; }
@@ -184,33 +159,33 @@
   }
 
   /* The header holds just a single gear that opens everything you set once
-     and forget (units, theme). A rocker-plate idiom: a sunken track
-     holding a raised, shadowed "on" pill -- also reused by the provider
-     chips and range toggles elsewhere. */
+     and forget (units, theme). A sunken track holding pill buttons; the
+     selected one fills with the accent -- same idiom as the range toggles
+     elsewhere. */
   .settings-rail {
     display: flex; align-items: stretch; background: var(--panel-sunken); border-radius: 999px; padding: 3px;
-    box-shadow: var(--shadow-inset);
+    border: 1px solid var(--hairline);
   }
   .settings-rail button {
     border: none; background: transparent; color: var(--ink-dim); cursor: pointer;
-    padding: 12px 14px; min-height: 40px; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
-    font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
-    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    padding: 11px 14px; min-height: 40px; border-radius: 999px; white-space: nowrap;
+    font-size: 0.8125rem; font-weight: 600;
+    transition: background 150ms ease, color 150ms ease;
   }
   .settings-rail button[aria-pressed="true"] {
-    background: var(--panel-raised); color: var(--ink); box-shadow: var(--shadow-raised);
+    background: var(--accent); color: var(--accent-ink);
   }
 
   .settings-gear {
     display: flex; align-items: center; justify-content: center;
     width: 40px; height: 40px; flex: none; padding: 0;
     border-radius: 50%; border: 1px solid var(--hairline); background: var(--panel-sunken);
-    color: var(--ink-dim); cursor: pointer; box-shadow: var(--shadow-inset);
-    transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    color: var(--ink-dim); cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
   }
   .settings-gear svg { width: 18px; height: 18px; }
   .settings-gear[aria-expanded="true"] {
-    background: var(--accent); color: var(--accent-ink); box-shadow: none; border-color: var(--accent);
+    background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
   }
 
   /* Belt-and-suspenders for the never-wraps rule above: header-controls holds
@@ -222,8 +197,8 @@
   @media (max-width: 480px) {
     .faceplate-inner { gap: 10px; }
     .header-controls { gap: 6px; }
-    .mode-rail button { padding: 12px 10px; }
-    .device-name { font-size: 0.75rem; }
+    .mode-rail button { padding: 11px 10px; }
+    .device-name { font-size: 0.8125rem; }
   }
 
   .settings-backdrop {
@@ -231,7 +206,8 @@
   }
   .settings-panel {
     position: fixed; z-index: 30; width: 220px;
-    background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+    background: var(--panel-raised); border-radius: var(--radius);
+    border: 1px solid var(--hairline); box-shadow: var(--shadow-raised);
     padding: 6px 16px 12px; display: flex; flex-direction: column;
     animation: settingsin 140ms ease both;
   }
@@ -252,7 +228,7 @@
     @keyframes settingsheetup { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
   }
   .settings-panel-head {
-    font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.03em;
+    font-size: 0.75rem;
     color: var(--ink-dim); font-weight: 600; padding: 10px 0 8px; border-bottom: 1px solid var(--hairline);
   }
   /* Label above control, not beside it -- "Data source" plus a two-word
@@ -274,7 +250,7 @@
   .section { margin-top: 40px; }
   .section:first-child { margin-top: 0; }
   .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-  .section-title { font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.03em; text-transform: uppercase; font-weight: 600; color: var(--ink); }
+  .section-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); }
   .section-note { font-size: 0.8125rem; color: var(--ink-dim); }
   /* Groups a freshness note with an action link on the right of a
      section-head (e.g. "Updated 15m ago" + a "Forecast →" pill) -- the link
@@ -285,16 +261,16 @@
 
   .readout-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .readout {
-    background: var(--panel-raised); border-radius: var(--radius-tech);
+    background: var(--panel-raised); border-radius: var(--radius);
+    border: 1px solid var(--hairline);
     border-top: 3px solid var(--edge-color, var(--hairline));
-    box-shadow: var(--shadow-raised);
     padding: 14px 14px 12px;
     min-width: 0;
   }
-  .readout .r-label { font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-dim); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .readout .r-label { font-size: 0.75rem; color: var(--ink-dim); font-weight: 500; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .readout .r-label > span:first-child { overflow-wrap: anywhere; }
   .readout .r-value { font-family: var(--font-mono); font-weight: 700; font-size: 1.5rem; margin-top: 8px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; }
-  .readout .r-unit { font-size: 0.75rem; color: var(--ink-dim); font-weight: 500; }
+  .readout .r-unit { font-size: 0.75rem; color: var(--ink-dim); font-weight: 500; font-family: var(--font-body); }
   .trend { font-size: 0.7rem; }
   .trend[data-dir="up"] { color: var(--poor); }
   .trend[data-dir="down"] { color: var(--good); }
@@ -303,11 +279,11 @@
   /* controls */
   .control-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
   .control-card {
-    background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+    background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
     padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
     min-width: 0; overflow: hidden;
   }
-  .control-card h3 { margin: 0; font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-dim); font-weight: 600; }
+  .control-card h3 { margin: 0; font-size: 0.8125rem; color: var(--ink-dim); font-weight: 600; }
 
   .control-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .control-label { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
@@ -315,21 +291,21 @@
   .control-label .cl-help { font-size: 0.75rem; color: var(--ink-dim); overflow-wrap: anywhere; }
 
   .rocker {
-    position: relative; width: 52px; height: 30px; border-radius: 6px;
-    background: var(--panel-sunken); box-shadow: var(--shadow-inset); border: none; cursor: pointer; flex: none;
+    position: relative; width: 52px; height: 30px; border-radius: 8px;
+    background: var(--panel-sunken); border: 1px solid var(--hairline); cursor: pointer; flex: none;
   }
   .rocker::after {
-    content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 4px;
-    background: var(--panel-raised); box-shadow: var(--shadow-raised);
+    content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 6px;
+    background: var(--panel-raised); box-shadow: var(--shadow-raised); border: 1px solid var(--hairline);
     transition: transform 160ms ease, background 160ms ease;
   }
-  .rocker[aria-pressed="true"]::after { transform: translateX(22px); background: var(--accent); }
-  .rocker[aria-pressed="true"] { box-shadow: var(--shadow-inset), inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+  .rocker[aria-pressed="true"]::after { transform: translateX(22px); background: var(--accent); border-color: var(--accent); }
+  .rocker[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 50%, var(--hairline)); }
 
   .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
   .stepper button {
-    width: 32px; height: 32px; border-radius: 4px; border: 1px solid var(--hairline); background: var(--panel-sunken);
-    color: var(--ink); font-family: var(--font-mono); font-weight: 700; cursor: pointer; font-size: 0.9rem;
+    width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--panel-sunken);
+    color: var(--ink); font-weight: 700; cursor: pointer; font-size: 0.9rem;
     display: flex; align-items: center; justify-content: center;
   }
   .stepper button:active { background: var(--accent); color: var(--accent-ink); }
@@ -337,16 +313,16 @@
     font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.9375rem;
     min-width: 4.5ch; text-align: center;
   }
-  .stepper .stepper-unit { font-size: 0.75rem; color: var(--ink-dim); }
+  .stepper .stepper-unit { font-size: 0.75rem; color: var(--ink-dim); font-family: var(--font-body); }
 
   .btn {
     font-family: var(--font-body); font-weight: 600; font-size: 0.875rem; cursor: pointer;
-    border-radius: var(--radius-tech); border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
+    border-radius: 6px; border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
     padding: 10px 14px; text-align: left; display: flex; flex-direction: column; gap: 2px;
     transition: background 120ms ease;
   }
   .btn:hover { background: var(--hairline); }
-  .btn .btn-id { font-family: var(--font-mono); font-size: 0.6875rem; color: var(--ink-dim); font-weight: 500; overflow-wrap: anywhere; }
+  .btn .btn-id { font-size: 0.75rem; color: var(--ink-dim); font-weight: 500; overflow-wrap: anywhere; }
   .btn.btn-status { color: var(--good); }
 
   .danger-card { border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--hairline)); }
@@ -362,14 +338,14 @@
   /* history charts */
   .range-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
   .range-toggle button {
-    font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.015em;
+    font-size: 0.8125rem; font-weight: 600;
     border: 1px solid var(--hairline); background: var(--panel-raised); color: var(--ink-dim);
-    border-radius: 4px; padding: 9px 13px; min-height: 40px; cursor: pointer;
+    border-radius: 6px; padding: 9px 13px; min-height: 40px; cursor: pointer;
   }
   .range-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
   .chart-card {
-    background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+    background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
     padding: 16px 18px 10px; margin-bottom: 12px;
   }
   .chart-card h4 { margin: 0 0 10px; font-size: 0.875rem; font-weight: 600; display: flex; align-items: center; gap: 10px; }
@@ -380,9 +356,9 @@
   .chart-endpoint { filter: drop-shadow(0 0 0 transparent); }
 
   /* tables */
-  .table-wrap { overflow-x: auto; background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised); }
+  .table-wrap { overflow-x: auto; background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline); }
   table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-  table caption { text-align: left; padding: 12px 16px 0; font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-dim); }
+  table caption { text-align: left; padding: 12px 16px 0; font-size: 0.8125rem; font-weight: 600; color: var(--ink-dim); }
   th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--hairline); }
   tbody tr:last-child th, tbody tr:last-child td { border-bottom: none; }
   th { font-weight: 500; color: var(--ink-dim); }
@@ -392,23 +368,24 @@
   @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
 
   .activity-card {
-    background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+    background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
     padding: 20px 18px; display: flex; flex-direction: column; gap: 8px; height: 100%;
   }
   .activity-card p { margin: 0; font-size: 0.875rem; color: var(--ink-dim); }
   .activity-card .act-title { font-size: 0.9375rem; font-weight: 600; }
-  .activity-card code { font-family: var(--font-mono); font-size: 0.75rem; background: var(--panel-sunken); padding: 2px 5px; border-radius: 3px; }
+  .activity-card code { font-family: var(--font-mono); font-size: 0.75rem; background: var(--panel-sunken); padding: 2px 5px; border-radius: 4px; }
 
   footer.page-footer {
     margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--hairline);
     display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-    font-size: 0.75rem; color: var(--ink-dim); font-family: var(--font-mono);
+    font-size: 0.75rem; color: var(--ink-dim);
   }
+  footer.page-footer #footer-clock { font-variant-numeric: tabular-nums; }
 
   .toast-stack { position: fixed; bottom: 18px; right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .toast {
     background: var(--ink); color: var(--panel); font-size: 0.8125rem; font-weight: 600;
-    padding: 10px 16px; border-radius: 6px; box-shadow: var(--shadow-raised);
+    padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow-raised);
     animation: toastin 200ms ease both;
   }
   @keyframes toastin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -420,29 +397,25 @@
 .zone-banner {
   display: flex; align-items: baseline; gap: 8px;
   margin: 40px 0 14px;
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-dim);
+  font-size: 0.875rem; font-weight: 600; color: var(--ink-dim);
 }
 .zone-banner:first-child { margin-top: 0; }
 .zone-banner .zone-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .zone-banner--inside .zone-dot { background: var(--accent); }
 .zone-banner--outside .zone-dot { background: var(--zone-outside); }
-.zone-banner .zone-sub { text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--ink-dim); opacity: 0.8; }
+.zone-banner .zone-sub { font-weight: 500; color: var(--ink-dim); opacity: 0.8; }
 
 /* ---------- rack (Basic view: Inside / Outside instrument panels) ----------
    Two panel modules reading as one system with the header faceplate and the
-   Technical view's readout tiles -- same raised-panel/hairline/mono-caps
-   vocabulary, just arranged as a dense "rack" of metric rows with one
-   headline stat each, instead of the old giant centered hero + badge grid.
-   That's a deliberate move toward the instrument-panel register (matches
-   .chart-card/.control-card's --radius-tech) rather than the softer
-   --radius-simple pill the old hero used -- Basic is still the friendly
-   view, but "friendly" here means scannable at a glance, not big and empty. */
+   Technical view's readout tiles -- same raised-panel/hairline vocabulary,
+   arranged as a dense "rack" of metric rows with one headline stat each.
+   Basic is still the friendly view -- "friendly" here means scannable at a
+   glance, not big and empty. */
 .rack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 720px) { .rack-grid { grid-template-columns: 1fr; } }
 
 .rack {
-  background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+  background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
   border-top: 3px solid var(--accent); overflow: hidden;
 }
 .rack--outside { border-top-color: var(--zone-outside); }
@@ -450,40 +423,38 @@
 .rack-head { padding: 16px 18px 14px; }
 .rack-zone {
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-dim);
+  font-size: 0.875rem; font-weight: 600; color: var(--ink-dim);
 }
 .rack-zone .zone-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .rack--inside .zone-dot { background: var(--accent); }
 .rack--outside .zone-dot { background: var(--zone-outside); }
-.rack-area { text-transform: none; letter-spacing: normal; font-weight: 500; opacity: 0.8; }
+.rack-area { font-weight: 500; opacity: 0.8; }
 
 /* Each chip carries its own provider's live AQI, not just a selected state --
    closer to the outside-tech pollutant badges than to a plain tab control,
    since tapping one is also how you learn what the other three are reading.
-   A flex row lets each of the 4 chips claim only as much width as its own
-   label+AQI text needs, so neighboring chips of different lengths never line
-   up -- a fixed grid instead gives every chip the same cell width regardless
-   of content, so the row reads as one evenly spaced control at any size: all
-   4 in a row on desktop, 2x2 on a phone. */
+   A fixed grid gives every chip the same cell width regardless of content,
+   so the row reads as one evenly spaced control at any size: all 4 in a row
+   on desktop, 2x2 on a phone. */
 .provider-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
 @media (max-width: 560px) {
   .provider-chips { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 .provider-chip {
-  display: flex; align-items: center; justify-content: center; gap: 6px; border: none;
-  font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.01em;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 0.75rem; font-weight: 600;
   background: var(--panel-sunken); color: var(--ink-dim);
+  border: 1px solid var(--hairline);
   border-radius: 999px; padding: 9px 13px 9px 11px; cursor: pointer; min-height: 44px;
-  box-shadow: var(--shadow-inset);
 }
 .provider-chip[aria-pressed="true"] {
-  background: var(--panel-raised); color: var(--ink); box-shadow: var(--shadow-raised);
-  outline: 1.5px solid var(--zone-outside); outline-offset: -1px;
+  background: var(--panel-raised); color: var(--ink);
+  border-color: var(--zone-outside);
+  outline: 1px solid var(--zone-outside); outline-offset: -2px;
 }
 .provider-chip[data-unavailable="true"] { opacity: 0.45; }
 .provider-chip .pc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--pc-color, var(--ink-dim)); }
-.provider-chip .pc-aqi { font-variant-numeric: tabular-nums; color: var(--ink); }
+.provider-chip .pc-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 
 .rack-stat { display: flex; align-items: center; gap: 12px; }
 .rack-aqi {
@@ -509,7 +480,7 @@
   font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600;
   color: var(--rr-color, var(--ink)); white-space: nowrap;
 }
-.rack-row .rr-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.6875rem; margin-left: 3px; }
+.rack-row .rr-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.75rem; margin-left: 3px; font-family: var(--font-body); }
 
 .rack-foot {
   padding: 12px 18px 16px; display: flex; align-items: center; justify-content: space-between;
@@ -525,7 +496,7 @@
 
 .pill-link {
   display: inline-block;
-  font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.015em;
+  font-size: 0.8125rem; font-weight: 600;
   color: var(--ink); text-decoration: none;
   border: 1px solid var(--hairline); border-radius: 999px; padding: 8px 18px;
 }
@@ -537,7 +508,7 @@
 .pill-link[hidden] { display: none; }
 
 .outside-tech-card {
-  background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+  background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
   padding: 18px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
   border-top: 3px solid var(--edge-color, var(--hairline));
 }
@@ -560,38 +531,38 @@
 .outside-tech-dominant { font-size: 0.75rem; color: var(--ink-dim); font-weight: 400; }
 .outside-tech-pollutants { display: flex; gap: 18px; flex-wrap: wrap; margin-left: auto; }
 .outside-pollutant {
-  font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-dim);
-  display: flex; flex-direction: column; align-items: center; gap: 2px; text-transform: uppercase; letter-spacing: 0.02em;
+  font-size: 0.75rem; color: var(--ink-dim);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
-.outside-pollutant .op-value { font-weight: 700; color: var(--ink); font-size: 1rem; font-family: var(--font-mono); white-space: nowrap; }
-.outside-pollutant .op-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.6875rem; text-transform: none; letter-spacing: 0; margin-left: 2px; }
+.outside-pollutant .op-value { font-weight: 700; color: var(--ink); font-size: 1rem; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.outside-pollutant .op-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.75rem; margin-left: 2px; font-family: var(--font-body); }
 
 .empty-state { font-size: 0.875rem; color: var(--ink-dim); padding: 20px 0; text-align: center; }
 
 .add-location-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .add-location-form[hidden] { display: none; }
 .add-location-form input {
-  font: inherit; font-size: 0.875rem; padding: 8px 12px; border-radius: var(--radius-tech);
+  font: inherit; font-size: 0.875rem; padding: 8px 12px; border-radius: 6px;
   border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
 }
 .add-location-form input#away-location-zip,
 .add-location-form input#home-zip { width: 7ch; flex: none; }
 .add-location-form button {
-  font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
-  border-radius: var(--radius-tech); border: 1px solid var(--hairline); padding: 8px 14px;
+  font-size: 0.8125rem; font-weight: 600; cursor: pointer;
+  border-radius: 6px; border: 1px solid var(--hairline); padding: 8px 14px;
 }
 .add-location-form button[type="submit"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 .forecast-card {
-  background: var(--panel-raised); border-radius: var(--radius-tech); box-shadow: var(--shadow-raised);
+  background: var(--panel-raised); border-radius: var(--radius); border: 1px solid var(--hairline);
   padding: 18px 20px;
 }
 .forecast-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .forecast-area { margin-bottom: 0; }
 .forecast-meta { display: flex; align-items: center; gap: 10px; }
-.forecast-source { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-dim); white-space: nowrap; }
+.forecast-source { font-size: 0.75rem; color: var(--ink-dim); white-space: nowrap; }
 .refresh-btn {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.015em;
+  font-size: 0.8125rem; font-weight: 600;
   border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
   border-radius: 999px; padding: 8px 14px; min-height: 36px; cursor: pointer;
 }
@@ -602,10 +573,10 @@
    (the "4 + 1 orphan" the old flex layout produced for OWM's 5 days). */
 .forecast-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 12px; }
 .forecast-day {
-  border: 1px solid var(--hairline); border-radius: var(--radius-tech);
+  border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 14px 16px 12px; text-align: center;
 }
-.fd-label { font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-dim); margin-bottom: 8px; }
+.fd-label { font-size: 0.75rem; font-weight: 600; color: var(--ink-dim); margin-bottom: 8px; }
 .fd-badge { font-weight: 700; font-size: 1rem; color: var(--band-color, var(--ink)); text-wrap: balance; margin-bottom: 6px; }
 .fd-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 0.875rem; color: var(--ink-dim); }
 .fd-dominant { font-size: 0.75rem; color: var(--ink-dim); margin-top: 2px; }
@@ -620,14 +591,14 @@
 }
 .fd-pollutant-item {
   display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0;
-  font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.01em; color: var(--ink-dim);
+  font-size: 0.75rem; color: var(--ink-dim);
 }
-.fd-pollutant-item .fp-label { text-transform: uppercase; flex: none; }
-.fd-pollutant-item .fp-value { color: var(--ink); font-weight: 600; text-align: right; }
+.fd-pollutant-item .fp-label { flex: none; }
+.fd-pollutant-item .fp-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; text-align: right; }
 
 .fd-action-badge {
-  display: inline-block; font-family: var(--font-mono); font-size: 0.625rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.02em; color: var(--poor);
+  display: inline-block; font-size: 0.6875rem; font-weight: 700;
+  color: var(--poor);
   background: var(--poor-bg); border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;
 }
 
@@ -637,7 +608,7 @@
 .health-guidance strong { color: var(--ink); }
 .health-guidance-text { font-size: 0.8125rem; color: var(--ink-dim); margin: 0; }
 .health-guidance-toggle {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.015em;
+  font-size: 0.8125rem; font-weight: 600;
   background: none; border: none; color: var(--ink-dim); cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px;
   display: inline-block; margin: 8px -6px 0; padding: 9px 6px;
@@ -649,7 +620,7 @@
 
 .forecast-discussion { margin-top: 16px; border-top: 1px solid var(--hairline); padding-top: 12px; }
 .discussion-toggle {
-  font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.015em;
+  font-size: 0.8125rem; font-weight: 600;
   background: none; border: none; color: var(--ink-dim); cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px;
   /* Padding widens the tap target; the matching negative margin keeps the

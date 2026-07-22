@@ -1,4 +1,4 @@
-const CACHE_NAME = "apollo-air1-shell-v3";
+const CACHE_NAME = "apollo-air1-shell-v4";
 const SHELL_FILES = [
   "/",
   "/forecast",

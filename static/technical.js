@@ -88,9 +88,17 @@
   // called from the same place that already fetches both (see
   // loadOutsideHistorySection) rather than each chart fetching its own copy.
   //
-  // AQI is the one number every provider gives on a shared 0-500 scale, so it
-  // always overlays. Everything else only overlays where AIR-1 and the
-  // selected provider measure the *same* thing in real units: providers that
+  // These three cards render in the same order for every mode/provider
+  // combination (see the fixed markup in technical.html) -- only their
+  // content degrades gracefully (a missing row, or an empty state) when the
+  // current combination has nothing for it, rather than the card itself
+  // disappearing and reflowing whatever comes after it.
+  //
+  // In Home mode the AQI and PM cards overlay the indoor series (dashed)
+  // right on the same chart instead of a separate Inside-vs-Outside section
+  // repeating the outside lines. AQI is the one number every provider gives
+  // on a shared 0-500 scale, so it always overlays. PM only overlays where
+  // AIR-1 and the selected provider measure the *same* thing: providers that
   // give raw concentrations overlay PM2.5/PM10 (already µg/m³ on both sides)
   // directly. AirNow never gives a raw concentration for anything -- only
   // computed AQI numbers -- so AIR-1's own raw PM2.5/PM10 convert to an
@@ -98,119 +106,89 @@
   // against AirNow's pm2_5_aqi/pm10_aqi on that shared scale instead. CO/NO2
   // needed the optional MICS-4514, which this unit doesn't have, so those
   // never overlay. O3 and SO2 have no indoor equivalent either (no ozone or
-  // SO2 sensor at all), so they stay outside-only in the charts above.
-  function renderInsideOutsideCharts(insidePoints, outsidePoints, rangeLabel) {
-    renderOverlayRowChart(document.getElementById("chart-aqi-compare"), [
-      {
-        label: "AQI", unit: "", decimals: 0,
-        inside: { points: seriesFor(insidePoints, "aqi", null).points, bandFor: bandFromAqi },
-        outside: { points: seriesFor(outsidePoints, "aqi", null).points, bandFor: bandFromAqi },
-      },
-    ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
+  // SO2 sensor at all), so the gas card stays outside-only. In Away mode
+  // there's no indoor series to compare against, so every card is
+  // outside-only.
+  function renderOutsideCharts(insidePoints, outsidePoints, rangeLabel) {
+    const home = currentMode() !== "away";
 
-    // AQI is the default (non-technical) read regardless of provider --
-    // AirNow's own pm2_5_aqi/pm10_aqi fields are used directly, everyone
-    // else's raw concentration is converted. Readout=Units switches to the
-    // real µg/m³ numbers, only available for providers that report them.
-    if (readoutMode() === "units" && providerGivesConcentrations()) {
-      renderOverlayRowChart(document.getElementById("chart-inside-outside-pollutants"), [
+    // The one field every provider's history carries in every mode,
+    // including AirNow's coarse Away series -- always safe to plot.
+    if (home) {
+      renderOverlayRowChart(document.getElementById("chart-outside-aqi-history"), [
         {
-          label: "PM2.5", unit: " µg/m³", decimals: 1,
-          inside: { points: seriesFor(insidePoints, "pm2_5_ugm3", null).points, bandFor: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER") },
-          outside: { points: seriesFor(outsidePoints, "pm2_5_ugm3", null).points, bandFor: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER") },
+          label: "AQI", unit: "", decimals: 0,
+          inside: { points: seriesFor(insidePoints, "aqi", null).points, bandFor: bandFromAqi },
+          outside: { points: seriesFor(outsidePoints, "aqi", null).points, bandFor: bandFromAqi },
         },
-        {
-          label: "PM10", unit: " µg/m³", decimals: 1,
-          inside: { points: seriesFor(insidePoints, "pm10_0_ugm3", null).points, bandFor: (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER") },
-          outside: { points: seriesFor(outsidePoints, "pm10_ugm3", null).points, bandFor: (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER") },
-        },
-      ], { leftLabel: rangeLabel, label: "Inside vs outside pollutant concentration history" });
+      ], { leftLabel: rangeLabel, label: "Inside vs outside AQI history" });
     } else {
+      renderPollutantRows("chart-outside-aqi-history", outsidePoints, [
+        ["aqi", "AQI", "", 0, bandFromAqi],
+      ], rangeLabel, "Outside AQI history");
+    }
+
+    const showUnits = readoutMode() === "units";
+    const pmEl = document.getElementById("chart-outside-pm-history");
+    const pmBand25 = (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER");
+    const pmBand10 = (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER");
+    if (showUnits && providerGivesConcentrations()) {
+      // Readout=Units reads the provider's real µg/m³ numbers directly --
+      // only available for providers that report them.
+      document.getElementById("pm-history-unit-label").textContent = "µg/m³";
+      if (home) {
+        renderOverlayRowChart(pmEl, [
+          {
+            label: "PM2.5", unit: " µg/m³", decimals: 1,
+            inside: { points: seriesFor(insidePoints, "pm2_5_ugm3", null).points, bandFor: pmBand25 },
+            outside: { points: seriesFor(outsidePoints, "pm2_5_ugm3", null).points, bandFor: pmBand25 },
+          },
+          {
+            label: "PM10", unit: " µg/m³", decimals: 1,
+            inside: { points: seriesFor(insidePoints, "pm10_0_ugm3", null).points, bandFor: pmBand10 },
+            outside: { points: seriesFor(outsidePoints, "pm10_ugm3", null).points, bandFor: pmBand10 },
+          },
+        ], { leftLabel: rangeLabel, label: "Inside vs outside pollutant concentration history" });
+      } else {
+        renderPollutantRows("chart-outside-pm-history", outsidePoints, [
+          ["pm2_5_ugm3", "PM2.5", " µg/m³", 1, pmBand25],
+          ["pm10_ugm3", "PM10", " µg/m³", 1, pmBand10],
+        ], rangeLabel, "Outside PM2.5/PM10 history");
+      }
+    } else {
+      // AQI is the default (non-technical) read regardless of provider.
       // Outside comes straight from AirNow's own pm2_5_aqi/pm10_aqi when it
-      // has no raw concentration to convert; every other provider's history
-      // only ever carries the concentration, so that's converted here too.
+      // has no raw concentration to convert (those are only ever populated
+      // in Home -- its Away history carries no per-pollutant breakdown at
+      // all, see away.py, so the chart falls back to its "no data" state
+      // there); every other provider's history only ever carries the
+      // concentration, so that's converted here.
+      document.getElementById("pm-history-unit-label").textContent = "AQI per pollutant";
       const outsidePm25 = providerGivesConcentrations()
         ? toAqiSeries(seriesFor(outsidePoints, "pm2_5_ugm3", null).points, "PM2.5", "MICROGRAMS_PER_CUBIC_METER")
         : seriesFor(outsidePoints, "pm2_5_aqi", null).points;
       const outsidePm10 = providerGivesConcentrations()
         ? toAqiSeries(seriesFor(outsidePoints, "pm10_ugm3", null).points, "PM10", "MICROGRAMS_PER_CUBIC_METER")
         : seriesFor(outsidePoints, "pm10_aqi", null).points;
-      renderOverlayRowChart(document.getElementById("chart-inside-outside-pollutants"), [
-        {
-          label: "PM2.5 AQI", unit: "", decimals: 0,
-          inside: { points: toAqiSeries(seriesFor(insidePoints, "pm2_5_ugm3", null).points, "PM2.5", "MICROGRAMS_PER_CUBIC_METER"), bandFor: bandFromAqi },
-          outside: { points: outsidePm25, bandFor: bandFromAqi },
-        },
-        {
-          label: "PM10 AQI", unit: "", decimals: 0,
-          inside: { points: toAqiSeries(seriesFor(insidePoints, "pm10_0_ugm3", null).points, "PM10", "MICROGRAMS_PER_CUBIC_METER"), bandFor: bandFromAqi },
-          outside: { points: outsidePm10, bandFor: bandFromAqi },
-        },
-      ], { leftLabel: rangeLabel, label: "Inside vs outside pollutant AQI history" });
-    }
-
-    // Weather isn't provider-dependent -- it comes from a separate feed
-    // regardless of which provider is selected for pollutants -- so this
-    // renders the same way either way. No severity bands exist anywhere in
-    // this app for temp/humidity/pressure.
-    const insideTemp = seriesFor(insidePoints, "temperature_c", null).points.map((p) => ({ t: p.t, v: displayTemp(p.v) }));
-    const outsideTemp = seriesFor(outsidePoints, "temperature_c", null).points.map((p) => ({ t: p.t, v: displayTemp(p.v) }));
-    renderOverlayRowChart(document.getElementById("chart-inside-outside-weather"), [
-      {
-        label: "Temp", unit: tempUnitLabel(), decimals: 1,
-        inside: { points: insideTemp, bandFor: () => null },
-        outside: { points: outsideTemp, bandFor: () => null },
-      },
-      {
-        label: "Humidity", unit: "%", decimals: 1,
-        inside: { points: seriesFor(insidePoints, "humidity_pct", null).points, bandFor: () => null },
-        outside: { points: seriesFor(outsidePoints, "humidity_pct", null).points, bandFor: () => null },
-      },
-      {
-        label: "Pressure", unit: " hPa", decimals: 1,
-        inside: { points: seriesFor(insidePoints, "pressure_hpa", null).points, bandFor: () => null },
-        outside: { points: seriesFor(outsidePoints, "pressure_hpa", null).points, bandFor: () => null },
-      },
-    ], { leftLabel: rangeLabel, label: "Inside vs outside temperature, humidity, pressure history" });
-  }
-
-  // These three cards render in the same order for every mode/provider
-  // combination (see the fixed markup in technical.html) -- only their
-  // content degrades gracefully (a missing row, or an empty state) when the
-  // current combination has nothing for it, rather than the card itself
-  // disappearing and reflowing whatever comes after it.
-  function renderOutsideCharts(outsidePoints, rangeLabel) {
-    // The one field every provider's history carries in every mode,
-    // including AirNow's coarse Away series -- always safe to plot.
-    renderPollutantRows("chart-outside-aqi-history", outsidePoints, [
-      ["aqi", "AQI", "", 0, bandFromAqi],
-    ], rangeLabel, "Outside AQI history");
-
-    const showUnits = readoutMode() === "units";
-    // AirNow never gives a raw concentration, only its own computed
-    // pm2_5_aqi/pm10_aqi -- those are only ever populated in Home (its Away
-    // history carries no per-pollutant breakdown at all, see away.py), so
-    // the chart just falls back to its own "no data" state there. Every
-    // other provider's PM fields are µg/m³, so Units mode reads those
-    // directly and AQI mode converts them.
-    if (currentProvider === "airnow") {
-      document.getElementById("pm-history-unit-label").textContent = "AQI per pollutant";
-      renderPollutantRows("chart-outside-pm-history", outsidePoints, [
-        ["pm2_5_aqi", "PM2.5", "", 0, bandFromAqi],
-        ["pm10_aqi", "PM10", "", 0, bandFromAqi],
-      ], rangeLabel, "Outside PM2.5/PM10 AQI history");
-    } else if (showUnits) {
-      document.getElementById("pm-history-unit-label").textContent = "µg/m³";
-      renderPollutantRows("chart-outside-pm-history", outsidePoints, [
-        ["pm2_5_ugm3", "PM2.5", " µg/m³", 1, (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER")],
-        ["pm10_ugm3", "PM10", " µg/m³", 1, (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER")],
-      ], rangeLabel, "Outside PM2.5/PM10 history");
-    } else {
-      document.getElementById("pm-history-unit-label").textContent = "AQI per pollutant";
-      renderPollutantAqiRows("chart-outside-pm-history", outsidePoints, [
-        ["pm2_5_ugm3", "PM2.5", "PM2.5", "MICROGRAMS_PER_CUBIC_METER"],
-        ["pm10_ugm3", "PM10", "PM10", "MICROGRAMS_PER_CUBIC_METER"],
-      ], rangeLabel, "Outside PM2.5/PM10 AQI history");
+      if (home) {
+        renderOverlayRowChart(pmEl, [
+          {
+            label: "PM2.5 AQI", unit: "", decimals: 0,
+            inside: { points: toAqiSeries(seriesFor(insidePoints, "pm2_5_ugm3", null).points, "PM2.5", "MICROGRAMS_PER_CUBIC_METER"), bandFor: bandFromAqi },
+            outside: { points: outsidePm25, bandFor: bandFromAqi },
+          },
+          {
+            label: "PM10 AQI", unit: "", decimals: 0,
+            inside: { points: toAqiSeries(seriesFor(insidePoints, "pm10_0_ugm3", null).points, "PM10", "MICROGRAMS_PER_CUBIC_METER"), bandFor: bandFromAqi },
+            outside: { points: outsidePm10, bandFor: bandFromAqi },
+          },
+        ], { leftLabel: rangeLabel, label: "Inside vs outside pollutant AQI history" });
+      } else {
+        renderRowChart(pmEl, [
+          { label: "PM2.5", unit: "", decimals: 0, bandFor: bandFromAqi, points: outsidePm25 },
+          { label: "PM10", unit: "", decimals: 0, bandFor: bandFromAqi, points: outsidePm10 },
+        ], { leftLabel: rangeLabel, label: "Outside PM2.5/PM10 AQI history" });
+      }
     }
 
     // Everything beyond PM2.5/PM10: AirNow gives per-pollutant AQI (O3/NO2
@@ -249,6 +227,34 @@
     }
   }
 
+  // Weather isn't provider-dependent -- it comes from a separate feed
+  // regardless of which provider is selected for pollutants -- so this
+  // renders the same way either way. No severity bands exist anywhere in
+  // this app for temp/humidity/pressure. Home only: the indoor half comes
+  // from the sensor, which is physically tied to Home (the whole section is
+  // hidden in Away mode, see applyModeVisibility).
+  function renderWeatherChart(insidePoints, outsidePoints, rangeLabel) {
+    const insideTemp = seriesFor(insidePoints, "temperature_c", null).points.map((p) => ({ t: p.t, v: displayTemp(p.v) }));
+    const outsideTemp = seriesFor(outsidePoints, "temperature_c", null).points.map((p) => ({ t: p.t, v: displayTemp(p.v) }));
+    renderOverlayRowChart(document.getElementById("chart-inside-outside-weather"), [
+      {
+        label: "Temp", unit: tempUnitLabel(), decimals: 1,
+        inside: { points: insideTemp, bandFor: () => null },
+        outside: { points: outsideTemp, bandFor: () => null },
+      },
+      {
+        label: "Humidity", unit: "%", decimals: 1,
+        inside: { points: seriesFor(insidePoints, "humidity_pct", null).points, bandFor: () => null },
+        outside: { points: seriesFor(outsidePoints, "humidity_pct", null).points, bandFor: () => null },
+      },
+      {
+        label: "Pressure", unit: " hPa", decimals: 1,
+        inside: { points: seriesFor(insidePoints, "pressure_hpa", null).points, bandFor: () => null },
+        outside: { points: seriesFor(outsidePoints, "pressure_hpa", null).points, bandFor: () => null },
+      },
+    ], { leftLabel: rangeLabel, label: "Inside vs outside temperature, humidity, pressure history" });
+  }
+
   /* ---------- provider (read-only here -- switching only happens on Basic) ----------
    * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. One shared
    * choice across Home and Away (not per-mode) -- see dashboard.js. */
@@ -266,19 +272,17 @@
     link.href = awayLoc ? `/forecast?zip=${encodeURIComponent(awayLoc.zip)}` : "/forecast";
   }
 
-  // Indoor air is physically tied to Home -- hide the whole Inside vs
-  // Outside section, and the Temperature/humidity/pressure section at the
-  // bottom of the page, entirely in Away mode (comparing either to a remote
-  // location would be misleading), leaving just the current reading + the
-  // shared range toggle + outside-only history. The range toggle lives in
-  // its own row above both sections (see technical.html), so it isn't tied
-  // to either one's visibility.
+  // Indoor air is physically tied to Home -- in Away mode, hide the
+  // Temperature/humidity/pressure section at the bottom of the page
+  // (comparing the sensor to a remote location would be misleading) and the
+  // "dashed = inside" legend on the AQI card, whose inside overlay isn't
+  // drawn in Away either (see renderOutsideCharts).
   function applyModeVisibility() {
     const away = currentMode() === "away";
-    const sectionEl = document.getElementById("section-inside-outside");
-    if (sectionEl) sectionEl.hidden = away;
     const weatherEl = document.getElementById("section-inside-outside-weather");
     if (weatherEl) weatherEl.hidden = away;
+    const legendEl = document.getElementById("aqi-legend");
+    if (legendEl) legendEl.hidden = away;
   }
 
   // Readout=AQI (the default) is a non-technical read: every pollutant
@@ -370,8 +374,8 @@
     lastOutsideSectionInsidePoints = insidePoints;
     lastOutsidePoints = outsidePoints;
     lastOutsideRangeLabel = rangeLabelFor(hours);
-    renderOutsideCharts(outsidePoints, lastOutsideRangeLabel);
-    if (mode !== "away") renderInsideOutsideCharts(insidePoints, outsidePoints, lastOutsideRangeLabel);
+    renderOutsideCharts(insidePoints, outsidePoints, lastOutsideRangeLabel);
+    if (mode !== "away") renderWeatherChart(insidePoints, outsidePoints, lastOutsideRangeLabel);
   }
 
   let resizeTimer = null;
@@ -379,8 +383,8 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (lastOutsidePoints) {
-        renderOutsideCharts(lastOutsidePoints, lastOutsideRangeLabel);
-        if (currentMode() !== "away") renderInsideOutsideCharts(lastOutsideSectionInsidePoints, lastOutsidePoints, lastOutsideRangeLabel);
+        renderOutsideCharts(lastOutsideSectionInsidePoints, lastOutsidePoints, lastOutsideRangeLabel);
+        if (currentMode() !== "away") renderWeatherChart(lastOutsideSectionInsidePoints, lastOutsidePoints, lastOutsideRangeLabel);
       }
     }, 200);
   });

@@ -110,57 +110,6 @@
       </div>
     </div>
 
-    <!-- One range control for the whole page (drives Inside vs Outside,
-         Outside only, and the weather section below), living in its own row
-         rather than inside either section's title -- Inside vs Outside is
-         hidden outright in Away mode (see applyModeVisibility), and a title
-         that has to keep switching between "Inside vs Outside" and "Outside
-         history" just to hold onto the toggle ended up sitting right on top
-         of "Outside only" with nothing in between. -->
-    <div class="section">
-      <div class="section-head">
-        <span class="section-title">History range</span>
-        <div class="range-toggle" id="range-toggle-outside">
-          <button type="button" data-range="6" aria-pressed="false">6h</button>
-          <button type="button" data-range="24" aria-pressed="true">24h</button>
-          <button type="button" data-range="72" aria-pressed="false">3d</button>
-          <button type="button" data-range="168" aria-pressed="false">7d</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- AQI is the one signal every provider gives on a shared 0-500 scale,
-         so it's the universal inside/outside overlay. Providers that give
-         raw concentrations (Google, PurpleAir, OpenWeatherMap) overlay
-         PM2.5/PM10 (already µg/m³ on both sides) in real units too. AirNow
-         never gives a raw concentration, only its own computed AQI -- so
-         for AirNow, AIR-1's raw PM2.5/PM10 convert to an actual EPA AQI
-         number (aqiFromConcentration) and overlay against AirNow's own
-         pm2_5_aqi/pm10_aqi on that scale instead. CO/NO2 would need the
-         optional MICS-4514, which this unit doesn't have, so they stay
-         outside-only (see the Outside only section below) rather than
-         overlay. Inside and Outside share one row per metric (not separate
-         rows) since they're the same scale -- dashed vs solid tells them
-         apart since color here is already spoken for by severity. -->
-    <!-- Indoor air is physically tied to Home -- comparing it against a
-         remote Away location is misleading, so this whole section is hidden
-         in Away mode (see technical.js's applyModeVisibility). -->
-    <div class="section" id="section-inside-outside">
-      <div class="section-head">
-        <span class="section-title">Inside vs Outside</span>
-      </div>
-      <div id="inside-outside-charts">
-        <div class="chart-card">
-          <h4>AQI <span class="eyebrow" style="font-weight:500">dashed = inside, solid = outside</span></h4>
-          <div class="chart-svg-wrap" id="chart-aqi-compare"></div>
-        </div>
-        <div class="chart-card">
-          <h4>Pollutants</h4>
-          <div class="chart-svg-wrap" id="chart-inside-outside-pollutants"></div>
-        </div>
-      </div>
-    </div>
-
     <!-- Fixed set of three cards, always rendered in this order regardless
          of Home/Away or which provider is selected -- same chart in the same
          slot every time so the page doesn't reshuffle under you when you
@@ -169,25 +118,40 @@
          when the current mode/provider combination has nothing for it,
          rather than disappearing and shifting everything below it. Rows are
          colored by severity, not pollutant identity -- each row is already
-         labeled by name. -->
+         labeled by name.
+
+         In Home mode the AQI and PM cards overlay the indoor sensor's series
+         (dashed) right on the same chart -- AQI is the one signal every
+         provider gives on a shared 0-500 scale, and PM2.5/PM10 is the one
+         thing AIR-1 and the providers both measure (in µg/m³ where the
+         provider reports concentrations; converted onto the EPA AQI scale
+         for AirNow, which only ever gives computed AQI numbers). Indoor air
+         is physically tied to Home, so in Away mode the same cards show the
+         outside series alone (see technical.js). The range toggle drives
+         this section and the weather section below. -->
     <div class="section">
       <div class="section-head">
-        <span class="section-title">Outside only</span>
-        <span class="section-note">Same range as above</span>
+        <span class="section-title">History</span>
+        <div class="range-toggle" id="range-toggle-outside">
+          <button type="button" data-range="6" aria-pressed="false">6h</button>
+          <button type="button" data-range="24" aria-pressed="true">24h</button>
+          <button type="button" data-range="72" aria-pressed="false">3d</button>
+          <button type="button" data-range="168" aria-pressed="false">7d</button>
+        </div>
       </div>
       <div class="chart-card" id="card-outside-aqi-history">
-        <h4>Outside AQI history</h4>
+        <h4>AQI <span class="eyebrow" style="font-weight:500" id="aqi-legend">dashed = inside, solid = outside</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-aqi-history"></div>
       </div>
       <div class="chart-card" id="card-outside-pm-history">
-        <h4>Outside PM2.5 / PM10 history <span class="eyebrow" style="font-weight:500" id="pm-history-unit-label">AQI per pollutant</span></h4>
+        <h4>PM2.5 / PM10 <span class="eyebrow" style="font-weight:500" id="pm-history-unit-label">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pm-history"></div>
       </div>
       <!-- Everything beyond PM2.5/PM10 -- O3/SO2 have no indoor sensor at
            all, and CO/NO2 would need the optional MICS-4514 this unit
            doesn't have, so none of these ever overlay against Inside. -->
       <div class="chart-card" id="card-outside-pollutants">
-        <h4>Outside pollutants <span class="eyebrow" style="font-weight:500" id="pollutants-unit-label">AQI per pollutant</span></h4>
+        <h4>Gas pollutants <span class="eyebrow" style="font-weight:500" id="pollutants-unit-label">AQI per pollutant</span></h4>
         <div class="chart-svg-wrap" id="chart-outside-pollutants"></div>
       </div>
     </div>
