@@ -174,12 +174,15 @@
   // Technical-only in the Gas sensors table.
   function insideRowsHtml(d) {
     const units = readoutMode() === "units";
-    const pm25Band = bandForConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER");
-    const pm25 = units
-      ? { value: d.pm2_5_ugm3, decimals: 1, unit: "µg/m³", band: pm25Band }
-      : { value: aqiFromConcentration("PM2.5", d.pm2_5_ugm3, "MICROGRAMS_PER_CUBIC_METER"), decimals: 0, unit: "", band: pm25Band };
+    const pmRow = (parameter, raw) => {
+      const band = bandForConcentration(parameter, raw, "MICROGRAMS_PER_CUBIC_METER");
+      return units
+        ? { label: parameter, value: raw, decimals: 1, unit: "µg/m³", band }
+        : { label: parameter, value: aqiFromConcentration(parameter, raw, "MICROGRAMS_PER_CUBIC_METER"), decimals: 0, unit: "", band };
+    };
     const items = [
-      { label: "PM2.5", value: pm25.value, decimals: pm25.decimals, unit: pm25.unit, band: pm25.band },
+      pmRow("PM2.5", d.pm2_5_ugm3),
+      pmRow("PM10", d.pm10_0_ugm3),
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
       { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },

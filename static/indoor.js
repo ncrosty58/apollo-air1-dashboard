@@ -49,15 +49,37 @@
   // first). Charts plot by real timestamp so sources sampled at different
   // rates overlay correctly.
 
-  // Rows colored by severity, not identity. PM1.0/PM4.0 have no
-  // EPA-recognized health thresholds (only PM2.5/PM10 do), so those two
-  // rows stay neutral rather than borrowing numbers that don't apply.
+  // Raw µg/m³ converted onto the shared 0-500 EPA AQI scale -- the same
+  // non-technical default the dashboard and Technical page use.
+  function toAqiSeries(points, parameter) {
+    return points
+      .map((p) => ({ t: p.t, v: aqiFromConcentration(parameter, p.v, "MICROGRAMS_PER_CUBIC_METER") }))
+      .filter((p) => typeof p.v === "number");
+  }
+
+  // Rows colored by severity, not identity. PM2.5/PM10 read as AQI by
+  // default (Readout=Units switches them to raw µg/m³); PM1.0/PM4.0 have no
+  // EPA-recognized health thresholds at all, so those two rows stay in
+  // µg/m³ and neutral-colored rather than borrowing numbers that don't
+  // apply.
   function renderInsideCharts(points, rangeLabel) {
     renderRowChart(document.getElementById("chart-co2"), [
       { label: "CO2", unit: " ppm", decimals: 0, bandFor: bandFromCo2, points: seriesFor(points, "co2_ppm", null).points },
     ], { leftLabel: rangeLabel, label: "CO2 history" });
 
+    const units = readoutMode() === "units";
+    document.getElementById("pm-chart-unit-label").textContent = units ? "µg/m³" : "AQI · PM1/PM4 in µg/m³";
+    const pm25Points = seriesFor(points, "pm2_5_ugm3", null).points;
+    const pm10Points = seriesFor(points, "pm10_0_ugm3", null).points;
+    const pmRows = units ? [
+      { label: "PM2.5", unit: " µg/m³", decimals: 1, bandFor: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER"), points: pm25Points },
+      { label: "PM10", unit: " µg/m³", decimals: 1, bandFor: (v) => bandForConcentration("PM10", v, "MICROGRAMS_PER_CUBIC_METER"), points: pm10Points },
+    ] : [
+      { label: "PM2.5 AQI", unit: "", decimals: 0, bandFor: bandFromAqi, points: toAqiSeries(pm25Points, "PM2.5") },
+      { label: "PM10 AQI", unit: "", decimals: 0, bandFor: bandFromAqi, points: toAqiSeries(pm10Points, "PM10") },
+    ];
     renderRowChart(document.getElementById("chart-pm"), [
+      ...pmRows,
       { label: "PM1.0", unit: " µg/m³", decimals: 1, bandFor: () => null, points: seriesFor(points, "pm1_0_ugm3", null).points },
       { label: "PM4.0", unit: " µg/m³", decimals: 1, bandFor: () => null, points: seriesFor(points, "pm4_0_ugm3", null).points },
     ], { leftLabel: rangeLabel, label: "Particulate matter history" });
@@ -89,10 +111,27 @@
   }
 
   /* ---------- live readout tiles ---------- */
+  // The two PM tiles follow the app-wide Readout setting: AQI (the
+  // non-technical default) or the sensor's raw µg/m³. Everything else has
+  // no AQI equivalent (CO2/VOC/NOx are indoor-only scales; temp/humidity/
+  // pressure aren't pollutants), so those tiles always show their own units.
+  const isUnitsReadout = () => readoutMode() === "units";
+  function pmTile(id, parameter, key) {
+    return {
+      id,
+      label: () => isUnitsReadout() ? parameter : `${parameter} AQI`,
+      unit: () => isUnitsReadout() ? "µg/m³" : "",
+      key,
+      decimals: () => isUnitsReadout() ? 1 : 0,
+      band: (v) => bandForConcentration(parameter, v, "MICROGRAMS_PER_CUBIC_METER"),
+      convert: (v) => isUnitsReadout() ? v : aqiFromConcentration(parameter, v, "MICROGRAMS_PER_CUBIC_METER"),
+    };
+  }
   const READOUT_DEFS = [
     { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
     { id: "aqi", label: "AQI", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
-    { id: "pm25", label: "PM2.5 AQI", unit: "", key: "pm2_5_ugm3", decimals: 0, band: (v) => bandForConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER"), convert: (v) => aqiFromConcentration("PM2.5", v, "MICROGRAMS_PER_CUBIC_METER") },
+    pmTile("pm25", "PM2.5", "pm2_5_ugm3"),
+    pmTile("pm10", "PM10", "pm10_0_ugm3"),
     { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: bandForVocIndex },
     { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
     { id: "temp", label: "Temperature", unit: () => tempUnitLabel(), key: "temperature_c", decimals: 1, band: () => null, convert: displayTemp },
@@ -115,9 +154,11 @@
       const bandKey = typeof rawValue === "number" ? r.band(rawValue) : null;
       const value = typeof r.convert === "function" ? r.convert(rawValue) : rawValue;
       const unit = typeof r.unit === "function" ? r.unit() : r.unit;
+      const label = typeof r.label === "function" ? r.label() : r.label;
+      const decimals = typeof r.decimals === "function" ? r.decimals() : r.decimals;
       return `<div class="readout" style="--edge-color: ${bandKey ? `var(--${bandKey})` : "var(--hairline)"}">
-        <div class="r-label"><span>${r.label}</span><span class="trend" data-dir="${dir}">${arrow}</span></div>
-        <div class="r-value">${fmt(value, r.decimals)}<span class="r-unit">${unit}</span></div>
+        <div class="r-label"><span>${label}</span><span class="trend" data-dir="${dir}">${arrow}</span></div>
+        <div class="r-value">${fmt(value, decimals)}<span class="r-unit">${unit}</span></div>
       </div>`;
     }).join("");
   }
@@ -387,6 +428,13 @@
       currentRange = Number(btn.getAttribute("data-range"));
       loadHistory(currentRange);
     });
+  });
+
+  // Settings panel's AQI/Units toggle (common.js) -- re-render the PM tiles
+  // and PM chart at the new readout without refetching.
+  document.addEventListener("readoutchange", () => {
+    renderReadouts(previousLatest);
+    if (lastInsidePoints) renderInsideCharts(lastInsidePoints, lastInsideRangeLabel);
   });
 
   /* ---------- init ---------- */
