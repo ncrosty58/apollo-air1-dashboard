@@ -29,9 +29,11 @@
         btn.setAttribute("aria-pressed", String(btn.getAttribute("data-unit") === currentUnit));
       });
     });
-    document.querySelectorAll("#chart-temp-unit, #unit-toffset").forEach((el) => {
+    document.querySelectorAll("#unit-toffset").forEach((el) => {
       el.textContent = tempUnitLabel();
     });
+    const weatherUnit = document.getElementById("chart-weather-unit");
+    if (weatherUnit) weatherUnit.textContent = `${tempUnitLabel()} · % · hPa`;
   }
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".unit-toggle button");
@@ -57,18 +59,20 @@
       .filter((p) => typeof p.v === "number");
   }
 
-  // Rows colored by severity, not identity. PM2.5/PM10 read as AQI by
-  // default (Readout=Units switches them to raw µg/m³); PM1.0/PM4.0 have no
-  // EPA-recognized health thresholds at all, so those two rows stay in
-  // µg/m³ and neutral-colored rather than borrowing numbers that don't
-  // apply.
+  // Rows colored by severity, not identity. Chart order mirrors the outdoor
+  // (Technical) page and the readout tiles: AQI, then PM2.5/PM10, then the
+  // non-standard PM1.0/PM4.0, then CO2, VOC/NOx, and finally the combined
+  // weather chart -- matching the outdoor page's Temperature/Humidity/Pressure
+  // grouping. PM2.5/PM10 read as AQI by default (Readout=Units switches them to
+  // raw µg/m³); PM1.0/PM4.0 have no EPA-recognized health thresholds, so they
+  // stay in µg/m³ and neutral-colored on their own chart.
   function renderInsideCharts(points, rangeLabel) {
-    renderRowChart(document.getElementById("chart-co2"), [
-      { label: "CO2", unit: " ppm", decimals: 0, bandFor: bandFromCo2, points: seriesFor(points, "co2_ppm", null).points },
-    ], { leftLabel: rangeLabel, label: "CO2 history" });
+    renderRowChart(document.getElementById("chart-aqi"), [
+      { label: "AQI", unit: "", decimals: 0, bandFor: bandFromAqi, points: seriesFor(points, "aqi", null).points },
+    ], { leftLabel: rangeLabel, label: "AQI history" });
 
     const units = readoutMode() === "units";
-    document.getElementById("pm-chart-unit-label").textContent = units ? "µg/m³" : "AQI · PM1/PM4 in µg/m³";
+    document.getElementById("pm-chart-unit-label").textContent = units ? "µg/m³" : "AQI per pollutant";
     const pm25Points = seriesFor(points, "pm2_5_ugm3", null).points;
     const pm10Points = seriesFor(points, "pm10_0_ugm3", null).points;
     const pmRows = units ? [
@@ -78,26 +82,29 @@
       { label: "PM2.5 AQI", unit: "", decimals: 0, bandFor: bandFromAqi, points: toAqiSeries(pm25Points, "PM2.5") },
       { label: "PM10 AQI", unit: "", decimals: 0, bandFor: bandFromAqi, points: toAqiSeries(pm10Points, "PM10") },
     ];
-    renderRowChart(document.getElementById("chart-pm"), [
-      ...pmRows,
+    renderRowChart(document.getElementById("chart-pm"), pmRows, { leftLabel: rangeLabel, label: "PM2.5 / PM10 history" });
+
+    renderRowChart(document.getElementById("chart-pm-fine"), [
       { label: "PM1.0", unit: " µg/m³", decimals: 1, bandFor: () => null, points: seriesFor(points, "pm1_0_ugm3", null).points },
       { label: "PM4.0", unit: " µg/m³", decimals: 1, bandFor: () => null, points: seriesFor(points, "pm4_0_ugm3", null).points },
-    ], { leftLabel: rangeLabel, label: "Particulate matter history" });
+    ], { leftLabel: rangeLabel, label: "PM1.0 / PM4.0 history" });
+
+    renderRowChart(document.getElementById("chart-co2"), [
+      { label: "CO2", unit: " ppm", decimals: 0, bandFor: bandFromCo2, points: seriesFor(points, "co2_ppm", null).points },
+    ], { leftLabel: rangeLabel, label: "CO2 history" });
 
     renderRowChart(document.getElementById("chart-voc"), [
       { label: "VOC index", unit: "", decimals: 0, bandFor: bandForVocIndex, points: seriesFor(points, "voc_index", null).points },
       { label: "NOx index", unit: "", decimals: 0, bandFor: () => null, points: seriesFor(points, "nox_index", null).points },
     ], { leftLabel: rangeLabel, label: "VOC and NOx index history" });
 
-    const tempSeries = seriesFor(points, "temperature_c", "#e0935a", true);
-    if (currentUnit === "f") {
-      tempSeries.points = tempSeries.points.map((p) => ({ t: p.t, v: p.v * 9 / 5 + 32 }));
-    }
-    renderChart(document.getElementById("chart-temp"), [tempSeries], { leftLabel: rangeLabel, label: "Temperature history" });
-
-    renderChart(document.getElementById("chart-hum"), [
-      seriesFor(points, "humidity_pct", "#6f9be0", true),
-    ], { leftLabel: rangeLabel, label: "Humidity history" });
+    const tempPoints = seriesFor(points, "temperature_c", null).points.map(
+      (p) => ({ t: p.t, v: currentUnit === "f" ? p.v * 9 / 5 + 32 : p.v }));
+    renderRowChart(document.getElementById("chart-weather"), [
+      { label: "Temperature", unit: ` ${tempUnitLabel()}`, decimals: 1, bandFor: () => null, points: tempPoints },
+      { label: "Humidity", unit: " %", decimals: 1, bandFor: () => null, points: seriesFor(points, "humidity_pct", null).points },
+      { label: "Pressure", unit: " hPa", decimals: 1, bandFor: () => null, points: seriesFor(points, "pressure_hpa", null).points },
+    ], { leftLabel: rangeLabel, label: "Temperature, humidity, pressure history" });
   }
 
   /* ---------- toast ---------- */
@@ -127,11 +134,12 @@
       convert: (v) => isUnitsReadout() ? v : aqiFromConcentration(parameter, v, "MICROGRAMS_PER_CUBIC_METER"),
     };
   }
+  // Tile order matches the chart order above (AQI-first, weather last).
   const READOUT_DEFS = [
-    { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
     { id: "aqi", label: "AQI", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
     pmTile("pm25", "PM2.5", "pm2_5_ugm3"),
     pmTile("pm10", "PM10", "pm10_0_ugm3"),
+    { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
     { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: bandForVocIndex },
     { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
     { id: "temp", label: "Temperature", unit: () => tempUnitLabel(), key: "temperature_c", decimals: 1, band: () => null, convert: displayTemp },
