@@ -499,6 +499,15 @@
 .rack-updated { font-size: 0.75rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .rack-updated:empty { display: none; }
 
+/* The "via <Provider> · Updated <time>" line -- one shared text treatment
+   for the three spots that show it (Overview's rack-foot, Technical's
+   section-head, Forecast's card head), each sitting in a different
+   structural context so this stays a second class alongside whatever
+   governs that context's layout, rather than folding into it. Fine-print
+   size/color, same tabular-nums numeral treatment as every other
+   timestamp in the app. */
+.provider-status { font-size: 0.75rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+
 .outside-tech-card {
   padding: 18px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
   border-top: 3px solid var(--edge-color, var(--hairline));
@@ -550,7 +559,7 @@
 .forecast-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .forecast-area { margin-bottom: 0; }
 .forecast-meta { display: flex; align-items: center; gap: 10px; }
-.forecast-source { font-size: 0.75rem; color: var(--ink-dim); white-space: nowrap; }
+.forecast-source { white-space: nowrap; }
 .refresh-btn {
   font-size: 0.875rem; font-weight: 600;
   border: 1px solid var(--hairline); background: var(--panel-sunken); color: var(--ink);
