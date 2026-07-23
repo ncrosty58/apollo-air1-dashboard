@@ -8,8 +8,6 @@ FIELDS = [
     "co2_ppm", "pressure_hpa", "temperature_c", "humidity_pct",
     "pm1_0_ugm3", "pm2_5_ugm3", "pm4_0_ugm3", "pm10_0_ugm3",
     "voc_index", "nox_index", "aqi",
-    "nitrogen_dioxide_ppm", "carbon_monoxide_ppm", "hydrogen_ppm",
-    "ethanol_ppm", "methane_ppm", "ammonia_ppm",
     "wifi_rssi_db", "esp_temperature_c", "uptime_s",
 ]
 STRING_FIELDS = ["voc_quality", "firmware_version"]
