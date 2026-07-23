@@ -191,8 +191,13 @@
       // actually served this data (not just currentProvider, which could
       // theoretically be stale across tabs) -- always show which agency/
       // model the forecast on screen came from, same principle as the main
-      // dashboard's provider chips.
-      sourceEl.textContent = `via ${providerLabel(d.provider)}`;
+      // dashboard's provider chips. fetched_at is when the forecast was
+      // actually pulled from the upstream API, not just when this page asked
+      // for it -- forecasts are cached for hours, so "just now" would be
+      // misleading most of the time.
+      sourceEl.textContent = d.fetched_at
+        ? `via ${providerLabel(d.provider)} · Updated ${timeAgo(d.fetched_at)}`
+        : `via ${providerLabel(d.provider)}`;
       areaEl.textContent = d.reporting_area || "—";
       lastForecast = d;
       renderForecastDays(d);

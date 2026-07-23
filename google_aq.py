@@ -202,6 +202,10 @@ def _fetch_forecast(lat, lon):
         "reporting_area": None,
         "discussion": None,  # Google doesn't provide a forecaster narrative like AirNow's
         "days": days,
+        # Stamped once here (not by the TTL cache) so it stays correct across
+        # cache hits -- it's when this forecast was actually fetched, not when
+        # the page happened to ask for it.
+        "fetched_at": datetime.now(UTC).isoformat(),
     }
 
 

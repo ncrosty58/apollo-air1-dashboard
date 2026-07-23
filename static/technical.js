@@ -84,6 +84,10 @@
     return currentProvider() !== "airnow";
   }
 
+  function providerLabel() {
+    return PROVIDER_NAMES[currentProvider()] || "AirNow";
+  }
+
   // insidePoints/outsidePoints are both needed on the same time axis --
   // called from the same place that already fetches both (see
   // loadOutsideHistorySection) rather than each chart fetching its own copy.
@@ -321,7 +325,10 @@
       document.getElementById("outside-category-tech").textContent = d.category || "—";
       document.getElementById("outside-dominant-tech").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
       document.getElementById("outside-area-tech").textContent = d.reporting_area || "—";
-      document.getElementById("outside-updated-tech").textContent = whenText;
+      // Which provider this reading is from and when it was last refreshed --
+      // both in one place, since the persistent chip bar's highlight alone
+      // wasn't a clear enough tell of the current selection.
+      document.getElementById("outside-updated-tech").textContent = `via ${providerLabel()} · Updated ${whenText}`;
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
       document.getElementById("outside-pollutants").innerHTML = pollutantFactorsHtml(d.pollutants);
     } catch (e) {

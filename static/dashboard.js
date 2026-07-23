@@ -250,8 +250,12 @@
       lastOutsidePollutants = d.pollutants;
       document.getElementById("outside-rows").innerHTML = outsideRowsHtml(d.pollutants);
       document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
-      // When the selected provider's reading was last refreshed into the DB.
-      document.getElementById("out-updated").textContent = d.time ? "Updated " + timeAgo(d.time) : "";
+      // Which provider this reading is from and when it was last refreshed
+      // into the DB -- both in one place, since the persistent chip bar's
+      // highlight alone wasn't a clear enough tell of the current selection.
+      document.getElementById("out-updated").textContent = d.time
+        ? `via ${providerLabel()} · Updated ${timeAgo(d.time)}`
+        : `via ${providerLabel()}`;
     } catch (e) {
       document.getElementById("out-aqi").textContent = "—";
       document.getElementById("out-category").textContent = apiErrorMsg || ("Couldn't reach " + providerLabel() + ".");
