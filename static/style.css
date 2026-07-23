@@ -78,11 +78,10 @@
   /* Bottom padding clears the fixed tab bar (plus phone home-indicator
      inset) so the footer is never trapped underneath it. */
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px calc(96px + env(safe-area-inset-bottom, 0px)); }
-  /* Overview/Outdoor/Forecast also carry the fixed provider bar (a second
-     shelf above the tab bar, see .provider-bar) -- their content needs extra
-     bottom padding to clear it too. Indoor has no provider concept (it's the
-     sensor's own reading, not an external source) and stays at the base
-     amount above. */
+  /* Overview/Outdoor/Forecast also carry the provider row inside .bottom-nav
+     (see below) -- their content needs extra bottom padding to clear it too.
+     Indoor has no provider concept (it's the sensor's own reading, not an
+     external source) and stays at the base amount above. */
   .wrap--provider-bar { padding-bottom: calc(96px + 62px + env(safe-area-inset-bottom, 0px)); }
   /* Every extra px of side padding on a narrow phone is a px the chart
      itself doesn't get -- both the faceplate and .wrap eat into the same
@@ -93,16 +92,28 @@
     .chart-card { padding: 14px 14px 10px; }
   }
 
-  /* ---------- bottom tab bar ----------
-     The one navigation surface, identical on every page: four named tabs,
-     current page highlighted. Replaces the old scattered "Details →" pills
-     and the icon-only back button -- there's always exactly one visible way
-     to get anywhere. */
-  .tab-bar {
+  /* ---------- bottom nav ----------
+     The one fixed surface at the bottom of every page, one shared panel/
+     border/shadow rather than two stacked bars: an optional provider row
+     (Overview/Outdoor/Forecast -- pages whose reading comes from an external
+     source; not Indoor, which has none) sitting above the four-tab page nav,
+     divided by a single hairline. Both rows share one button language --
+     flat resting state, same accent wash for whichever one is currently
+     selected -- so switching data source and switching page read as the same
+     kind of control, not two different widgets bolted together. Replaces the
+     old scattered "Details →" pills and the icon-only back button -- there's
+     always exactly one visible way to get anywhere. */
+  .bottom-nav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-    display: flex; justify-content: center; gap: 4px;
     background: var(--panel); border-top: 1px solid var(--hairline);
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .bottom-nav .provider-chips {
+    padding: 6px 8px; border-bottom: 1px solid var(--hairline);
+  }
+  .tab-bar {
+    display: flex; justify-content: center; gap: 4px;
+    padding: 6px 8px;
   }
   .tab-bar a {
     flex: 0 1 160px; min-width: 0; text-align: center; text-decoration: none;
@@ -118,18 +129,6 @@
      (used to hide the Forecast tab for providers with no forecast) has no
      visual effect and the tab stays on screen. */
   .tab-bar a[hidden] { display: none; }
-
-  /* ---------- provider bar ----------
-     A second fixed shelf sitting right above the tab bar, present on every
-     page whose reading comes from an external provider (Overview/Outdoor/
-     Forecast) so switching sources doesn't require a trip back to Overview.
-     Not on Indoor, which has no provider concept. */
-  .provider-bar {
-    position: fixed; left: 0; right: 0; z-index: 19;
-    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-    background: var(--panel); border-top: 1px solid var(--hairline);
-    padding: 8px 12px;
-  }
 
   /* ---------- faceplate header ---------- */
   .faceplate {
@@ -384,8 +383,8 @@
   }
   footer.page-footer .footer-link:hover { color: var(--ink); }
 
-  /* Sits above the fixed tab bar (and, on Forecast, the provider bar too) --
-     not on top of either. */
+  /* Sits above the fixed bottom nav -- clears the taller provider-row
+     version (Forecast) too, since this same rule covers both. */
   .toast-stack { position: fixed; bottom: calc(76px + 62px + env(safe-area-inset-bottom, 0px)); right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .toast {
     background: var(--ink); color: var(--panel); font-size: 0.875rem; font-weight: 600;
@@ -428,27 +427,26 @@
 
 .rack-head { padding: 16px 18px 14px; }
 
-/* Each chip carries its own provider's live AQI, not just a selected state --
-   closer to the outside-tech pollutant badges than to a plain tab control,
-   since tapping one is also how you learn what the other three are reading.
-   Lives in the fixed .provider-bar now, so this scrolls horizontally as one
-   row rather than wrapping to 2x2 -- a wrap would make the fixed shelf's
-   height (and how much of the screen it permanently occupies) depend on
-   viewport width. */
-.provider-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+/* Same flat-button language as .tab-bar a right below it in .bottom-nav --
+   plain resting state, same accent wash for the selected one -- so the two
+   rows read as one control family. Each chip still carries its own
+   provider's live AQI dot/value, not just a selected state, since tapping
+   one is also how you learn what the other three are reading. Scrolls
+   horizontally as one row rather than wrapping to 2x2 -- a wrap would make
+   the fixed bar's height (and how much of the screen it permanently
+   occupies) depend on viewport width. */
+.provider-chips { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .provider-chips::-webkit-scrollbar { display: none; }
 .provider-chip {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  flex: 1 1 0; min-width: 108px;
-  font-size: 0.75rem; font-weight: 600;
-  background: var(--panel-sunken); color: var(--ink-dim);
-  border: 1px solid var(--hairline);
-  border-radius: 8px; padding: 9px 13px 9px 11px; cursor: pointer; min-height: 44px;
+  flex: 1 1 0; min-width: 100px;
+  font-size: 0.875rem; font-weight: 600;
+  background: transparent; color: var(--ink-dim); border: none;
+  border-radius: 8px; padding: 12px 4px; cursor: pointer; min-height: 44px;
 }
 .provider-chip[aria-pressed="true"] {
-  background: var(--panel-raised); color: var(--ink);
-  border-color: var(--zone-outside);
-  outline: 1px solid var(--zone-outside); outline-offset: -2px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .provider-chip[data-unavailable="true"] { opacity: 0.45; }
 .provider-chip .pc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--pc-color, var(--ink-dim)); }

@@ -57,9 +57,9 @@
   {% include "_partials/footer.html" %}
 </div>
 
+{% set show_provider_bar = true %}
 {% set active_page = "overview" %}
-{% include "_partials/provider_bar.html" %}
-{% include "_partials/tab_bar.html" %}
+{% include "_partials/bottom_nav.html" %}
 
 <script src="{{ url_for('static', filename='aqi.js') }}"></script>
 <script src="{{ url_for('static', filename='common.js') }}"></script>
