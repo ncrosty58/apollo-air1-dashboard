@@ -81,7 +81,7 @@
   // exactly this reason), so they share the same "raw concentration"
   // branch as Google rather than each needing their own case.
   function providerGivesConcentrations() {
-    return currentProvider !== "airnow";
+    return currentProvider() !== "airnow";
   }
 
   // insidePoints/outsidePoints are both needed on the same time axis --
@@ -198,13 +198,13 @@
     // channel at all -- so it gets an explicit empty state rather than a
     // chart that looks like it's just waiting on data.
     const pollutantsLabel = document.getElementById("pollutants-unit-label");
-    if (currentProvider === "airnow") {
+    if (currentProvider() === "airnow") {
       pollutantsLabel.textContent = "AQI per pollutant";
       renderPollutantRows("chart-outside-pollutants", outsidePoints, [
         ["o3_aqi", "O3", "", 0, bandFromAqi],
         ["no2_aqi", "NO2", "", 0, bandFromAqi],
       ], rangeLabel, "Outside pollutant AQI history");
-    } else if (currentProvider === "purpleair") {
+    } else if (currentProvider() === "purpleair") {
       pollutantsLabel.textContent = "—";
       document.getElementById("chart-outside-pollutants").innerHTML =
         '<div class="empty-state">PurpleAir reports particulates only -- no gas pollutants.</div>';
@@ -253,15 +253,6 @@
         outside: { points: seriesFor(outsidePoints, "pressure_hpa", null).points, bandFor: () => null },
       },
     ], { leftLabel: rangeLabel, label: "Inside vs outside temperature, humidity, pressure history" });
-  }
-
-  /* ---------- provider (read-only here -- switching only happens on Basic) ----------
-   * PROVIDER_NAMES / PROVIDERS_WITHOUT_FORECAST live in common.js. One shared
-   * choice across Home and Away (not per-mode) -- see dashboard.js. */
-  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-
-  function providerLabel() {
-    return PROVIDER_NAMES[currentProvider] || "AirNow";
   }
 
   // Indoor air is physically tied to Home -- in Away mode, hide the
@@ -318,7 +309,7 @@
     // "Unavailable" when it has one -- same as dashboard.js.
     let apiErrorMsg = null;
     try {
-      const res = await fetch(`/api/outside?provider=${currentProvider}&mode=${currentMode()}`);
+      const res = await fetch(`/api/outside?provider=${currentProvider()}&mode=${currentMode()}`);
       const d = await res.json();
       if (!res.ok) { apiErrorMsg = d.error || "request failed"; throw new Error(apiErrorMsg); }
 
@@ -354,7 +345,7 @@
 
   async function loadOutsideHistorySection(hours) {
     const mode = currentMode();
-    const outsideUrl = `/api/outside/history?hours=${hours}&provider=${currentProvider}&mode=${mode}`;
+    const outsideUrl = `/api/outside/history?hours=${hours}&provider=${currentProvider()}&mode=${mode}`;
     // Away has no indoor reading to compare against -- skip the inside fetch
     // entirely rather than pulling Home's sensor history just to discard it.
     const fetches = mode === "away"
@@ -396,7 +387,13 @@
   // the other location's data.
   document.addEventListener("modechange", () => {
     applyModeVisibility();
-    updateForecastLink();
+    loadOutside();
+    loadOutsideHistorySection(currentRangeOutside);
+  });
+
+  // The persistent provider bar (common.js) is now reachable from this page
+  // too, not just Overview.
+  document.addEventListener("providerchange", () => {
     loadOutside();
     loadOutsideHistorySection(currentRangeOutside);
   });
@@ -410,7 +407,6 @@
 
   /* ---------- init ---------- */
   renderUnitToggle();
-  document.getElementById("outside-source-tech").textContent = providerLabel();
   applyModeVisibility();
   updateForecastLink();
   fetchAwayLoc().then(updateForecastLink);

@@ -89,55 +89,15 @@
   }
 
   /* ---------- provider switch (AirNow / Google / PurpleAir / OpenWeatherMap) ----------
-   * The only screen with a switcher -- Technical and Forecast just display
-   * whichever provider is currently selected (shared via localStorage).
-   * PROVIDER_NAMES / PROVIDER_ORDER / PROVIDERS_WITHOUT_FORECAST live in
-   * common.js so this page and the server's api_forecast set can't drift.
-   *
-   * One shared choice across Home and Away (not per-mode) -- all 4 providers
-   * work in both now, and a provider that silently changes underneath you
-   * when you flip modes is more confusing than useful. getAwayLoc comes
-   * from common.js. */
-  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-
+   * The chip bar itself, currentProvider(), and the shared "modechange"
+   * re-fetch all live in common.js now (the persistent bar is the same
+   * control on Overview/Outdoor/Forecast, not just this page). This page
+   * only needs to react to a provider actually changing. */
   function providerLabel() {
-    return PROVIDER_NAMES[currentProvider] || "AirNow";
+    return PROVIDER_NAMES[currentProvider()] || "AirNow";
   }
 
-  // Each chip shows that provider's own live AQI (from /api/outside/all,
-  // one best-effort call per provider server-side, no extra upstream
-  // traffic beyond what browsing them individually would cost) so tapping
-  // between sources is also how you see what the other three are reading
-  // -- not just a blind tab switch.
-  async function loadProviderChips() {
-    const wrap = document.getElementById("provider-chips");
-    if (!wrap) return;
-    try {
-      const res = await fetch(`/api/outside/all?mode=${currentMode()}`);
-      const summary = res.ok ? await res.json() : {};
-      wrap.innerHTML = PROVIDER_ORDER.map((p) => {
-        const s = summary[p] || { available: false };
-        const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
-        const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";
-        // A dim chip alone doesn't say why -- e.g. "no healthy PurpleAir
-        // sensor nearby" vs. "no away location set" are both just "off"
-        // without this, so the reason the API already returns goes on the
-        // chip as a hover title.
-        const titleAttr = !s.available && s.reason ? ` title="${escapeHtml(s.reason)}"` : "";
-        return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === currentProvider}" data-unavailable="${!s.available}" style="--pc-color: ${color}"${titleAttr}>` +
-          `<span class="pc-dot"></span>${PROVIDER_NAMES[p]} <span class="pc-aqi">${aqiText}</span></button>`;
-      }).join("");
-    } catch (e) {
-      // Chips just stay at their last-rendered state.
-    }
-  }
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".provider-chip");
-    if (!btn) return;
-    currentProvider = btn.getAttribute("data-provider");
-    localStorage.setItem("apollo-air1-provider", currentProvider);
-    loadProviderChips();
-    updateForecastLink();
+  document.addEventListener("providerchange", () => {
     loadOutside();
     loadBasicSparks();
   });
@@ -146,8 +106,6 @@
   // this page over to the other location's data -- the provider choice
   // itself doesn't change, just what it's fetched for.
   document.addEventListener("modechange", () => {
-    loadProviderChips();
-    updateForecastLink();
     loadOutside();
     loadBasicSparks();
   });
@@ -251,7 +209,7 @@
   }
 
   function outsideDiscussionHtml(d) {
-    if (currentProvider === "google") return healthRecommendationsHtml(d.health_recommendations);
+    if (currentProvider() === "google") return healthRecommendationsHtml(d.health_recommendations);
     if (!d.discussion) return "";
     return `<div class="forecast-discussion">
       <button type="button" class="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
@@ -278,7 +236,7 @@
     // network/parse failure, and show the real one instead of a generic line.
     let apiErrorMsg = null;
     try {
-      const res = await fetch(`/api/outside?provider=${currentProvider}&mode=${currentMode()}`);
+      const res = await fetch(`/api/outside?provider=${currentProvider()}&mode=${currentMode()}`);
       const d = await res.json();
       if (!res.ok) { apiErrorMsg = d.error || "request failed"; throw new Error(apiErrorMsg); }
 
@@ -325,7 +283,7 @@
     try {
       const [insideRes, outsideRes] = await Promise.allSettled([
         fetch("/api/history?hours=6"),
-        fetch(`/api/outside/history?hours=6&provider=${currentProvider}&mode=${currentMode()}`),
+        fetch(`/api/outside/history?hours=6&provider=${currentProvider()}&mode=${currentMode()}`),
       ]);
       const insidePoints = insideRes.status === "fulfilled" && insideRes.value.ok ? await insideRes.value.json() : [];
       const outsidePoints = outsideRes.status === "fulfilled" && outsideRes.value.ok ? await outsideRes.value.json() : [];
@@ -380,7 +338,6 @@
   }
 
   /* ---------- init ---------- */
-  loadProviderChips();
   updateForecastLink();
   fetchAwayLoc().then(updateForecastLink);
   renderUnitToggle();
@@ -388,5 +345,5 @@
   loadOutside();
   loadBasicSparks();
   pollInterval(loadLatest, 60000);
-  pollInterval(() => { loadOutside(); loadProviderChips(); loadBasicSparks(); }, 15 * 60000);
+  pollInterval(() => { loadOutside(); loadBasicSparks(); }, 15 * 60000);
 })();

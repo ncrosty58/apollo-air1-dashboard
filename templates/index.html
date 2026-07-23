@@ -8,7 +8,7 @@
 {% set show_units_row = true %}
 {% include "_partials/chrome_header.html" %}
 
-<div class="wrap">
+<div class="wrap wrap--provider-bar">
 
   <!-- ============ BASIC VIEW ============ -->
   <section class="view view-fade" id="view-simple">
@@ -35,7 +35,6 @@
       <div class="rack rack--outside">
         <div class="rack-head">
           <div class="rack-zone"><span class="zone-dot"></span> Outside <span class="rack-area" id="outside-area">—</span></div>
-          <div class="provider-chips" id="provider-chips"></div>
           <div class="rack-stat">
             <span class="rack-aqi" id="out-aqi" style="--band-color: var(--ink-dim);">—</span>
             <div class="rack-stat-text">
@@ -59,6 +58,7 @@
 </div>
 
 {% set active_page = "overview" %}
+{% include "_partials/provider_bar.html" %}
 {% include "_partials/tab_bar.html" %}
 
 <script src="{{ url_for('static', filename='aqi.js') }}"></script>

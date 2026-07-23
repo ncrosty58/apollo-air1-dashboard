@@ -229,6 +229,64 @@ function renderAwayLocationRow() {
   el.textContent = loc ? (loc.reporting_area || loc.zip) : "Not set — pick a ZIP below";
 }
 
+/* ---------- provider chips: AirNow / Google / PurpleAir / OpenWeatherMap
+ * (self-initializing wherever #provider-chips exists) ----------
+ * Lives here (not per-page) so the persistent chip bar works identically on
+ * every page that has one, rather than only the page that happened to define
+ * it first. One shared choice across Home and Away (not per-mode) -- a
+ * provider silently changing underneath you when you flip modes turned out
+ * to be more confusing than useful. PROVIDER_NAMES/PROVIDER_ORDER above. */
+function currentProvider() {
+  return localStorage.getItem("apollo-air1-provider") || "airnow";
+}
+
+// Each chip shows that provider's own live AQI (from /api/outside/all, one
+// best-effort call per provider server-side, no extra upstream traffic
+// beyond what browsing them individually would cost) so tapping between
+// sources is also how you see what the other three are reading -- not just a
+// blind tab switch.
+async function renderProviderChips() {
+  const wrap = document.getElementById("provider-chips");
+  if (!wrap) return;
+  const selected = currentProvider();
+  try {
+    const res = await fetch(`/api/outside/all?mode=${currentMode()}`);
+    const summary = res.ok ? await res.json() : {};
+    wrap.innerHTML = PROVIDER_ORDER.map((p) => {
+      const s = summary[p] || { available: false };
+      const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
+      const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";
+      // A dim chip alone doesn't say why -- e.g. "no healthy PurpleAir sensor
+      // nearby" vs. "no away location set" are both just "off" without this,
+      // so the reason the API already returns goes on the chip as a hover
+      // title.
+      const titleAttr = !s.available && s.reason ? ` title="${escapeHtml(s.reason)}"` : "";
+      return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === selected}" data-unavailable="${!s.available}" style="--pc-color: ${color}"${titleAttr}>` +
+        `<span class="pc-dot"></span>${PROVIDER_NAMES[p]} <span class="pc-aqi">${aqiText}</span></button>`;
+    }).join("");
+  } catch (e) {
+    // Chips just stay at their last-rendered state.
+  }
+}
+
+function setProvider(provider) {
+  localStorage.setItem("apollo-air1-provider", provider);
+  renderProviderChips();
+  updateForecastLink();
+  document.dispatchEvent(new CustomEvent("providerchange"));
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".provider-chip");
+  if (!btn) return;
+  setProvider(btn.getAttribute("data-provider"));
+});
+
+// The mode rail flips the whole outside half of the app to another
+// location's data -- each provider's availability/AQI in the chips needs a
+// re-fetch for the new location.
+document.addEventListener("modechange", renderProviderChips);
+
 /* ---------- tab bar's Forecast link ---------- */
 // One shared handler for every page's bottom tab bar: in Away mode the tab
 // points at the away location's forecast, and it hides entirely for
@@ -331,3 +389,8 @@ if ("serviceWorker" in navigator) {
 renderThemeToggle();
 // Reflect the saved readout choice on the pages that show the toggle.
 renderReadoutToggle();
+// Initial chip render (no-ops on pages with no #provider-chips) + the same
+// 15-minute refresh cadence each page already polls its own outside reading
+// at, so the chips' live AQI values don't go stale sitting in the fixed bar.
+renderProviderChips();
+pollInterval(renderProviderChips, 15 * 60000);

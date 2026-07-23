@@ -78,6 +78,12 @@
   /* Bottom padding clears the fixed tab bar (plus phone home-indicator
      inset) so the footer is never trapped underneath it. */
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px calc(96px + env(safe-area-inset-bottom, 0px)); }
+  /* Overview/Outdoor/Forecast also carry the fixed provider bar (a second
+     shelf above the tab bar, see .provider-bar) -- their content needs extra
+     bottom padding to clear it too. Indoor has no provider concept (it's the
+     sensor's own reading, not an external source) and stays at the base
+     amount above. */
+  .wrap--provider-bar { padding-bottom: calc(96px + 62px + env(safe-area-inset-bottom, 0px)); }
   /* Every extra px of side padding on a narrow phone is a px the chart
      itself doesn't get -- both the faceplate and .wrap eat into the same
      budget, so both come down together below this width. */
@@ -112,6 +118,18 @@
      (used to hide the Forecast tab for providers with no forecast) has no
      visual effect and the tab stays on screen. */
   .tab-bar a[hidden] { display: none; }
+
+  /* ---------- provider bar ----------
+     A second fixed shelf sitting right above the tab bar, present on every
+     page whose reading comes from an external provider (Overview/Outdoor/
+     Forecast) so switching sources doesn't require a trip back to Overview.
+     Not on Indoor, which has no provider concept. */
+  .provider-bar {
+    position: fixed; left: 0; right: 0; z-index: 19;
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); border-top: 1px solid var(--hairline);
+    padding: 8px 12px;
+  }
 
   /* ---------- faceplate header ---------- */
   .faceplate {
@@ -366,8 +384,9 @@
   }
   footer.page-footer .footer-link:hover { color: var(--ink); }
 
-  /* Sits above the fixed tab bar, not on top of it. */
-  .toast-stack { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  /* Sits above the fixed tab bar (and, on Forecast, the provider bar too) --
+     not on top of either. */
+  .toast-stack { position: fixed; bottom: calc(76px + 62px + env(safe-area-inset-bottom, 0px)); right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .toast {
     background: var(--ink); color: var(--panel); font-size: 0.875rem; font-weight: 600;
     padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow-raised);
@@ -412,15 +431,15 @@
 /* Each chip carries its own provider's live AQI, not just a selected state --
    closer to the outside-tech pollutant badges than to a plain tab control,
    since tapping one is also how you learn what the other three are reading.
-   A fixed grid gives every chip the same cell width regardless of content,
-   so the row reads as one evenly spaced control at any size: all 4 in a row
-   on desktop, 2x2 on a phone. */
-.provider-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
-@media (max-width: 560px) {
-  .provider-chips { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-}
+   Lives in the fixed .provider-bar now, so this scrolls horizontally as one
+   row rather than wrapping to 2x2 -- a wrap would make the fixed shelf's
+   height (and how much of the screen it permanently occupies) depend on
+   viewport width. */
+.provider-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.provider-chips::-webkit-scrollbar { display: none; }
 .provider-chip {
   display: flex; align-items: center; justify-content: center; gap: 6px;
+  flex: 1 1 0; min-width: 108px;
   font-size: 0.75rem; font-weight: 600;
   background: var(--panel-sunken); color: var(--ink-dim);
   border: 1px solid var(--hairline);

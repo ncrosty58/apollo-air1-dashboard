@@ -98,15 +98,14 @@
     setTimeout(() => el.remove(), 3200);
   }
 
-  // The active provider is chosen on the dashboard (the AQI chips) and shared
-  // via localStorage; the Forecast page just follows it and shows which agency
-  // served the data (forecast-source), rather than carrying its own switcher.
-  // One shared choice across Home and Away (not per-mode) -- see dashboard.js.
-  let currentProvider = localStorage.getItem("apollo-air1-provider") || "airnow";
-
+  // The provider is chosen from the persistent chip bar (common.js,
+  // currentProvider()) -- this page reacts to it via "providerchange" below
+  // and shows which agency actually served the data (forecast-source, using
+  // the response's own "provider" field, which is the real source of truth --
+  // see loadForecast).
   const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow" };
   function providerLabel(provider) {
-    return PROVIDER_LABELS[provider || currentProvider] || "AirNow";
+    return PROVIDER_LABELS[provider || currentProvider()] || "AirNow";
   }
 
   // null = home; a zip when Away is active. Driven entirely by the header's
@@ -175,7 +174,7 @@
 
     const zipParam = selectedZip ? `zip=${encodeURIComponent(selectedZip)}&` : "";
     const refreshParam = force ? "&refresh=1" : "";
-    const url = `/api/forecast?${zipParam}provider=${currentProvider}${refreshParam}`;
+    const url = `/api/forecast?${zipParam}provider=${currentProvider()}${refreshParam}`;
     try {
       const res = await fetch(url);
       let d;
@@ -249,6 +248,10 @@
     await applyMode();
     loadForecast();
   });
+
+  // The persistent provider bar (common.js) is now reachable from this page
+  // too, not just Overview.
+  document.addEventListener("providerchange", () => loadForecast());
 
   document.getElementById("forecast-source").textContent = `via ${providerLabel()}`;
   applyMode().then(loadForecast);
