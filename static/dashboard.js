@@ -123,6 +123,9 @@
   // Outside's own first row) so it lands on the same row as Outside's PM2.5
   // -- the one pollutant both racks share -- letting a glance across the two
   // columns compare them directly instead of hunting for the matching label.
+  // PM1.0/PM4.0 follow PM10 as neutral (no EPA band) rows -- the non-standard
+  // sizes have no health threshold and no Outside counterpart, shown here only
+  // for parity with the Inside tab.
   // VOC index comes next even though it has no outside equivalent -- it's as
   // central an indoor air quality signal as CO2/PM2.5. Temp/Humidity/
   // Pressure/NOx have no severity bands anywhere in this app, so those rows
@@ -141,6 +144,8 @@
     const items = [
       pmRow("PM2.5", d.pm2_5_ugm3),
       pmRow("PM10", d.pm10_0_ugm3),
+      { label: "PM1.0", value: d.pm1_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
+      { label: "PM4.0", value: d.pm4_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
       { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
