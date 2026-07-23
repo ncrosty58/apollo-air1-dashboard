@@ -32,8 +32,6 @@
     document.querySelectorAll("#unit-toffset").forEach((el) => {
       el.textContent = tempUnitLabel();
     });
-    const weatherUnit = document.getElementById("chart-weather-unit");
-    if (weatherUnit) weatherUnit.textContent = `${tempUnitLabel()} · % · hPa`;
   }
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".unit-toggle button");
