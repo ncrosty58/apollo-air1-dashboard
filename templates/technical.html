@@ -1,80 +1,12 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Outdoor — Apollo AIR-1</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
-  <meta name="theme-color" content="#5fc9c1">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="AIR-1">
-  <script>
-    // Applied before first paint so a saved dark-mode choice never flashes light.
-    (function () {
-      var t = localStorage.getItem("apollo-air1-theme");
-      if (t) document.documentElement.setAttribute("data-theme", t);
-    })();
-  </script>
-</head>
+{% set page_title = "Outdoor — Apollo AIR-1" %}
+{% include "_partials/head.html" %}
 <body>
 
-<div class="faceplate">
-  <div class="faceplate-inner">
-    <div class="device-id">
-      <span class="device-name">CosmosLab<br>Air Quality App</span>
-    </div>
-    <div class="header-controls">
-      <div class="settings-rail mode-rail" id="mode-rail" role="tablist" aria-label="Location mode">
-        <button type="button" data-mode="home" aria-pressed="true">Home</button>
-        <button type="button" data-mode="away" aria-pressed="false">Away</button>
-      </div>
-      <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3.2"/>
-          <path d="M12 3v2.4M12 18.6V21M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M3 12h2.4M18.6 12H21M5.4 18.6l1.7-1.7M16.9 7.1l1.7-1.7"/>
-        </svg>
-      </button>
-    </div>
-  </div>
-</div>
-
-<div class="settings-backdrop" id="settings-backdrop" hidden></div>
-<div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
-  <div class="settings-panel-head">Settings</div>
-  <div class="settings-row">
-    <span class="cl-name">Readout</span>
-    <div class="settings-rail readout-toggle" role="tablist" aria-label="Pollutant readout">
-      <button type="button" data-readout="aqi" aria-pressed="true">AQI</button>
-      <button type="button" data-readout="units" aria-pressed="false">Units</button>
-    </div>
-  </div>
-  <div class="settings-row">
-    <span class="cl-name">Units</span>
-    <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
-      <button type="button" data-unit="f" aria-pressed="true">°F</button>
-      <button type="button" data-unit="c" aria-pressed="false">°C</button>
-    </div>
-  </div>
-  <div class="settings-row">
-    <span class="cl-name">Theme</span>
-    <div class="settings-rail theme-toggle" role="tablist" aria-label="Color theme">
-      <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
-      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
-    </div>
-  </div>
-  <div class="settings-row">
-    <span class="cl-name">Away location</span>
-    <div class="away-location-current eyebrow" id="away-location-current">Loading…</div>
-    <form class="add-location-form" id="away-location-form">
-      <input type="text" id="away-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-      <button type="submit">Save</button>
-    </form>
-  </div>
-</div>
+{% set show_away_mode = true %}
+{% set show_units_row = true %}
+{% include "_partials/chrome_header.html" %}
 
 <div class="wrap">
   <section class="view view-fade">
@@ -164,19 +96,11 @@
 
   </section>
 
-  <footer class="page-footer">
-    <span>apollo-air1-dashboard</span>
-    {% if grafana_url %}<a class="footer-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Grafana ↗</a>{% endif %}
-    <span id="footer-clock"></span>
-  </footer>
+  {% include "_partials/footer.html" %}
 </div>
 
-<nav class="tab-bar" aria-label="Pages">
-  <a href="/">Overview</a>
-  <a href="/technical" aria-current="page">Outdoor</a>
-  <a href="/indoor">Indoor</a>
-  <a href="/forecast" id="forecast-link">Forecast</a>
-</nav>
+{% set active_page = "technical" %}
+{% include "_partials/tab_bar.html" %}
 
 <script src="{{ url_for('static', filename='aqi.js') }}"></script>
 <script src="{{ url_for('static', filename='common.js') }}"></script>

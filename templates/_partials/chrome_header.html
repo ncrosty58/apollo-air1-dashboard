@@ -1,0 +1,59 @@
+<div class="faceplate">
+  <div class="faceplate-inner">
+    <div class="device-id">
+      <span class="device-name">CosmosLab<br>Air Quality App</span>
+    </div>
+    <div class="header-controls">
+      {% if show_away_mode %}
+      <div class="settings-rail mode-rail" id="mode-rail" role="tablist" aria-label="Location mode">
+        <button type="button" data-mode="home" aria-pressed="true">Home</button>
+        <button type="button" data-mode="away" aria-pressed="false">Away</button>
+      </div>
+      {% endif %}
+      <button type="button" class="settings-gear" id="settings-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M12 3v2.4M12 18.6V21M5.4 5.4l1.7 1.7M16.9 16.9l1.7 1.7M3 12h2.4M18.6 12H21M5.4 18.6l1.7-1.7M16.9 7.1l1.7-1.7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="settings-backdrop" hidden></div>
+<div class="settings-panel" id="settings-panel" role="dialog" aria-label="Settings" hidden>
+  <div class="settings-panel-head">Settings</div>
+  <div class="settings-row">
+    <span class="cl-name">Readout</span>
+    <div class="settings-rail readout-toggle" role="tablist" aria-label="Pollutant readout">
+      <button type="button" data-readout="aqi" aria-pressed="true">AQI</button>
+      <button type="button" data-readout="units" aria-pressed="false">Units</button>
+    </div>
+  </div>
+  {% if show_units_row %}
+  <div class="settings-row">
+    <span class="cl-name">Units</span>
+    <div class="settings-rail unit-toggle" role="tablist" aria-label="Temperature unit">
+      <button type="button" data-unit="f" aria-pressed="true">°F</button>
+      <button type="button" data-unit="c" aria-pressed="false">°C</button>
+    </div>
+  </div>
+  {% endif %}
+  <div class="settings-row">
+    <span class="cl-name">Theme</span>
+    <div class="settings-rail theme-toggle" role="tablist" aria-label="Color theme">
+      <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+  {% if show_away_mode %}
+  <div class="settings-row">
+    <span class="cl-name">Away location</span>
+    <div class="away-location-current eyebrow" id="away-location-current">Loading…</div>
+    <form class="add-location-form" id="away-location-form">
+      <input type="text" id="away-location-zip" placeholder="ZIP" maxlength="5" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+      <button type="submit">Save</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
