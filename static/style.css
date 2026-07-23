@@ -107,8 +107,10 @@
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
-  /* Same UA-[hidden]-vs-explicit-display footgun as .pill-link: the Forecast
-     tab is hidden by updateForecastLink for providers with no forecast. */
+  /* .tab-bar a sets an explicit display, which overrides the UA [hidden]
+     display:none -- without this rule, updateForecastLink's link.hidden = true
+     (used to hide the Forecast tab for providers with no forecast) has no
+     visual effect and the tab stays on screen. */
   .tab-bar a[hidden] { display: none; }
 
   /* ---------- faceplate header ---------- */
@@ -359,6 +361,10 @@
     font-size: 0.75rem; color: var(--ink-dim);
   }
   footer.page-footer #footer-clock { font-variant-numeric: tabular-nums; }
+  footer.page-footer .footer-link {
+    color: var(--ink-dim); text-decoration: underline; text-underline-offset: 2px;
+  }
+  footer.page-footer .footer-link:hover { color: var(--ink); }
 
   /* Sits above the fixed tab bar, not on top of it. */
   .toast-stack { position: fixed; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); right: 18px; z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
@@ -464,19 +470,6 @@
    each poll -- it doesn't tick between fetches. */
 .rack-updated { font-size: 0.75rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .rack-updated:empty { display: none; }
-
-.pill-link {
-  display: inline-block;
-  font-size: 0.875rem; font-weight: 600;
-  color: var(--ink); text-decoration: none;
-  border: 1px solid var(--hairline); border-radius: 8px; padding: 8px 18px;
-}
-.pill-link:hover { background: var(--panel-sunken); }
-/* .pill-link sets an explicit display, which overrides the UA [hidden]
-   display:none -- without this rule, link.hidden = true in dashboard.js
-   (used to hide Forecast for providers that don't publish one) has no
-   visual effect and the button stays on screen. */
-.pill-link[hidden] { display: none; }
 
 .outside-tech-card {
   padding: 18px 20px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;

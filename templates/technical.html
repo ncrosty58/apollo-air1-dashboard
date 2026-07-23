@@ -66,12 +66,6 @@
       <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
     </div>
   </div>
-  {% if grafana_url %}
-  <div class="settings-row">
-    <span class="cl-name">Grafana</span>
-    <a class="pill-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Open dashboard ↗</a>
-  </div>
-  {% endif %}
   <div class="settings-row">
     <span class="cl-name">Away location</span>
     <div class="away-location-current eyebrow" id="away-location-current">Loading…</div>
@@ -172,6 +166,7 @@
 
   <footer class="page-footer">
     <span>apollo-air1-dashboard</span>
+    {% if grafana_url %}<a class="footer-link" href="{{ grafana_url }}" target="_blank" rel="noopener">Grafana ↗</a>{% endif %}
     <span id="footer-clock"></span>
   </footer>
 </div>
