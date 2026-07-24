@@ -173,11 +173,28 @@ function renderOverlayRowChart(el, rows, opts) {
     const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
 
     const drawSeries = (series, dashed) => {
-      for (let j = 1; j < series.points.length; j++) {
-        const p0 = series.points[j - 1], p1 = series.points[j];
-        const segColor = bandVar(series.bandFor(p1.v));
-        const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
-        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
+      const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
+      // One <path> per run of consecutive same-band points, not one per
+      // point-to-point pair -- SVG's stroke-dasharray restarts its pattern
+      // at the start of every path element, and most segments here are
+      // only 1-2px long (real sampling intervals at chart scale), far
+      // short of the 7px a 4,3 dash+gap cycle needs to show even one gap.
+      // A per-pair path never got past "solid" regardless of the
+      // dasharray -- the Inside line looked solid despite the attribute
+      // being right. Grouping into runs still recolors exactly where the
+      // band actually changes, but gives the pattern enough continuous
+      // length to actually read as dashed.
+      let i = 0;
+      while (i < series.points.length - 1) {
+        const runColor = bandVar(series.bandFor(series.points[i + 1].v));
+        let d = `M${xAt(series.points[i].t).toFixed(1)},${yAt(series.points[i].v).toFixed(1)}`;
+        let j = i + 1;
+        while (j < series.points.length && bandVar(series.bandFor(series.points[j].v)) === runColor) {
+          d += ` L${xAt(series.points[j].t).toFixed(1)},${yAt(series.points[j].v).toFixed(1)}`;
+          j++;
+        }
+        svg += `<path d="${d}" fill="none" stroke="${runColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${dashAttr} />`;
+        i = j - 1;
       }
       if (series.points.length === 0) return null;
       const last = series.points[series.points.length - 1];
