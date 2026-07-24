@@ -42,18 +42,16 @@
     return BAND_ORDER.indexOf(a) >= BAND_ORDER.indexOf(b) ? a : b;
   }
 
-  // Short enough to sit on one line in the rack's narrow half-width column
-  // (see rack-sub in style.css) -- the category label ("Good"/"Fair"/"Poor"/
-  // "Bad") already carries the headline, so this only needs the action, not
-  // the reasoning behind it.
-  function insideSentence(band) {
-    switch (band) {
-      case "good": return "Nothing to do.";
-      case "fair": return "Crack a window.";
-      case "poor": return "Ventilate soon.";
-      case "bad": return "Ventilate now.";
-      default: return "Waiting for a reading…";
-    }
+  // Matches Outside rack-sub's "Driven by <pollutant>" instead of a custom
+  // advice sentence -- same worseBand() comparison used for the headline
+  // category (below), so whichever factor actually pushed it there is the
+  // one named, not a fixed guess.
+  function insideDrivenBy(d, band) {
+    if (!band) return "";
+    const aqiBand = bandFromAqi(d.aqi);
+    const co2Band = bandFromCo2(d.co2_ppm);
+    const co2IsWorse = !aqiBand || (co2Band && BAND_ORDER.indexOf(co2Band) > BAND_ORDER.indexOf(aqiBand));
+    return co2IsWorse ? "Driven by CO2" : "Driven by PM2.5";
   }
   function bandLabel(band) {
     return { good: "Good", fair: "Fair", poor: "Poor", bad: "Bad" }[band] || null;
@@ -132,13 +130,11 @@
   // for parity with the Inside tab.
   // VOC index comes next even though it has no outside equivalent -- it's as
   // central an indoor air quality signal as CO2/PM2.5. Temp/Humidity/
-  // Pressure have no severity bands anywhere in this app, so those rows stay
-  // neutral-colored. NOx isn't shown at all -- the sensor never actually
-  // reports it (see indoor.js), so it'd only ever be a dash. The rest is
-  // the full set AIR-1's base hardware always reports (SCD40 + SEN55 +
-  // DPS310) -- as opposed to the MICS-4514 gas readings, which are an
-  // optional add-on this unit doesn't have and stay Technical-only in the
-  // Gas sensors table.
+  // Pressure/NOx have no severity bands anywhere in this app, so those rows
+  // stay neutral-colored. The full set AIR-1's base hardware always reports
+  // (SCD40 + SEN55 + DPS310) -- as opposed to the MICS-4514 gas readings,
+  // which are an optional add-on this unit doesn't have and stay
+  // Technical-only in the Gas sensors table.
   function insideRowsHtml(d) {
     const units = readoutMode() === "units";
     const pmRow = (parameter, raw) => {
@@ -158,6 +154,7 @@
       { label: "PM4", value: d.pm4_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
+      { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
       // Whole-number here (not Indoor/Technical's 1 decimal) -- same
       // column-width problem as PM1/PM4 above, but a fractional degree/
       // percent/hPa isn't information this glance view needs anyway.
@@ -296,7 +293,7 @@
       inAqi.textContent = typeof d.aqi === "number" ? String(Math.round(d.aqi)) : "—";
       inAqi.style.setProperty("--band-color", bandVar(band));
       document.getElementById("in-category").textContent = bandLabel(band) || "Waiting for a reading…";
-      document.getElementById("in-sub").textContent = insideSentence(band);
+      document.getElementById("in-sub").textContent = insideDrivenBy(d, band);
       lastInsideLatest = d;
       document.getElementById("inside-rows").innerHTML = insideRowsHtml(d);
       // When the AIR-1 last reported a reading into the DB.

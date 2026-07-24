@@ -59,7 +59,7 @@
 
   // Rows colored by severity, not identity. Chart order mirrors the outdoor
   // (Technical) page and the readout tiles: AQI, then PM2.5/PM10, then the
-  // non-standard PM1.0/PM4.0, then CO2, VOC, and finally the combined
+  // non-standard PM1.0/PM4.0, then CO2, VOC/NOx, and finally the combined
   // weather chart -- matching the outdoor page's Temperature/Humidity/Pressure
   // grouping. PM2.5/PM10 read as AQI by default (Readout=Units switches them to
   // raw µg/m³); PM1.0/PM4.0 have no EPA-recognized health thresholds, so they
@@ -93,7 +93,8 @@
 
     renderRowChart(document.getElementById("chart-voc"), [
       { label: "VOC index", unit: "", decimals: 0, bandFor: bandForVocIndex, points: seriesFor(points, "voc_index", null).points },
-    ], { leftLabel: rangeLabel, label: "VOC index history" });
+      { label: "NOx index", unit: "", decimals: 0, bandFor: () => null, points: seriesFor(points, "nox_index", null).points },
+    ], { leftLabel: rangeLabel, label: "VOC and NOx index history" });
 
     const tempPoints = seriesFor(points, "temperature_c", null).points.map(
       (p) => ({ t: p.t, v: currentUnit === "f" ? p.v * 9 / 5 + 32 : p.v }));
@@ -117,7 +118,7 @@
   /* ---------- live readout tiles ---------- */
   // The two PM tiles follow the app-wide Readout setting: AQI (the
   // non-technical default) or the sensor's raw µg/m³. Everything else has
-  // no AQI equivalent (CO2/VOC are indoor-only scales; temp/humidity/
+  // no AQI equivalent (CO2/VOC/NOx are indoor-only scales; temp/humidity/
   // pressure aren't pollutants), so those tiles always show their own units.
   const isUnitsReadout = () => readoutMode() === "units";
   function pmTile(id, parameter, key) {
@@ -136,11 +137,13 @@
     { id: "aqi", label: "AQI", unit: "", key: "aqi", decimals: 0, band: bandFromAqi },
     pmTile("pm25", "PM2.5", "pm2_5_ugm3"),
     pmTile("pm10", "PM10", "pm10_0_ugm3"),
-    { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: (v) => v > 1500 ? "bad" : v > 1000 ? "poor" : null },
-    // NOx index isn't shown -- the sensor never actually reports it
-    // (nox_index comes back null on every reading), so it'd only ever be a
-    // dash. VOC (from the same SEN55) reports fine.
+    // bandFromCo2 (shared with Overview and this page's own CO2 chart, see
+    // common.js) -- this tile used to have its own inline thresholds that
+    // didn't match (e.g. never showed "good" green, only colored at
+    // poor/bad), so CO2 looked color-coded on the dashboard but not here.
+    { id: "co2", label: "CO2", unit: "ppm", key: "co2_ppm", decimals: 0, band: bandFromCo2 },
     { id: "voc", label: "VOC index", unit: "", key: "voc_index", decimals: 0, band: bandForVocIndex },
+    { id: "nox", label: "NOx index", unit: "", key: "nox_index", decimals: 0, band: () => null },
     { id: "temp", label: "Temperature", unit: () => tempUnitLabel(), key: "temperature_c", decimals: 1, band: () => null, convert: displayTemp },
     { id: "hum", label: "Humidity", unit: "%", key: "humidity_pct", decimals: 1, band: () => null },
     { id: "pressure", label: "Pressure", unit: "hPa", key: "pressure_hpa", decimals: 1, band: () => null },

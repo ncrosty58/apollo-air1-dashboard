@@ -486,9 +486,17 @@
 .rack-spark svg { display: block; width: 100%; height: 100%; }
 /* Column width, not viewport, is what's tight now that the racks sit
    side-by-side at every width -- shrink the headline number first, then
-   drop the sparkline rather than let it squeeze the category text. */
-@container (max-width: 260px) { .rack-aqi { font-size: 1.75rem; } .rack-stat { gap: 8px; } }
-@container (max-width: 200px) { .rack-spark { display: none; } }
+   shrink the sparkline. It used to drop out entirely at this point, but
+   that hid it on nearly every phone width (169-216px covers the whole
+   mainstream range) while leaving visible empty space next to the
+   category text -- a smaller trend line reads better than a gap. */
+@container (max-width: 260px) { .rack-aqi { font-size: 1.75rem; } .rack-stat { gap: 8px; } .rack-spark { width: 52px; height: 28px; } }
+@container (max-width: 200px) { .rack-spark { width: 38px; } }
+/* Below this, 38px of spark leaves so little room for the category/sub
+   text that it wraps character-by-character (e.g. "Good" -> "Go"/"od") --
+   worse than just not having a trend line. Only ~320-340px phones land
+   here; everything from ~360px up keeps the shrunk spark above. */
+@container (max-width: 150px) { .rack-spark { display: none; } }
 
 /* Two columns of metrics instead of one long list -- halves how tall each
    rack's row block is, which is what actually lets Inside and Outside both
@@ -540,7 +548,16 @@
    font size between neighboring device widths (375px vs 390px) without
    the larger size actually fitting, which read as a truncation bug
    rather than a deliberate step. */
-@container (max-width: 230px) { .rack-row { font-size: 0.6875rem; gap: 4px; padding: 7px 0; } .rack-row .rr-unit { display: none; } }
+@container (max-width: 230px) {
+  .rack-row { font-size: 0.6875rem; gap: 4px; padding: 7px 0; }
+  .rack-row .rr-unit { display: none; }
+  /* A handful of labels (PM2.5, PM4, CO2) overflowed by 1-2px at some
+     widths in this tier (e.g. 360px viewport) even with the unit hidden --
+     shaving 2px off each side's padding closes that without needing a
+     smaller font across the whole tier. */
+  .rack-row:nth-child(odd) { padding-right: 8px; }
+  .rack-row:nth-child(even) { padding-left: 8px; }
+}
 /* The narrowest phones still in real use (~320px viewport) land here. */
 @container (max-width: 150px) {
   .rack-rows { padding: 2px 8px; column-gap: 6px; }
