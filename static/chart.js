@@ -177,12 +177,24 @@ function renderOverlayRowChart(el, rows, opts) {
     const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
 
     const drawSeries = (series, isInside) => {
-      const opacityAttr = isInside ? ' opacity="0.5"' : "";
+      // Opacity goes on a wrapping <g>, not each segment's own <path> --
+      // every point is its own short path with round line caps, so at
+      // real sample density the caps of adjacent segments overlap right
+      // at each shared point. Per-path opacity compounds where shapes
+      // overlap (two stacked 50% layers blend to ~75%), so every sample
+      // point was rendering as a near-solid dot, and with enough points
+      // close together the whole line looked solid again. A <g> composites
+      // its children as one flattened layer first, then fades that layer
+      // once -- overlaps inside the group stay full-strength relative to
+      // each other (invisible anyway, same color), only the one group-to-
+      // background blend is at 50%.
+      if (isInside) svg += '<g opacity="0.5">';
       for (let j = 1; j < series.points.length; j++) {
         const p0 = series.points[j - 1], p1 = series.points[j];
         const segColor = bandVar(series.bandFor(p1.v));
-        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${opacityAttr} />`;
+        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round" />`;
       }
+      if (isInside) svg += '</g>';
       if (series.points.length === 0) return null;
       const last = series.points[series.points.length - 1];
       const color = bandVar(series.bandFor(last.v));
