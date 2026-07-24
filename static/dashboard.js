@@ -125,16 +125,15 @@
   // Outside's own first row) so it lands on the same row as Outside's PM2.5
   // -- the one pollutant both racks share -- letting a glance across the two
   // columns compare them directly instead of hunting for the matching label.
-  // PM1.0/PM4.0 follow PM10 as neutral (no EPA band) rows -- the non-standard
-  // sizes have no health threshold and no Outside counterpart, shown here only
-  // for parity with the Inside tab.
-  // VOC index comes next even though it has no outside equivalent -- it's as
-  // central an indoor air quality signal as CO2/PM2.5. Temp/Humidity/
-  // Pressure/NOx have no severity bands anywhere in this app, so those rows
-  // stay neutral-colored. The full set AIR-1's base hardware always reports
-  // (SCD40 + SEN55 + DPS310) -- as opposed to the MICS-4514 gas readings,
-  // which are an optional add-on this unit doesn't have and stay
-  // Technical-only in the Gas sensors table.
+  // CO2 and VOC follow -- along with PM2.5, they're the two other signals
+  // that actually drive severity here (CO2 co-determines the headline band
+  // via worseBand() above; VOC has its own band too). Trimmed down from a
+  // 10-field rack (PM1.0/PM4.0/NOx/Temp/Humidity/Pressure included) to match
+  // Outside's own density -- Outside never showed more than its handful of
+  // pollutants either, no weather/comfort metrics, full breakdown one tap
+  // away on the Indoor details page or Grafana. PM10 stays despite not
+  // driving the band: it's the other half of the two EPA particulate sizes
+  // everyone recognizes, same reasoning Outside keeps it for.
   function insideRowsHtml(d) {
     const units = readoutMode() === "units";
     const pmRow = (parameter, raw) => {
@@ -146,24 +145,8 @@
     const items = [
       pmRow("PM2.5", d.pm2_5_ugm3),
       pmRow("PM10", d.pm10_0_ugm3),
-      // "PM1"/"PM4", not "PM1.0"/"PM4.0" -- with a real (non-placeholder)
-      // decimal value next to it, the full label overflowed the rack's
-      // narrow column even with the unit hidden (see .rack-row .rr-label
-      // in style.css). Indoor/Technical keep the full "PM1.0"/"PM4.0".
-      { label: "PM1", value: d.pm1_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
-      { label: "PM4", value: d.pm4_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
-      { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
-      // Whole-number here (not Indoor/Technical's 1 decimal) -- same
-      // column-width problem as PM1/PM4 above, but a fractional degree/
-      // percent/hPa isn't information this glance view needs anyway.
-      { label: "Temp", value: displayTemp(d.temperature_c), decimals: 0, unit: tempUnitLabel(), band: null },
-      // Shortened from Indoor/Technical's "Humidity"/"Pressure" -- "Humid"/
-      // "Press" still overflowed by a character's width once real (not
-      // placeholder-dash) values were in the value column next to them.
-      { label: "Hum", value: d.humidity_pct, decimals: 0, unit: "%", band: null },
-      { label: "Pres", value: d.pressure_hpa, decimals: 0, unit: "hPa", band: null },
     ];
     return items.map((it) => {
       const valueHtml = typeof it.value === "number"
