@@ -148,17 +148,24 @@
     const items = [
       pmRow("PM2.5", d.pm2_5_ugm3),
       pmRow("PM10", d.pm10_0_ugm3),
-      { label: "PM1.0", value: d.pm1_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
-      { label: "PM4.0", value: d.pm4_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
+      // "PM1"/"PM4", not "PM1.0"/"PM4.0" -- with a real (non-placeholder)
+      // decimal value next to it, the full label overflowed the rack's
+      // narrow column even with the unit hidden (see .rack-row .rr-label
+      // in style.css). Indoor/Technical keep the full "PM1.0"/"PM4.0".
+      { label: "PM1", value: d.pm1_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
+      { label: "PM4", value: d.pm4_0_ugm3, decimals: 1, unit: "µg/m³", band: null },
       { label: "CO2", value: d.co2_ppm, decimals: 0, unit: "ppm", band: bandFromCo2(d.co2_ppm) },
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
       { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
-      { label: "Temp", value: displayTemp(d.temperature_c), decimals: 1, unit: tempUnitLabel(), band: null },
-      // Shortened from Indoor/Technical's "Humidity"/"Pressure" -- the only
-      // two inside labels long enough to ellipsis-truncate in the rack's
-      // narrow 2-column rows (see .rack-row .rr-label in style.css).
-      { label: "Humid", value: d.humidity_pct, decimals: 1, unit: "%", band: null },
-      { label: "Press", value: d.pressure_hpa, decimals: 1, unit: "hPa", band: null },
+      // Whole-number here (not Indoor/Technical's 1 decimal) -- same
+      // column-width problem as PM1/PM4 above, but a fractional degree/
+      // percent/hPa isn't information this glance view needs anyway.
+      { label: "Temp", value: displayTemp(d.temperature_c), decimals: 0, unit: tempUnitLabel(), band: null },
+      // Shortened from Indoor/Technical's "Humidity"/"Pressure" -- "Humid"/
+      // "Press" still overflowed by a character's width once real (not
+      // placeholder-dash) values were in the value column next to them.
+      { label: "Hum", value: d.humidity_pct, decimals: 0, unit: "%", band: null },
+      { label: "Pres", value: d.pressure_hpa, decimals: 0, unit: "hPa", band: null },
     ];
     return items.map((it) => {
       const valueHtml = typeof it.value === "number"
