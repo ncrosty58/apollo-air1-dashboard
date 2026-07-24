@@ -584,6 +584,10 @@
 .outside-pollutant .op-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.75rem; margin-left: 2px; font-family: var(--font-body); }
 
 .empty-state { font-size: 0.875rem; color: var(--ink-dim); padding: 20px 0; text-align: center; }
+/* A lone empty-state message inside the readout grid would otherwise only
+   fill one auto-fill track (as narrow as 150px) instead of the card's full
+   width, since grid sizing is driven by its items. */
+.readout-grid .empty-state { grid-column: 1 / -1; }
 
 .add-location-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .add-location-form[hidden] { display: none; }
@@ -604,7 +608,11 @@
 }
 .forecast-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .forecast-area { margin-bottom: 0; }
-.forecast-meta { display: flex; align-items: center; gap: 10px; }
+/* flex-wrap lets the Refresh button drop to its own line rather than
+   push off the right edge of the card when the source/timestamp text
+   ("via Google Air Quality · Updated 2m ago") is too long to share a row
+   with it at phone widths. */
+.forecast-meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 10px; }
 .forecast-source { white-space: nowrap; }
 .refresh-btn {
   font-size: 0.875rem; font-weight: 600;

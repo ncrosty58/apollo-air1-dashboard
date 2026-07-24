@@ -176,7 +176,7 @@
     try {
       const res = await fetch("/api/latest");
       if (res.status === 404) {
-        setIndoorUnavailable();
+        setIndoorUnavailable("Waiting for the AIR-1 to report in.");
         return;
       }
       if (!res.ok) throw new Error("request failed");
@@ -192,14 +192,17 @@
       document.getElementById("d-firmware").textContent = d.firmware_version || "—";
       document.getElementById("since-reading").textContent = timeAgo(d.time);
     } catch (e) {
-      setIndoorUnavailable();
+      setIndoorUnavailable("Couldn't reach the sensor feed.");
     }
   }
 
-  function setIndoorUnavailable() {
+  // Matches Overview's rack empty-state (see dashboard.js's own
+  // setIndoorUnavailable) -- the readout grid used to just go blank here,
+  // leaving a tall empty gap between the "Live readout" head and History.
+  function setIndoorUnavailable(msg) {
     document.getElementById("since-reading").textContent = "—";
     INDOOR_FIELD_IDS.forEach((id) => { document.getElementById(id).textContent = "—"; });
-    document.getElementById("readout-grid").innerHTML = "";
+    document.getElementById("readout-grid").innerHTML = `<div class="empty-state">${escapeHtml(msg)}</div>`;
     previousLatest = null;
   }
 
