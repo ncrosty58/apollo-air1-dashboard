@@ -98,7 +98,7 @@
   // current combination has nothing for it, rather than the card itself
   // disappearing and reflowing whatever comes after it.
   //
-  // In Home mode the AQI and PM cards overlay the indoor series (dashed)
+  // In Home mode the AQI and PM cards overlay the indoor series (faded)
   // right on the same chart instead of a separate Inside-vs-Outside section
   // repeating the outside lines. AQI is the one number every provider gives
   // on a shared 0-500 scale, so it always overlays. PM only overlays where
@@ -262,7 +262,7 @@
   // Indoor air is physically tied to Home -- in Away mode, hide the
   // Temperature/humidity/pressure section at the bottom of the page
   // (comparing the sensor to a remote location would be misleading) and the
-  // "dashed = inside" legend on the AQI card, whose inside overlay isn't
+  // "faded = inside" legend on the AQI card, whose inside overlay isn't
   // drawn in Away either (see renderOutsideCharts).
   function applyModeVisibility() {
     const away = currentMode() === "away";

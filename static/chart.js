@@ -142,8 +142,12 @@ function renderRowChart(el, rows, opts) {
 
 // Same idea as renderRowChart, but each row overlays two series (Inside and
 // Outside) sharing one y-scale within that row. Color still tracks severity per
-// point on each line; Inside/Outside identity comes from line style (Inside
-// dashed, Outside solid) and the "In"/"Out" label prefix.
+// point on each line; Inside/Outside identity comes from line weight (Inside
+// faded, Outside full-strength -- a dashed line was tried first, but a dash
+// pattern restarts at the start of every short per-segment <path>, and real
+// sensor noise rarely produces segments long enough to show more than a
+// solid-looking stroke -- opacity doesn't care how short or jagged the
+// segments are) and the "In"/"Out" label prefix.
 // rows: [{ label, unit, decimals, inside: {points, bandFor}, outside: {points, bandFor} }]
 function renderOverlayRowChart(el, rows, opts) {
   const nonEmpty = rows.filter((r) => r.inside.points.length > 0 || r.outside.points.length > 0);
@@ -172,39 +176,21 @@ function renderOverlayRowChart(el, rows, opts) {
     const xAt = (t) => ROW_PAD.l + ((t - tMin) / (tMax - tMin || 1)) * xw;
     const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
 
-    const drawSeries = (series, dashed) => {
-      const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
-      // One <path> per run of consecutive same-band points, not one per
-      // point-to-point pair -- SVG's stroke-dasharray restarts its pattern
-      // at the start of every path element, and most segments here are
-      // only 1-2px long (real sampling intervals at chart scale), far
-      // short of the 7px a 4,3 dash+gap cycle needs to show even one gap.
-      // A per-pair path never got past "solid" regardless of the
-      // dasharray -- the Inside line looked solid despite the attribute
-      // being right. Grouping into runs still recolors exactly where the
-      // band actually changes, but gives the pattern enough continuous
-      // length to actually read as dashed.
-      let i = 0;
-      while (i < series.points.length - 1) {
-        const runColor = bandVar(series.bandFor(series.points[i + 1].v));
-        let d = `M${xAt(series.points[i].t).toFixed(1)},${yAt(series.points[i].v).toFixed(1)}`;
-        let j = i + 1;
-        while (j < series.points.length && bandVar(series.bandFor(series.points[j].v)) === runColor) {
-          d += ` L${xAt(series.points[j].t).toFixed(1)},${yAt(series.points[j].v).toFixed(1)}`;
-          j++;
-        }
-        svg += `<path d="${d}" fill="none" stroke="${runColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${dashAttr} />`;
-        i = j - 1;
+    const drawSeries = (series, isInside) => {
+      const opacityAttr = isInside ? ' opacity="0.5"' : "";
+      for (let j = 1; j < series.points.length; j++) {
+        const p0 = series.points[j - 1], p1 = series.points[j];
+        const segColor = bandVar(series.bandFor(p1.v));
+        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${opacityAttr} />`;
       }
       if (series.points.length === 0) return null;
       const last = series.points[series.points.length - 1];
       const color = bandVar(series.bandFor(last.v));
       const ex = xAt(last.t), ey = yAt(last.v);
-      // Open ring for Inside, filled dot for Outside -- a second signal on
-      // top of dashed-vs-solid line style, since a very short Inside
-      // segment (e.g. right after the sensor first starts reporting) may
-      // be too short to visibly read as dashed at all.
-      if (dashed) {
+      // Open ring for Inside, filled dot for Outside -- the endpoint marker
+      // stays full-strength even though the trailing line fades, so the
+      // current reading is always the most legible part of either series.
+      if (isInside) {
         svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="var(--panel-raised)" stroke="${color}" stroke-width="2" />`;
       } else {
         svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
