@@ -421,7 +421,11 @@
    on one screen without scrolling. Each rack sizes its own internals off
    its own column width (container queries below), not the viewport, since
    that column is half the old full-width rack once this stopped stacking. */
-.rack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* align-items: start overrides grid's default row-stretch -- without it, a
+   long Inside sentence (real sensor prose, not just the placeholder) makes
+   that rack taller and stretches Outside to match, leaving a dangling empty
+   gap in the shorter card instead of each rack sizing to its own content. */
+.rack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 @media (max-width: 480px) { .rack-grid { gap: 8px; } }
 
 .rack {
@@ -539,7 +543,10 @@
   padding: 10px 14px 14px; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--hairline); margin-top: 2px;
 }
-.rack-foot .outside-discussion:empty { display: none; }
+/* Now lives on the Outdoor details page (technical.html), not the
+   dashboard's rack-foot -- an empty state (no discussion/guidance for
+   this provider) should take no space rather than leave a gap. */
+.outside-discussion:empty { display: none; }
 /* "Updated Xm ago" freshness stamp at the left of the foot. Recomputed on
    each poll -- it doesn't tick between fetches. */
 .rack-updated { font-size: 0.75rem; color: var(--ink-dim); font-variant-numeric: tabular-nums; }

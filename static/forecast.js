@@ -79,6 +79,17 @@
     </div>`;
   }
 
+  // Google's health guidance is generated per day but in practice is
+  // boilerplate keyed to the AQI category, not the specific day -- when a
+  // forecast run has the same category several days running (common), every
+  // card repeated the exact same paragraph. Detect that and show it once
+  // instead, only falling back to per-day text when it actually differs.
+  function allHealthRecommendationsEqual(days) {
+    if (!days.length || !days.every((d) => d.health_recommendations && d.health_recommendations.generalPopulation)) return false;
+    const first = JSON.stringify(days[0].health_recommendations);
+    return days.every((d) => JSON.stringify(d.health_recommendations) === first);
+  }
+
   function dayLabel(dateStr) {
     const d = new Date(dateStr + "T00:00:00");
     const today = new Date();
@@ -124,9 +135,20 @@
 
   function renderForecastDays(d) {
     const daysEl = document.getElementById("forecast-days");
+    const sharedGuidanceEl = document.getElementById("forecast-health-guidance");
     if (!d.days || !d.days.length) {
       daysEl.innerHTML = '<div class="empty-state">No forecast for this location.</div>';
+      sharedGuidanceEl.hidden = true;
+      sharedGuidanceEl.innerHTML = "";
       return;
+    }
+    const guidanceIsShared = allHealthRecommendationsEqual(d.days);
+    if (guidanceIsShared) {
+      sharedGuidanceEl.innerHTML = healthRecommendationsHtml(d.days[0].health_recommendations);
+      sharedGuidanceEl.hidden = false;
+    } else {
+      sharedGuidanceEl.hidden = true;
+      sharedGuidanceEl.innerHTML = "";
     }
     daysEl.innerHTML = d.days.map((day) => {
       // The day headline is always the AQI number (there's no single
@@ -153,7 +175,7 @@
         <div class="fd-aqi">${aqiText}</div>
         ${dominantHtml}
         ${pollutantsBlock}
-        ${healthRecommendationsHtml(day.health_recommendations)}
+        ${guidanceIsShared ? "" : healthRecommendationsHtml(day.health_recommendations)}
       </div>`;
     }).join("");
   }
@@ -215,6 +237,7 @@
       areaEl.textContent = "—";
       daysEl.innerHTML = `<div class="empty-state">Couldn't reach ${providerLabel()} — ${escapeHtml(e.message)}</div>`;
       discussionWrap.hidden = true;
+      document.getElementById("forecast-health-guidance").hidden = true;
     }
   }
 

@@ -23,6 +23,11 @@
         </div>
       </div>
       <div class="forecast-days" id="forecast-days"></div>
+      <!-- Google's health guidance is identical across every day more often
+           than not (it's boilerplate tied to the AQI category, not the
+           specific day) -- shown once here instead of repeated in each day
+           card. See forecast.js's allHealthRecommendationsEqual. -->
+      <div class="outside-discussion" id="forecast-health-guidance" hidden></div>
       <div class="forecast-discussion" id="forecast-discussion" hidden>
         <button type="button" class="discussion-toggle" id="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
         <p id="discussion-text" hidden></p>

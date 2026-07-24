@@ -188,56 +188,14 @@
     }).filter(Boolean).join("");
   }
 
-  // Google's per-population-group guidance -- its equivalent of AirNow's
-  // forecaster discussion, just structured differently (no narrative,
-  // tailored text per group instead). Children get their own always-visible
-  // line, same as general population. Everyone else (elderly, lung
-  // disease, heart disease, athletes, pregnant) stays behind a toggle.
-  const HEALTH_GROUP_LABELS = {
-    elderly: "Elderly",
-    lungDiseasePopulation: "Lung disease",
-    heartDiseasePopulation: "Heart disease",
-    athletes: "Athletes",
-    pregnantWomen: "Pregnant",
-  };
-
-  function healthRecommendationsHtml(hr) {
-    if (!hr || !hr.generalPopulation) return "";
-    const groups = Object.entries(HEALTH_GROUP_LABELS)
-      .filter(([key]) => hr[key])
-      .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
-      .join("");
-    const childrenP = hr.children ? `<p><strong>Children:</strong> ${escapeHtml(hr.children)}</p>` : "";
-    return `<div class="health-guidance">
-      <p class="health-guidance-text">${escapeHtml(hr.generalPopulation)}</p>
-      ${childrenP}
-      ${groups ? `<button type="button" class="health-guidance-toggle" aria-expanded="false">Guidance for sensitive groups</button>
-      <div class="health-guidance-groups" hidden>${groups}</div>` : ""}
-    </div>`;
-  }
-
-  function outsideDiscussionHtml(d) {
-    if (currentProvider() === "google") return healthRecommendationsHtml(d.health_recommendations);
-    if (!d.discussion) return "";
-    return `<div class="forecast-discussion">
-      <button type="button" class="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
-      <p class="discussion-text" hidden>${escapeHtml(d.discussion)}</p>
-    </div>`;
-  }
-
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".discussion-toggle, .health-guidance-toggle");
-    if (!btn) return;
-    const body = btn.nextElementSibling;
-    const expanded = btn.getAttribute("aria-expanded") === "true";
-    btn.setAttribute("aria-expanded", String(!expanded));
-    body.hidden = expanded;
-  });
-
   /* ---------- outside (AirNow / Google / PurpleAir / OpenWeatherMap) ---------- */
   // Kept so the AQI/Units readout toggle can re-render the rows without refetching.
   let lastOutsidePollutants = null;
 
+  // Forecaster's discussion / Google health guidance live on the Outdoor
+  // page now (technical.js), not here -- the dashboard is the at-a-glance
+  // view and that commentary was the biggest thing standing between it and
+  // fitting on one screen without scrolling.
   async function loadOutside() {
     // Kept outside the try/catch so the catch block can tell an API-reported
     // reason (e.g. "no healthy PurpleAir sensor nearby") apart from a genuine
@@ -257,7 +215,6 @@
       document.getElementById("out-sub").textContent = d.dominant_pollutant ? `Driven by ${d.dominant_pollutant}` : "";
       lastOutsidePollutants = d.pollutants;
       document.getElementById("outside-rows").innerHTML = outsideRowsHtml(d.pollutants);
-      document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
       // Which provider this reading is from and when it was last refreshed
       // into the DB -- both in one place, since the persistent chip bar's
       // highlight alone wasn't a clear enough tell of the current selection.
@@ -270,7 +227,6 @@
       document.getElementById("out-sub").textContent = "";
       lastOutsidePollutants = null;
       document.getElementById("outside-rows").innerHTML = "";
-      document.getElementById("outside-discussion").innerHTML = "";
       document.getElementById("out-updated").textContent = "";
     }
   }

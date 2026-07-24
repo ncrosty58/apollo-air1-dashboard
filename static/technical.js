@@ -306,6 +306,54 @@
     }).filter(Boolean).join("");
   }
 
+  // Google's per-population-group guidance -- its equivalent of AirNow's
+  // forecaster discussion, just structured differently (no narrative,
+  // tailored text per group instead). Children get their own always-visible
+  // line, same as general population. Everyone else (elderly, lung
+  // disease, heart disease, athletes, pregnant) stays behind a toggle.
+  // Moved here from dashboard.js -- this is the details page, so the
+  // commentary lives here instead of on the one-screen overview.
+  const HEALTH_GROUP_LABELS = {
+    elderly: "Elderly",
+    lungDiseasePopulation: "Lung disease",
+    heartDiseasePopulation: "Heart disease",
+    athletes: "Athletes",
+    pregnantWomen: "Pregnant",
+  };
+
+  function healthRecommendationsHtml(hr) {
+    if (!hr || !hr.generalPopulation) return "";
+    const groups = Object.entries(HEALTH_GROUP_LABELS)
+      .filter(([key]) => hr[key])
+      .map(([key, label]) => `<p><strong>${label}:</strong> ${escapeHtml(hr[key])}</p>`)
+      .join("");
+    const childrenP = hr.children ? `<p><strong>Children:</strong> ${escapeHtml(hr.children)}</p>` : "";
+    return `<div class="health-guidance">
+      <p class="health-guidance-text">${escapeHtml(hr.generalPopulation)}</p>
+      ${childrenP}
+      ${groups ? `<button type="button" class="health-guidance-toggle" aria-expanded="false">Guidance for sensitive groups</button>
+      <div class="health-guidance-groups" hidden>${groups}</div>` : ""}
+    </div>`;
+  }
+
+  function outsideDiscussionHtml(d) {
+    if (currentProvider() === "google") return healthRecommendationsHtml(d.health_recommendations);
+    if (!d.discussion) return "";
+    return `<div class="forecast-discussion">
+      <button type="button" class="discussion-toggle" aria-expanded="false">Forecaster's discussion</button>
+      <p class="discussion-text" hidden>${escapeHtml(d.discussion)}</p>
+    </div>`;
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".discussion-toggle, .health-guidance-toggle");
+    if (!btn) return;
+    const body = btn.nextElementSibling;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    body.hidden = expanded;
+  });
+
   /* ---------- outside current reading ---------- */
   async function loadOutside() {
     // Kept outside the try/catch so the catch block can show the API's own
@@ -331,11 +379,13 @@
       document.getElementById("outside-updated-tech").textContent = `via ${providerLabel()} · Updated ${whenText}`;
       document.getElementById("outside-tech-card").style.setProperty("--edge-color", bandVar(band));
       document.getElementById("outside-pollutants").innerHTML = pollutantFactorsHtml(d.pollutants);
+      document.getElementById("outside-discussion").innerHTML = outsideDiscussionHtml(d);
     } catch (e) {
       document.getElementById("outside-aqi-tech").textContent = "—";
       document.getElementById("outside-category-tech").textContent = apiErrorMsg || "Unavailable";
       document.getElementById("outside-dominant-tech").textContent = "";
       document.getElementById("outside-pollutants").innerHTML = "";
+      document.getElementById("outside-discussion").innerHTML = "";
     }
   }
 
