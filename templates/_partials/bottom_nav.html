@@ -1,6 +1,6 @@
 <div class="bottom-nav">
   {% if show_provider_bar %}
-  <div class="provider-chips" id="provider-chips"></div>
+  <div class="provider-chips" id="provider-chips"{% if active_page == "forecast" %} data-restrict-forecast="true"{% endif %}></div>
   {% endif %}
   <nav class="tab-bar" aria-label="Pages">
     <a href="/"{% if active_page == "overview" %} aria-current="page"{% endif %}>Overview</a>

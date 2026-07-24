@@ -249,19 +249,28 @@ async function renderProviderChips() {
   const wrap = document.getElementById("provider-chips");
   if (!wrap) return;
   const selected = currentProvider();
+  // The Forecast page marks its chip bar with this (bottom_nav.html) since
+  // it's the only place a provider with no forecast (PurpleAir) can't be
+  // picked at all -- everywhere else it's a perfectly valid live-conditions
+  // provider.
+  const restrictForecast = wrap.dataset.restrictForecast === "true";
   try {
     const res = await fetch(`/api/outside/all?mode=${currentMode()}`);
     const summary = res.ok ? await res.json() : {};
     wrap.innerHTML = PROVIDER_ORDER.map((p) => {
       const s = summary[p] || { available: false };
+      const noForecast = restrictForecast && PROVIDERS_WITHOUT_FORECAST.has(p);
       const color = s.available ? bandVar(s.band) : "var(--ink-dim)";
       const aqiText = s.available && typeof s.aqi === "number" ? String(s.aqi) : "—";
       // A dim chip alone doesn't say why -- e.g. "no healthy PurpleAir sensor
       // nearby" vs. "no away location set" are both just "off" without this,
       // so the reason the API already returns goes on the chip as a hover
       // title.
-      const titleAttr = !s.available && s.reason ? ` title="${escapeHtml(s.reason)}"` : "";
-      return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === selected}" data-unavailable="${!s.available}" style="--pc-color: ${color}"${titleAttr}>` +
+      const reasonText = !s.available && s.reason ? s.reason
+        : (noForecast ? `${PROVIDER_NAMES[p]} has no forecast` : "");
+      const titleAttr = reasonText ? ` title="${escapeHtml(reasonText)}"` : "";
+      const disabledAttr = noForecast ? " disabled" : "";
+      return `<button type="button" class="provider-chip" data-provider="${p}" aria-pressed="${p === selected}" data-unavailable="${!s.available}" data-no-forecast="${noForecast}" style="--pc-color: ${color}"${titleAttr}${disabledAttr}>` +
         `<span class="pc-dot"></span>${PROVIDER_NAMES[p]} <span class="pc-aqi">${aqiText}</span></button>`;
     }).join("");
   } catch (e) {
@@ -278,7 +287,7 @@ function setProvider(provider) {
 
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".provider-chip");
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   setProvider(btn.getAttribute("data-provider"));
 });
 

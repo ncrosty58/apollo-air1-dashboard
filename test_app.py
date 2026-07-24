@@ -56,6 +56,12 @@ def test_forecast_unconfigured_provider_is_400(client, monkeypatch):
     assert "configured" in res.get_json()["error"]
 
 
+def test_forecast_purpleair_is_rejected_not_silently_airnow(client):
+    res = client.get("/api/forecast?zip=54501&provider=purpleair")
+    assert res.status_code == 400
+    assert "no forecast" in res.get_json()["error"].lower()
+
+
 def test_control_503_when_mqtt_unavailable(client, monkeypatch):
     monkeypatch.setattr(app_module.mqtt_bridge, "available", lambda: False)
     assert client.post("/api/control/button/esp_reboot").status_code == 503

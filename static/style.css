@@ -449,6 +449,7 @@
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .provider-chip[data-unavailable="true"] { opacity: 0.45; }
+.provider-chip[data-no-forecast="true"] { opacity: 0.35; cursor: not-allowed; }
 .provider-chip .pc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--pc-color, var(--ink-dim)); }
 .provider-chip .pc-aqi { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); }
 /* Below 480px, 4 chips at their normal size don't fit a phone's width without

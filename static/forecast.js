@@ -103,7 +103,7 @@
   // and shows which agency actually served the data (forecast-source, using
   // the response's own "provider" field, which is the real source of truth --
   // see loadForecast).
-  const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow" };
+  const PROVIDER_LABELS = { google: "Google Air Quality", openweathermap: "OpenWeatherMap", airnow: "AirNow", purpleair: "PurpleAir" };
   function providerLabel(provider) {
     return PROVIDER_LABELS[provider || currentProvider()] || "AirNow";
   }

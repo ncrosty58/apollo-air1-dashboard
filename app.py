@@ -435,6 +435,13 @@ def api_forecast():
     provider = request.args.get("provider", "airnow")
     force = request.args.get("refresh") in ("1", "true")
 
+    if provider == "purpleair":
+        # One real-time sensor, no forward-looking model -- there is no
+        # PurpleAir forecast to serve. Reject rather than silently falling
+        # through to AirNow below, which would show the wrong agency's data
+        # under a "PurpleAir" label.
+        return jsonify({"error": "PurpleAir has no forecast"}), 400
+
     live = _LIVE_FORECAST_PROVIDERS.get(provider)
     if live is not None:
         fetch, env_key, cfg_label, fail_msg = live
