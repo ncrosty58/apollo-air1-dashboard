@@ -513,8 +513,11 @@
 .rack-row:nth-child(even) { padding-left: 10px; }
 /* An odd item count leaves the last row's left cell with no right-hand
    partner -- drop its divider rather than let it dangle with nothing next
-   to it. */
-.rack-row:nth-child(odd):last-child { border-right: none; padding-right: 0; }
+   to it. Border only, not the padding: keeping padding-right matched to
+   every other left-column row is what keeps this row's value lined up
+   under the ones above it instead of drifting right without a divider to
+   balance against. */
+.rack-row:nth-child(odd):last-child { border-right: none; }
 .rack-row .rr-label {
   color: var(--ink-dim); flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
