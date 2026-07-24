@@ -417,15 +417,21 @@
    arranged as a dense "rack" of metric rows with one headline stat each.
    Basic is still the friendly view -- "friendly" here means scannable at a
    glance, not big and empty. */
+/* Inside/Outside stay side-by-side down to phone width -- both are visible
+   on one screen without scrolling. Each rack sizes its own internals off
+   its own column width (container queries below), not the viewport, since
+   that column is half the old full-width rack once this stopped stacking. */
 .rack-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 720px) { .rack-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .rack-grid { gap: 8px; } }
 
 .rack {
+  container-type: inline-size;
   border-top: 3px solid var(--accent); overflow: hidden;
 }
 .rack--outside { border-top-color: var(--zone-outside); }
 
-.rack-head { padding: 16px 18px 14px; }
+.rack-head { padding: 14px 14px 12px; }
+@container (max-width: 220px) { .rack-head { padding: 10px 10px 8px; } }
 
 /* Same flat-button language as .tab-bar a right below it in .bottom-nav --
    plain resting state, same accent wash for the selected one -- so the two
@@ -464,34 +470,73 @@
   .provider-chip .pc-aqi { display: none; }
 }
 
-.rack-stat { display: flex; align-items: center; gap: 12px; }
+.rack-stat { display: flex; align-items: center; gap: 10px; }
 .rack-aqi {
-  font-family: var(--font-mono); font-weight: 700; font-size: clamp(2rem, 8vw, 2.5rem);
+  font-family: var(--font-mono); font-weight: 700; font-size: 2.25rem;
   color: var(--band-color); font-variant-numeric: tabular-nums; flex: none; line-height: 1;
 }
 .rack-stat-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
-.rack-category { font-size: 1rem; font-weight: 600; overflow-wrap: break-word; }
+.rack-category { font-size: 0.9375rem; font-weight: 600; overflow-wrap: break-word; }
 .rack-sub { font-size: 0.75rem; color: var(--ink-dim); overflow-wrap: break-word; }
-.rack-spark { width: 84px; height: 34px; flex: none; }
+.rack-spark { width: 72px; height: 32px; flex: none; }
 .rack-spark svg { display: block; width: 100%; height: 100%; }
-@media (max-width: 420px) { .rack-spark { width: 60px; } }
+/* Column width, not viewport, is what's tight now that the racks sit
+   side-by-side at every width -- shrink the headline number first, then
+   drop the sparkline rather than let it squeeze the category text. */
+@container (max-width: 260px) { .rack-aqi { font-size: 1.75rem; } .rack-stat { gap: 8px; } }
+@container (max-width: 200px) { .rack-spark { display: none; } }
 
-.rack-rows { display: flex; flex-direction: column; padding: 2px 18px; border-top: 1px solid var(--hairline); }
+/* Two columns of metrics instead of one long list -- halves how tall each
+   rack's row block is, which is what actually lets Inside and Outside both
+   sit on one mobile screen now that they stay side-by-side. Reading order
+   is row-major (PM2.5 next to PM10, not stacked above it) so related pairs
+   still land next to each other rather than split top/bottom. */
+.rack-rows {
+  display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px;
+  padding: 2px 14px; border-top: 1px solid var(--hairline);
+}
 .rack-rows:empty { display: none; border-top: none; }
 .rack-row {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 0.875rem;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 0.8125rem;
+  min-width: 0;
 }
-.rack-row:last-child { border-bottom: none; }
-.rack-row .rr-label { color: var(--ink-dim); }
+/* Drops the divider off the grid's final row (its last one or two cells,
+   depending on whether the item count is odd or even) -- same job
+   :last-child did for the old single-column list. */
+.rack-row:nth-last-child(-n+2) { border-bottom: none; }
+.rack-row:nth-child(odd) { border-right: 1px solid var(--hairline); padding-right: 10px; }
+.rack-row:nth-child(even) { padding-left: 10px; }
+/* An odd item count leaves the last row's left cell with no right-hand
+   partner -- drop its divider rather than let it dangle with nothing next
+   to it. */
+.rack-row:nth-child(odd):last-child { border-right: none; padding-right: 0; }
+.rack-row .rr-label {
+  color: var(--ink-dim); flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .rack-row .rr-value {
   font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600;
-  color: var(--rr-color, var(--ink)); white-space: nowrap;
+  color: var(--rr-color, var(--ink)); white-space: nowrap; flex: none;
 }
-.rack-row .rr-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.75rem; margin-left: 3px; font-family: var(--font-body); }
+.rack-row .rr-unit { font-weight: 500; color: var(--ink-dim); font-size: 0.6875rem; margin-left: 2px; font-family: var(--font-body); }
+/* One tier, not a graduated series -- mainstream phones (iPhone SE
+   through Pro Max, most Android) all land within a narrow ~140-220px
+   container-width band. A second breakpoint inside that band flipped
+   font size between neighboring device widths (375px vs 390px) without
+   the larger size actually fitting, which read as a truncation bug
+   rather than a deliberate step. */
+@container (max-width: 230px) { .rack-row { font-size: 0.6875rem; gap: 4px; padding: 7px 0; } .rack-row .rr-unit { display: none; } }
+/* The narrowest phones still in real use (~320px viewport) land here. */
+@container (max-width: 150px) {
+  .rack-rows { padding: 2px 8px; column-gap: 6px; }
+  .rack-row { font-size: 0.625rem; gap: 3px; }
+  .rack-row:nth-child(odd) { padding-right: 6px; }
+  .rack-row:nth-child(even) { padding-left: 6px; }
+}
 
 .rack-foot {
-  padding: 12px 18px 16px; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 14px; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--hairline); margin-top: 2px;
 }
 .rack-foot .outside-discussion:empty { display: none; }

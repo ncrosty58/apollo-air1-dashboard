@@ -150,8 +150,11 @@
       { label: "VOC", value: d.voc_index, decimals: 0, unit: "", band: bandForVocIndex(d.voc_index) },
       { label: "NOx", value: d.nox_index, decimals: 0, unit: "", band: null },
       { label: "Temp", value: displayTemp(d.temperature_c), decimals: 1, unit: tempUnitLabel(), band: null },
-      { label: "Humidity", value: d.humidity_pct, decimals: 1, unit: "%", band: null },
-      { label: "Pressure", value: d.pressure_hpa, decimals: 1, unit: "hPa", band: null },
+      // Shortened from Indoor/Technical's "Humidity"/"Pressure" -- the only
+      // two inside labels long enough to ellipsis-truncate in the rack's
+      // narrow 2-column rows (see .rack-row .rr-label in style.css).
+      { label: "Humid", value: d.humidity_pct, decimals: 1, unit: "%", band: null },
+      { label: "Press", value: d.pressure_hpa, decimals: 1, unit: "hPa", band: null },
     ];
     return items.map((it) => {
       const valueHtml = typeof it.value === "number"
