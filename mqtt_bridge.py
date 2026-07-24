@@ -9,11 +9,14 @@ import paho.mqtt.client as mqtt
 logger = logging.getLogger(__name__)
 
 # ESPHome derives each entity's MQTT object_id from its friendly `name:` (not
-# its yaml `id:`), lowercased and snake_cased. These are inferred from the
-# `name:` fields in apollo-air1-mqtt-esphome's apollo-air1-mqtt.yaml and have
-# NOT yet been confirmed against live device traffic — verify with
-# `mosquitto_sub -t '<prefix>/#' -v` (or the Node-RED debug tab on the Apollo
-# AIR-1 flow) during a real wake cycle before relying on the write side.
+# its yaml `id:`), lowercased and snake_cased. These started as inferences from
+# the `name:` fields in apollo-air1-mqtt-esphome's apollo-air1-mqtt.yaml, and
+# were confirmed against the live device on 2026-07-24 by enumerating its
+# web_server event stream (`curl -sN http://<device>/events`): every id below
+# matches. The write side is safe to rely on.
+#
+# Re-check after any firmware change that renames an entity — a renamed `name:`
+# silently changes the topic, and publishes to the old one just go nowhere.
 PREVENT_SLEEP = "prevent_sleep"
 SLEEP_DURATION = "sleep_duration"
 SEN55_TEMPERATURE_OFFSET = "sen55_temperature_offset"
