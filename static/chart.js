@@ -173,44 +173,25 @@ function renderOverlayRowChart(el, rows, opts) {
     const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
 
     const drawSeries = (series, dashed) => {
-      if (series.points.length === 0) return null;
-      const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
-      const xs = series.points.map((p) => xAt(p.t));
-      const footprintPx = Math.max(...xs) - Math.min(...xs);
-      // A series whose entire history sits within a sliver of the chart's
-      // width -- right after a sensor first comes online, or reconnects
-      // after a gap, when a burst of samples covers only a few real-world
-      // minutes on a chart scaled to hours or days -- can't show a
-      // meaningful trend at this scale. A minimum-segment-distance dedup
-      // was tried first, but real sensor noise rarely lands on the exact
-      // same pixel twice, so it only thinned a dense zigzag into a
-      // shorter, still-visible wiggle floating apart from the main line --
-      // reading as a rendering glitch rather than the (real, just
-      // visually insignificant at this scale) noise it actually was.
-      // Skipping the line entirely below this footprint and letting the
-      // endpoint marker alone say "here's the latest reading" is more
-      // honest about what a dozen points crammed into 20px can actually
-      // communicate. A normally-paced series spread across the chart is
-      // completely unaffected.
-      if (footprintPx >= 20) {
-        let prevX = null, prevY = null;
-        series.points.forEach((p) => {
-          const x = xAt(p.t), y = yAt(p.v);
-          if (prevX === null) { prevX = x; prevY = y; return; }
-          if (Math.hypot(x - prevX, y - prevY) < 3) return;
-          const segColor = bandVar(series.bandFor(p.v));
-          svg += `<path d="M${prevX.toFixed(1)},${prevY.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
-          prevX = x; prevY = y;
-        });
+      for (let j = 1; j < series.points.length; j++) {
+        const p0 = series.points[j - 1], p1 = series.points[j];
+        const segColor = bandVar(series.bandFor(p1.v));
+        const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
+        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
       }
+      if (series.points.length === 0) return null;
       const last = series.points[series.points.length - 1];
       const color = bandVar(series.bandFor(last.v));
       const ex = xAt(last.t), ey = yAt(last.v);
-      // Same filled-dot marker for both Inside and Outside -- dashed vs.
-      // solid line is already how the legend tells them apart; an open vs.
-      // closed dot on top of that read as an inconsistency/glitch rather
-      // than a second intentional signal.
-      svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+      // Open ring for Inside, filled dot for Outside -- a second signal on
+      // top of dashed-vs-solid line style, since a very short Inside
+      // segment (e.g. right after the sensor first starts reporting) may
+      // be too short to visibly read as dashed at all.
+      if (dashed) {
+        svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="var(--panel-raised)" stroke="${color}" stroke-width="2" />`;
+      } else {
+        svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
+      }
       return last;
     };
 
