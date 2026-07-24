@@ -45,6 +45,43 @@ function pointAt(p, tMin, tMax, vMin, vMax, W) {
   return [x, y];
 }
 
+// Averages points into fixed-duration buckets sized to at least
+// MIN_BUCKET_MS, and wider still if that's narrower than
+// ~targetPxPerPoint screen pixels' worth of the chart's own time range --
+// so a densely-sampled series (the AIR-1 reporting roughly once a minute)
+// doesn't render every small real fluctuation as its own visible zigzag.
+// The pixel-based half alone isn't enough when the chart's actual time
+// span is itself short (e.g. a single-series chart whose axis is just
+// that series' own ~2-hours-old history, not the nominal 24h range the
+// range toggle implies) -- each pixel already represents very little
+// real time then, so a point roughly a minute apart barely lands in the
+// same bucket as its neighbor. The fixed floor guarantees real smoothing
+// regardless of how much time is actually on screen; the pixel-based
+// term takes over (and floors don't matter) once the axis is wide enough
+// that it would call for a wider bucket anyway. A sparser series is
+// unaffected either way: each of its points already lands in its own
+// bucket. Only for line geometry -- callers keep the true latest raw
+// point for any endpoint marker/label, so the displayed "current
+// reading" is never a smoothed approximation.
+const MIN_BUCKET_MS = 3 * 60000;
+function downsampleForDisplay(points, tMin, tMax, pxWidth, targetPxPerPoint = 3) {
+  if (points.length < 3) return points;
+  const bucketMs = Math.max(((tMax - tMin) / pxWidth) * targetPxPerPoint, MIN_BUCKET_MS);
+  if (!(bucketMs > 0)) return points;
+  const out = [];
+  let bucketStart = points[0].t, sumT = 0, sumV = 0, count = 0;
+  for (const p of points) {
+    if (p.t - bucketStart > bucketMs && count > 0) {
+      out.push({ t: sumT / count, v: sumV / count });
+      bucketStart = p.t;
+      sumT = 0; sumV = 0; count = 0;
+    }
+    sumT += p.t; sumV += p.v; count++;
+  }
+  if (count > 0) out.push({ t: sumT / count, v: sumV / count });
+  return out;
+}
+
 // series: [{ color, points: [{t, v}], area }] -- one shared y-scale, grid +
 // y-axis labels. Used for the single-series indoor charts (temp/humidity).
 function renderChart(el, series, opts) {
@@ -70,7 +107,8 @@ function renderChart(el, series, opts) {
     svg += `<text class="chart-axis-label chart-y-label" x="${(CHART_PAD.l - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end">${formatTick(tickVal)}</text>`;
   }
   nonEmpty.forEach((s) => {
-    const d = pathFor(s.points, tMin, tMax, lo, hi, W);
+    const plotPoints = downsampleForDisplay(s.points, tMin, tMax, W - CHART_PAD.l - CHART_PAD.r);
+    const d = pathFor(plotPoints, tMin, tMax, lo, hi, W);
     if (s.area) {
       const yh = CHART_H - CHART_PAD.t - CHART_PAD.b;
       const areaD = `${d} L${(W - CHART_PAD.r).toFixed(1)},${(CHART_PAD.t + yh).toFixed(1)} L${CHART_PAD.l},${(CHART_PAD.t + yh).toFixed(1)} Z`;
@@ -120,8 +158,9 @@ function renderRowChart(el, rows, opts) {
     const xAt = (t) => ROW_PAD.l + ((t - tMin) / (tMax - tMin || 1)) * xw;
     const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
 
-    for (let j = 1; j < r.points.length; j++) {
-      const p0 = r.points[j - 1], p1 = r.points[j];
+    const plotPoints = downsampleForDisplay(r.points, tMin, tMax, xw);
+    for (let j = 1; j < plotPoints.length; j++) {
+      const p0 = plotPoints[j - 1], p1 = plotPoints[j];
       const segColor = bandVar(r.bandFor(p1.v));
       svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round" />`;
     }
@@ -188,9 +227,10 @@ function renderOverlayRowChart(el, rows, opts) {
       // once -- overlaps inside the group stay full-strength relative to
       // each other (invisible anyway, same color), only the one group-to-
       // background blend is at 50%.
+      const plotPoints = downsampleForDisplay(series.points, tMin, tMax, xw);
       if (isInside) svg += '<g opacity="0.5">';
-      for (let j = 1; j < series.points.length; j++) {
-        const p0 = series.points[j - 1], p1 = series.points[j];
+      for (let j = 1; j < plotPoints.length; j++) {
+        const p0 = plotPoints[j - 1], p1 = plotPoints[j];
         const segColor = bandVar(series.bandFor(p1.v));
         svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round" />`;
       }
