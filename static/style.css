@@ -474,7 +474,7 @@
   .provider-chip .pc-aqi { display: none; }
 }
 
-.rack-stat { display: flex; align-items: center; gap: 10px; }
+.rack-stat { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .rack-aqi {
   font-family: var(--font-mono); font-weight: 700; font-size: 2.25rem;
   color: var(--band-color); font-variant-numeric: tabular-nums; flex: none; line-height: 1;
@@ -485,18 +485,17 @@
 .rack-spark { width: 72px; height: 32px; flex: none; }
 .rack-spark svg { display: block; width: 100%; height: 100%; }
 /* Column width, not viewport, is what's tight now that the racks sit
-   side-by-side at every width -- shrink the headline number first, then
-   shrink the sparkline. It used to drop out entirely at this point, but
-   that hid it on nearly every phone width (169-216px covers the whole
-   mainstream range) while leaving visible empty space next to the
-   category text -- a smaller trend line reads better than a gap. */
-@container (max-width: 260px) { .rack-aqi { font-size: 1.75rem; } .rack-stat { gap: 8px; } .rack-spark { width: 52px; height: 28px; } }
-@container (max-width: 200px) { .rack-spark { width: 38px; } }
-/* Below this, 38px of spark leaves so little room for the category/sub
-   text that it wraps character-by-character (e.g. "Good" -> "Go"/"od") --
-   worse than just not having a trend line. Only ~320-340px phones land
-   here; everything from ~360px up keeps the shrunk spark above. */
-@container (max-width: 150px) { .rack-spark { display: none; } }
+   side-by-side at every width -- on mobile the sparkline drops to its own
+   full-width row (flex-basis: 100% always starts a fresh line in a
+   wrapped flex container) below the AQI number/category and above the
+   metric rows, trading the cramped inline sliver it had for real room to
+   actually show a trend. Desktop's wider column keeps it inline, where
+   there's space to spare beside the text. */
+@container (max-width: 260px) {
+  .rack-aqi { font-size: 1.75rem; }
+  .rack-stat { gap: 8px; }
+  .rack-spark { flex: 1 1 100%; width: auto; height: 36px; }
+}
 
 /* Two columns of metrics instead of one long list -- halves how tall each
    rack's row block is, which is what actually lets Inside and Outside both
