@@ -505,10 +505,17 @@
   padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 0.8125rem;
   min-width: 0;
 }
-/* Drops the divider off the grid's final row (its last one or two cells,
-   depending on whether the item count is odd or even) -- same job
-   :last-child did for the old single-column list. */
-.rack-row:nth-last-child(-n+2) { border-bottom: none; }
+/* Drops the divider off the grid's final row -- same job :last-child did
+   for the old single-column list. nth-last-child(-n+2) alone would grab
+   the last two DOM positions regardless of which row they're in: with an
+   odd item count that pulls in the second-to-last item even though it's
+   still in the second-to-last row (e.g. 3 items -- PM10 at position 2 sits
+   next to PM2.5 in row 1, not next to O3's lone row 2), stripping its
+   border while its actual row-mate keeps one. Splitting into "always the
+   last item" plus "the item before it, but only when that item starts a
+   row" keeps the pair-vs-lone-item math right for either parity. */
+.rack-row:last-child { border-bottom: none; }
+.rack-row:nth-last-child(2):nth-child(odd) { border-bottom: none; }
 .rack-row:nth-child(odd) { border-right: 1px solid var(--hairline); padding-right: 10px; }
 .rack-row:nth-child(even) { padding-left: 10px; }
 /* An odd item count leaves the last row's left cell with no right-hand
