@@ -42,12 +42,16 @@
     return BAND_ORDER.indexOf(a) >= BAND_ORDER.indexOf(b) ? a : b;
   }
 
+  // Short enough to sit on one line in the rack's narrow half-width column
+  // (see rack-sub in style.css) -- the category label ("Good"/"Fair"/"Poor"/
+  // "Bad") already carries the headline, so this only needs the action, not
+  // the reasoning behind it.
   function insideSentence(band) {
     switch (band) {
-      case "good": return "CO2 and particulates are both low right now — nothing to do.";
-      case "fair": return "Slightly elevated — cracking a window would help.";
-      case "poor": return "CO2 or particulates are elevated — ventilating is a good idea.";
-      case "bad": return "Air quality is poor right now — ventilate if you can.";
+      case "good": return "Nothing to do.";
+      case "fair": return "Crack a window.";
+      case "poor": return "Ventilate soon.";
+      case "bad": return "Ventilate now.";
       default: return "Waiting for a reading…";
     }
   }
