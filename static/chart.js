@@ -173,21 +173,33 @@ function renderOverlayRowChart(el, rows, opts) {
     const yAt = (v) => top + ROW_PAD_TOP + yh - ((v - lo) / (hi - lo || 1)) * yh;
 
     const drawSeries = (series, dashed) => {
-      for (let j = 1; j < series.points.length; j++) {
-        const p0 = series.points[j - 1], p1 = series.points[j];
-        const segColor = bandVar(series.bandFor(p1.v));
-        const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
-        svg += `<path d="M${xAt(p0.t).toFixed(1)},${yAt(p0.v).toFixed(1)} L${xAt(p1.t).toFixed(1)},${yAt(p1.v).toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
-      }
+      const dashAttr = dashed ? ' stroke-dasharray="4,3"' : "";
+      // Chains from the last point actually *drawn*, not just the previous
+      // point in the array, and skips a segment whose both ends round to
+      // the same pixel as that point. Right after a sensor first comes
+      // online (or reconnects after a gap), a burst of samples can cover
+      // only a few real-world minutes on a chart scaled to hours or days --
+      // without this, that rendered as a dense jittery zigzag that read as
+      // a rendering glitch rather than the (real, just visually
+      // insignificant) noise it actually was.
+      let prevX = null, prevY = null;
+      series.points.forEach((p) => {
+        const x = xAt(p.t), y = yAt(p.v);
+        if (prevX === null) { prevX = x; prevY = y; return; }
+        if (Math.round(x) === Math.round(prevX) && Math.round(y) === Math.round(prevY)) return;
+        const segColor = bandVar(series.bandFor(p.v));
+        svg += `<path d="M${prevX.toFixed(1)},${prevY.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}" fill="none" stroke="${segColor}" stroke-width="2" stroke-linecap="round"${dashAttr} />`;
+        prevX = x; prevY = y;
+      });
       if (series.points.length === 0) return null;
       const last = series.points[series.points.length - 1];
       const color = bandVar(series.bandFor(last.v));
       const ex = xAt(last.t), ey = yAt(last.v);
-      if (dashed) {
-        svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="var(--panel-raised)" stroke="${color}" stroke-width="2" />`;
-      } else {
-        svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
-      }
+      // Same filled-dot marker for both Inside and Outside -- dashed vs.
+      // solid line is already how the legend tells them apart; an open vs.
+      // closed dot on top of that read as an inconsistency/glitch rather
+      // than a second intentional signal.
+      svg += `<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--panel-raised)" stroke-width="1.5" />`;
       return last;
     };
 
